@@ -8,24 +8,13 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-
     steps:
-      - name: Version marker
+      - name: Hello + secret presence
         run: |
-          echo ZZ_MINIMAL_WORKFLOW=2026-01-25_v3
-          uname -a
-
-      - name: Create directory
-        run: |
-          mkdir -p supabase-backups
-          echo Directory created
-          ls -la supabase-backups
-
-      - name: Check env variable
-        run: |
+          echo "ZZ workflow is alive"
           if [ -z "$SUPABASE_DB_URL" ]; then
             echo "SUPABASE_DB_URL is EMPTY"
             exit 1
           fi
-          echo "SUPABASE_DB_URL is present"
+          echo "SUPABASE_DB_URL is present ✅"
           echo "$SUPABASE_DB_URL" | sed -E 's#(postgresql://postgres:)[^@]+@#\1***@#'
