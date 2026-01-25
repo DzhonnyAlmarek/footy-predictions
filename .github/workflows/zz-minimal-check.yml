@@ -13,7 +13,8 @@ jobs:
     steps:
       - name: Version marker
         run: |
-          echo "ZZ_MINIMAL_WORKFLOW = 2026-01-25_v2"
+        echo "ZZ_MINIMAL_WORKFLOW = 2026-01-25_v3"
+
 
       - name: Create directory
         run: |
