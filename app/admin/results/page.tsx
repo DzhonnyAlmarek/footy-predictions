@@ -2,10 +2,16 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import ResultsEditor from "./results-editor";
 
+function stageStatusRu(s: string) {
+  if (s === "draft") return "Черновик";
+  if (s === "published") return "Опубликован";
+  if (s === "locked") return "Закрыт";
+  return s;
+}
+
 export default async function AdminResultsPage() {
   const supabase = await createClient();
 
-  // текущий этап — только вручную
   const { data: stage, error: stageErr } = await supabase
     .from("stages")
     .select("id,name,status")
@@ -76,7 +82,7 @@ export default async function AdminResultsPage() {
       <header>
         <h1 style={{ fontSize: 28, fontWeight: 800 }}>Результаты</h1>
         <p style={{ marginTop: 6, opacity: 0.85 }}>
-          Этап: <b>{stage.name}</b> • статус: <b>{stage.status}</b>
+          Этап: <b>{stage.name}</b> • статус: <b>{stageStatusRu(stage.status)}</b>
         </p>
       </header>
 

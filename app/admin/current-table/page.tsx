@@ -13,6 +13,13 @@ type MatchRow = {
   away_score: number | null;
 };
 
+function stageStatusRu(s: string) {
+  if (s === "draft") return "Черновик";
+  if (s === "published") return "Опубликован";
+  if (s === "locked") return "Закрыт";
+  return s;
+}
+
 export default async function AdminCurrentTablePage() {
   const supabase = await createClient();
 
@@ -43,18 +50,16 @@ export default async function AdminCurrentTablePage() {
     );
   }
 
-  const { data: users, error: usersErr } = await supabase
+  const { data: users } = await supabase
     .from("login_accounts")
     .select("login,user_id")
     .neq("login", "ADMIN")
     .order("login", { ascending: true });
 
-  const userIdToLogin = new Map<string, string>(
-    (users ?? []).map((u: any) => [u.user_id, u.login])
-  );
+  const userIdToLogin = new Map<string, string>((users ?? []).map((u: any) => [u.user_id, u.login]));
   const logins: string[] = (users ?? []).map((u: any) => u.login);
 
-  const { data: tours, error: toursErr } = await supabase
+  const { data: tours } = await supabase
     .from("tours")
     .select("id,tour_no,name")
     .eq("stage_id", stage.id)
@@ -62,7 +67,7 @@ export default async function AdminCurrentTablePage() {
 
   const tourList: Tour[] = (tours ?? []) as any;
 
-  const { data: matches, error: matchesErr } = await supabase
+  const { data: matches } = await supabase
     .from("matches")
     .select(
       `
@@ -94,8 +99,7 @@ export default async function AdminCurrentTablePage() {
 
   const matchIds = matchList.map((m) => m.id);
 
-  // predictions
-  const predMap = new Map<string, string>(); // matchId::login -> "h:a"
+  const predMap = new Map<string, string>();
   if (matchIds.length > 0) {
     const { data: preds } = await supabase
       .from("predictions")
@@ -109,9 +113,8 @@ export default async function AdminCurrentTablePage() {
     }
   }
 
-  // points + totals
-  const pointsMap = new Map<string, number>(); // matchId::login -> points
-  const totalByLogin = new Map<string, number>(); // login -> sum in stage
+  const pointsMap = new Map<string, number>();
+  const totalByLogin = new Map<string, number>();
 
   if (matchIds.length > 0 && (users ?? []).length > 0) {
     const userIds = (users ?? []).map((u: any) => u.user_id);
@@ -125,6 +128,7 @@ export default async function AdminCurrentTablePage() {
     for (const r of rows ?? []) {
       const login = userIdToLogin.get(r.user_id);
       if (!login) continue;
+
       const pts = Number(r.points ?? 0);
       pointsMap.set(`${r.match_id}::${login}`, pts);
       totalByLogin.set(login, (totalByLogin.get(login) ?? 0) + pts);
@@ -136,7 +140,6 @@ export default async function AdminCurrentTablePage() {
     matchesByTour.set(m.tour_id, [...(matchesByTour.get(m.tour_id) ?? []), m]);
   }
 
-  const hasErrors = usersErr || toursErr || matchesErr;
   const gridCols = `420px 110px repeat(${logins.length}, minmax(110px, 1fr))`;
 
   return (
@@ -144,19 +147,13 @@ export default async function AdminCurrentTablePage() {
       <header>
         <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
         <p style={{ marginTop: 6, opacity: 0.8 }}>
-          Этап: <b>{stage.name}</b> • статус: <b>{stage.status}</b>
+          Этап: <b>{stage.name}</b> • статус: <b>{stageStatusRu(stage.status)}</b>
         </p>
       </header>
 
-      {hasErrors && (
-        <p style={{ marginTop: 16, color: "crimson" }}>
-          Ошибка загрузки: {usersErr?.message ?? toursErr?.message ?? matchesErr?.message}
-        </p>
-      )}
-
       <section style={{ marginTop: 18 }}>
         {logins.length === 0 ? (
-          <p>Нет участников (login_accounts пуст).</p>
+          <p>Нет участников.</p>
         ) : tourList.length === 0 ? (
           <p>В этапе нет туров.</p>
         ) : (
@@ -176,10 +173,7 @@ export default async function AdminCurrentTablePage() {
               <div style={{ textAlign: "center" }}>Результат</div>
               {logins.map((l) => (
                 <div key={l} style={{ textAlign: "center" }}>
-                  {l}{" "}
-                  <span style={{ opacity: 0.75, fontWeight: 800 }}>
-                    ({totalByLogin.get(l) ?? 0})
-                  </span>
+                  {l} <span style={{ opacity: 0.75, fontWeight: 800 }}>({totalByLogin.get(l) ?? 0})</span>
                 </div>
               ))}
             </div>
@@ -199,9 +193,7 @@ export default async function AdminCurrentTablePage() {
                     >
                       Тур {t.tour_no}
                       {t.name ? ` — ${t.name}` : ""}{" "}
-                      <span style={{ opacity: 0.75, fontWeight: 700 }}>
-                        (матчей: {tourMatches.length})
-                      </span>
+                      <span style={{ opacity: 0.75, fontWeight: 700 }}>(матчей: {tourMatches.length})</span>
                     </div>
 
                     {tourMatches.length === 0 ? (
@@ -212,10 +204,9 @@ export default async function AdminCurrentTablePage() {
                           dateStyle: "medium",
                           timeStyle: "short",
                         });
+
                         const result =
-                          m.home_score === null || m.away_score === null
-                            ? ""
-                            : `${m.home_score}:${m.away_score}`;
+                          m.home_score === null || m.away_score === null ? "" : `${m.home_score}:${m.away_score}`;
 
                         return (
                           <div
@@ -250,9 +241,7 @@ export default async function AdminCurrentTablePage() {
                               return (
                                 <div key={login} style={{ textAlign: "center", fontWeight: 800 }}>
                                   {pred}
-                                  {typeof pts === "number" ? (
-                                    <span style={{ opacity: 0.85 }}> ({pts})</span>
-                                  ) : null}
+                                  {typeof pts === "number" ? <span style={{ opacity: 0.85 }}> ({pts})</span> : null}
                                 </div>
                               );
                             })}

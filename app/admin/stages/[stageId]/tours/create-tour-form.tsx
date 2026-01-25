@@ -4,25 +4,23 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function CreateTourForm({
-  stageId,
-  stageStatus,
-}: {
+export default function CreateTourForm(props: {
   stageId: number;
-  stageStatus: string;
+  stageStatus: string; // draft | published | locked
 }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
-  const [tourNo, setTourNo] = useState<string>("1");
-  const [name, setName] = useState<string>("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const locked = props.stageStatus === "locked";
 
-  const disabled = stageStatus !== "draft";
+  const [tourNo, setTourNo] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
   async function create() {
     setMsg(null);
+    if (locked) return setMsg("Этап закрыт — добавлять туры нельзя");
 
     const no = Number(tourNo);
     if (!Number.isInteger(no) || no < 1) return setMsg("Номер тура должен быть целым >= 1");
@@ -30,15 +28,17 @@ export default function CreateTourForm({
     setLoading(true);
     try {
       const { error } = await supabase.from("tours").insert({
-        stage_id: stageId,
+        stage_id: props.stageId,
         tour_no: no,
         name: name.trim() ? name.trim() : null,
       });
 
       if (error) throw error;
 
-      setMsg("Тур создан ✅");
-      router.refresh(); // ✅ сразу обновит список туров и счётчики
+      setTourNo("");
+      setName("");
+      router.refresh();
+      setMsg("Создано ✅");
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка");
     } finally {
@@ -48,43 +48,43 @@ export default function CreateTourForm({
 
   return (
     <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14 }}>
-      <div style={{ fontWeight: 800 }}>Новый тур</div>
+      <div style={{ fontWeight: 900 }}>Новый тур</div>
 
-      {disabled && (
+      {locked && (
         <div style={{ marginTop: 8, color: "crimson" }}>
-          Этап не в draft — добавлять туры нельзя.
+          Этап закрыт (locked) — добавление туров запрещено.
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input
           value={tourNo}
           onChange={(e) => setTourNo(e.target.value)}
-          inputMode="numeric"
-          placeholder="№ тура"
-          disabled={disabled}
-          style={{ padding: 12, borderRadius: 12, border: "1px solid #ddd", width: 120 }}
+          placeholder="Номер тура"
+          disabled={loading || locked}
+          style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", width: 140 }}
         />
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Название (необязательно)"
-          disabled={disabled}
-          style={{ padding: 12, borderRadius: 12, border: "1px solid #ddd", minWidth: 260 }}
+          disabled={loading || locked}
+          style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 260 }}
         />
         <button
+          type="button"
           onClick={create}
-          disabled={disabled || loading}
+          disabled={loading || locked}
           style={{
-            padding: "12px 14px",
-            borderRadius: 12,
+            padding: "10px 12px",
+            borderRadius: 10,
             border: "1px solid #111",
-            background: disabled ? "#777" : "#111",
+            background: "#111",
             color: "#fff",
-            cursor: disabled ? "not-allowed" : "pointer",
+            opacity: locked ? 0.6 : 1,
           }}
         >
-          {loading ? "..." : "Создать тур"}
+          {loading ? "..." : "Создать"}
         </button>
       </div>
 

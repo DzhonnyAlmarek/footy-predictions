@@ -15,6 +15,13 @@ type MatchRow = {
   away: string;
 };
 
+function stageStatusRu(s: string) {
+  if (s === "draft") return "Черновик";
+  if (s === "published") return "Опубликован";
+  if (s === "locked") return "Закрыт";
+  return s;
+}
+
 export default async function AdminStageToursPage({
   params,
 }: {
@@ -98,7 +105,8 @@ export default async function AdminStageToursPage({
           {stage.is_current ? <span title="Текущий этап">⭐</span> : null}
         </h1>
         <p style={{ marginTop: 6, opacity: 0.85 }}>
-          статус: <b>{stage.status}</b> • матчей: <b>{matchCountSafe}</b> / {stage.matches_required}
+          статус: <b>{stageStatusRu(stage.status)}</b> • матчей:{" "}
+          <b>{matchCountSafe}</b> / {stage.matches_required}
         </p>
       </header>
 
@@ -155,7 +163,8 @@ export default async function AdminStageToursPage({
                   >
                     <div style={{ minWidth: 320 }}>
                       <div style={{ fontSize: 18, fontWeight: 800 }}>
-                        Тур {t.tour_no}{t.name ? ` — ${t.name}` : ""}{" "}
+                        Тур {t.tour_no}
+                        {t.name ? ` — ${t.name}` : ""}{" "}
                         <span style={{ opacity: 0.7, fontWeight: 700 }}>
                           (матчей: {tMatches.length})
                         </span>

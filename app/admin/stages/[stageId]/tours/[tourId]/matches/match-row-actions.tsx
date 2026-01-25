@@ -7,13 +7,13 @@ import { createClient } from "@/lib/supabase/client";
 type Team = { id: number; name: string };
 
 export default function MatchRowActions(props: {
-  stageStatus: string;
+  stageStatus: string; // draft | published | locked
   matchId: number;
 
   initialHomeTeamId: number;
   initialAwayTeamId: number;
   initialKickoffAt: string;   // ISO
-  initialDeadlineAt: string;  // ISO (теперь по сути = kickoff)
+  initialDeadlineAt: string;  // ISO (равен kickoff)
   initialStatus: string;
 
   teams: Team[];
@@ -21,22 +21,17 @@ export default function MatchRowActions(props: {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
-  const disabled = props.stageStatus !== "draft";
+  // ✅ НОВОЕ: запрещаем только в locked
+  const locked = props.stageStatus === "locked";
 
   const [editing, setEditing] = useState(false);
   const [homeTeamId, setHomeTeamId] = useState<number>(props.initialHomeTeamId);
   const [awayTeamId, setAwayTeamId] = useState<number>(props.initialAwayTeamId);
 
-  // datetime-local требует "YYYY-MM-DDTHH:mm"
   const isoToLocal = (iso: string) => {
     const d = new Date(iso);
     const pad = (n: number) => String(n).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    const mm = pad(d.getMonth() + 1);
-    const dd = pad(d.getDate());
-    const hh = pad(d.getHours());
-    const mi = pad(d.getMinutes());
-    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
   const [kickoffLocal, setKickoffLocal] = useState<string>(isoToLocal(props.initialKickoffAt));
@@ -47,7 +42,7 @@ export default function MatchRowActions(props: {
 
   async function save() {
     setMsg(null);
-    if (disabled) return setMsg("Этап не draft — редактирование запрещено");
+    if (locked) return setMsg("Этап закрыт (locked) — редактирование запрещено");
 
     if (homeTeamId === awayTeamId) return setMsg("Команды должны быть разными");
     if (!kickoffLocal) return setMsg("Укажите дату матча");
@@ -57,8 +52,7 @@ export default function MatchRowActions(props: {
 
     setLoading(true);
     try {
-      // НОВОЕ ПРАВИЛО: дедлайн = дата матча
-      const iso = kickoff.toISOString();
+      const iso = kickoff.toISOString(); // дедлайн = дата матча
 
       const { error } = await supabase
         .from("matches")
@@ -75,6 +69,7 @@ export default function MatchRowActions(props: {
 
       setEditing(false);
       router.refresh();
+      setMsg("Сохранено ✅");
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка сохранения");
     } finally {
@@ -84,7 +79,7 @@ export default function MatchRowActions(props: {
 
   async function remove() {
     setMsg(null);
-    if (disabled) return setMsg("Этап не draft — удаление запрещено");
+    if (locked) return setMsg("Этап закрыт (locked) — удаление запрещено");
 
     if (!confirm("Удалить матч?")) return;
 
@@ -94,6 +89,7 @@ export default function MatchRowActions(props: {
       if (error) throw error;
 
       router.refresh();
+      setMsg("Удалено ✅");
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка удаления");
     } finally {
@@ -105,20 +101,40 @@ export default function MatchRowActions(props: {
     return (
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
         <button
+          type="button"
           onClick={() => setEditing(true)}
-          disabled={disabled}
-          style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#fff" }}
+          disabled={locked || loading}
+          title={locked ? "Этап locked — редактирование запрещено" : "Редактировать матч"}
+          style={{
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "1px solid #111",
+            background: "#fff",
+            cursor: locked ? "not-allowed" : "pointer",
+            opacity: locked ? 0.6 : 1,
+          }}
         >
           Редактировать
         </button>
+
         <button
+          type="button"
           onClick={remove}
-          disabled={disabled || loading}
-          style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#fff" }}
+          disabled={locked || loading}
+          title={locked ? "Этап locked — удаление запрещено" : "Удалить матч"}
+          style={{
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "1px solid #111",
+            background: "#fff",
+            cursor: locked ? "not-allowed" : "pointer",
+            opacity: locked ? 0.6 : 1,
+          }}
         >
-          Удалить
+          {loading ? "..." : "Удалить"}
         </button>
-        {msg && <div style={{ color: "crimson" }}>{msg}</div>}
+
+        {msg && <div style={{ color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</div>}
       </div>
     );
   }
@@ -127,7 +143,11 @@ export default function MatchRowActions(props: {
     <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
       <div style={{ fontWeight: 800 }}>Редактирование</div>
 
-      {disabled && <div style={{ marginTop: 8, color: "crimson" }}>Этап не draft — редактирование запрещено.</div>}
+      {locked && (
+        <div style={{ marginTop: 8, color: "crimson" }}>
+          Этап закрыт (locked) — редактирование запрещено.
+        </div>
+      )}
 
       <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -136,7 +156,7 @@ export default function MatchRowActions(props: {
             <select
               value={homeTeamId}
               onChange={(e) => setHomeTeamId(Number(e.target.value))}
-              disabled={loading || disabled}
+              disabled={loading || locked}
               style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
             >
               {props.teams.map((t) => (
@@ -152,7 +172,7 @@ export default function MatchRowActions(props: {
             <select
               value={awayTeamId}
               onChange={(e) => setAwayTeamId(Number(e.target.value))}
-              disabled={loading || disabled}
+              disabled={loading || locked}
               style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
             >
               {props.teams.map((t) => (
@@ -170,7 +190,7 @@ export default function MatchRowActions(props: {
             type="datetime-local"
             value={kickoffLocal}
             onChange={(e) => setKickoffLocal(e.target.value)}
-            disabled={loading || disabled}
+            disabled={loading || locked}
             style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
           />
         </label>
@@ -180,7 +200,7 @@ export default function MatchRowActions(props: {
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            disabled={loading || disabled}
+            disabled={loading || locked}
             style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", width: 220 }}
           >
             <option value="scheduled">scheduled</option>
@@ -192,20 +212,24 @@ export default function MatchRowActions(props: {
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button
+            type="button"
             onClick={save}
-            disabled={loading || disabled}
+            disabled={loading || locked}
             style={{
               padding: "10px 12px",
               borderRadius: 10,
               border: "1px solid #111",
               background: "#111",
               color: "#fff",
+              cursor: locked ? "not-allowed" : "pointer",
+              opacity: locked ? 0.6 : 1,
             }}
           >
             {loading ? "..." : "Сохранить"}
           </button>
 
           <button
+            type="button"
             onClick={() => {
               setEditing(false);
               setHomeTeamId(props.initialHomeTeamId);
@@ -226,7 +250,7 @@ export default function MatchRowActions(props: {
           </button>
         </div>
 
-        {msg && <div style={{ color: "crimson" }}>{msg}</div>}
+        {msg && <div style={{ color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</div>}
       </div>
     </div>
   );

@@ -37,7 +37,7 @@ export default async function DashboardLayout({
       <div style={{ borderBottom: "1px solid #eee", padding: "12px 24px" }}>
         <div
           style={{
-            maxWidth: 1100,
+            maxWidth: 1200,
             margin: "0 auto",
             display: "flex",
             justifyContent: "space-between",
@@ -48,15 +48,14 @@ export default async function DashboardLayout({
         >
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <BackButton />
-            <Link href="/dashboard/stages" style={{ textDecoration: "underline" }}>
+            <Link href="/dashboard" style={{ textDecoration: "underline" }}>
               Домой
             </Link>
           </div>
 
-          {/* ЕДИНСТВЕННОЕ МЕНЮ */}
+          {/* ✅ только текущая таблица + выход */}
           <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <Link href="/dashboard/stages">Этапы</Link>
-            <Link href="/rating">Рейтинг</Link>
+            <Link href="/dashboard">Текущая таблица</Link>
             <Link href="/logout">{loginLabel}</Link>
           </nav>
         </div>

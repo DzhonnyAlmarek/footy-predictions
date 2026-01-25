@@ -74,7 +74,8 @@ export async function POST(req: Request) {
       .eq("user_id", acc.user_id)
       .maybeSingle();
 
-    let redirectTo = "/dashboard/stages";
+    let redirectTo = "/dashboard";
+
 
     if (acc2?.must_change_password) {
       redirectTo = "/change-password";

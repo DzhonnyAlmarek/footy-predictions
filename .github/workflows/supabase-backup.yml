@@ -1,0 +1,38 @@
+name: Supa-backup
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *' # каждый день в полночь (UTC)
+
+jobs:
+  run_db_backup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      supabase_db_url: ${{ secrets.SUPABASE_DB_URL }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Backup roles
+        run: supabase db dump --db-url "$supabase_db_url" -f supabase-backups/roles.sql --role-only
+
+      - name: Backup schema (includes policies/functions)
+        run: supabase db dump --db-url "$supabase_db_url" -f supabase-backups/schema.sql
+
+      - name: Backup data
+        run: supabase db dump --db-url "$supabase_db_url" -f supabase-backups/data.sql --data-only --use-copy
+
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Supabase backup

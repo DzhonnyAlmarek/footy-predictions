@@ -4,6 +4,13 @@ import StageRowActions from "./stage-row-actions";
 import SetCurrentStageButton from "./set-current-stage";
 import Link from "next/link";
 
+function stageStatusRu(s: string) {
+  if (s === "draft") return "Черновик";
+  if (s === "published") return "Опубликован";
+  if (s === "locked") return "Закрыт";
+  return s;
+}
+
 export default async function AdminStagesPage() {
   const supabase = await createClient();
 
@@ -19,10 +26,9 @@ export default async function AdminStagesPage() {
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 800 }}>Этапы</h1>
           <p style={{ marginTop: 6, opacity: 0.8 }}>
-            Выберите текущий этап вручную. Он используется в “Текущей таблице” и “Результатах”.
+            Выберите текущий этап вручную (⭐). Он используется в “Текущей таблице” и “Результатах”.
           </p>
         </div>
-        {/* ✅ тут больше нет nav */}
       </header>
 
       <section style={{ marginTop: 18 }}>
@@ -54,18 +60,24 @@ export default async function AdminStagesPage() {
                   <div style={{ fontSize: 18, fontWeight: 800 }}>
                     #{s.id} • {s.name} {s.is_current ? <span style={{ marginLeft: 6 }}>⭐</span> : null}
                   </div>
+
                   <div style={{ marginTop: 6, opacity: 0.8 }}>
-                    статус: <b>{s.status}</b> • матчей: {s.matches_required}
+                    статус: <b>{stageStatusRu(s.status)}</b> • матчей: {s.matches_required}
                   </div>
+
                   <div style={{ marginTop: 6, opacity: 0.8 }}>
                     создан:{" "}
-                    {new Date(s.created_at).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}
+                    {new Date(s.created_at).toLocaleString("ru-RU", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
                   </div>
 
                   <div style={{ marginTop: 10, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
                     <Link href={`/admin/stages/${s.id}/tours`} style={{ textDecoration: "underline" }}>
                       Открыть →
                     </Link>
+
                     <SetCurrentStageButton stageId={s.id} isCurrent={!!s.is_current} />
                   </div>
                 </div>

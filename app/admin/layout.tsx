@@ -81,14 +81,15 @@ export default async function AdminLayout({
           </div>
 
           {/* ЕДИНСТВЕННОЕ МЕНЮ */}
-          <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <Link href="/admin/current-table">Текущая таблица</Link>
-            <Link href="/admin/stages">Этапы</Link>
-            <Link href="/admin/results">Результаты</Link>
-            <Link href="/admin/audit">Логи</Link>
-            <Link href="/rating">Рейтинг</Link>
-            <Link href="/logout">{loginLabel}</Link>
-          </nav>
+         <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+  <Link href="/admin">Домой</Link>
+  <Link href="/admin/current-table">Текущая таблица</Link>
+  <Link href="/admin/stages">Этапы</Link>
+  <Link href="/admin/results">Результаты</Link>
+  <Link href="/admin/teams">Команды</Link>
+  <Link href="/admin/users">Пользователи</Link>
+  <Link href="/logout">{loginLabel}</Link>
+</nav>
         </div>
       </div>
 
