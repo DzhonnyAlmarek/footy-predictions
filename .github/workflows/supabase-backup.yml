@@ -1,38 +1,50 @@
-name: Supa-backup
+name: Supabase Backup (schema + roles)
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *' # каждый день в полночь (UTC)
+    - cron: "0 2 * * *"  # каждый день 02:00 UTC
 
 jobs:
-  run_db_backup:
+  backup:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     env:
-      supabase_db_url: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: supabase/setup-cli@v1
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      - name: Backup roles
-        run: supabase db dump --db-url "$supabase_db_url" -f supabase-backups/roles.sql --role-only
+      - name: Ensure backup dir
+        run: mkdir -p supabase-backups
 
-      - name: Backup schema (includes policies/functions)
-        run: supabase db dump --db-url "$supabase_db_url" -f supabase-backups/schema.sql
+      - name: Dump roles
+        run: supabase db dump --db-url "$SUPABASE_DB_URL" -f supabase-backups/roles.sql --role-only
 
-      - name: Backup data
-        run: supabase db dump --db-url "$supabase_db_url" -f supabase-backups/data.sql --data-only --use-copy
+      - name: Dump schema (includes RLS policies, functions, triggers)
+        run: supabase db dump --db-url "$SUPABASE_DB_URL" -f supabase-backups/schema.sql
 
-      - uses: stefanzweifel/git-auto-commit-action@v4
+      # Данные НЕ коммитим: сохраняем как artifact
+      - name: Dump data (artifact only)
+        run: supabase db dump --db-url "$SUPABASE_DB_URL" -f supabase-backups/data.sql --data-only --use-copy
+
+      - name: Upload data artifact
+        uses: actions/upload-artifact@v4
         with:
-          commit_message: Supabase backup
+          name: supabase-data-snapshot
+          path: supabase-backups/data.sql
+          retention-days: 14
+
+      - name: Commit schema/roles
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(backup): supabase schema + roles"
+          file_pattern: supabase-backups/schema.sql supabase-backups/roles.sql
