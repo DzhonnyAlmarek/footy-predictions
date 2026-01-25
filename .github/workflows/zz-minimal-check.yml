@@ -8,13 +8,31 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
     steps:
-      - name: Hello + secret presence
+      - name: Version marker
         run: |
-          echo "ZZ workflow is alive"
+          echo "ZZ_MINIMAL_WORKFLOW=2026-01-25_format_check"
+
+      - name: Check SUPABASE_DB_URL format
+        run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
-            echo "SUPABASE_DB_URL is EMPTY"
+            echo "❌ SUPABASE_DB_URL is EMPTY"
             exit 1
           fi
-          echo "SUPABASE_DB_URL is present ✅"
+
+          case "$SUPABASE_DB_URL" in
+            postgresql://postgres:*)
+              echo "✅ SUPABASE_DB_URL has correct prefix"
+              ;;
+            *)
+              echo "❌ SUPABASE_DB_URL has WRONG format"
+              echo "It must start with: postgresql://postgres:"
+              echo "Current value (masked or raw):"
+              echo "$SUPABASE_DB_URL"
+              exit 1
+              ;;
+          esac
+
+          echo "Masked DSN:"
           echo "$SUPABASE_DB_URL" | sed -E 's#(postgresql://postgres:)[^@]+@#\1***@#'
