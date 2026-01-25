@@ -3,7 +3,7 @@ name: Supabase Backup (schema + roles)
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 2 * * *" # каждый день в 02:00 UTC
+    - cron: "0 2 * * *"
 
 jobs:
   backup:
@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p supabase-backups
-          ls -la
+          ls -la supabase-backups
 
       - name: Dump roles
         shell: bash
@@ -37,7 +37,7 @@ jobs:
             --role-only \
             -f supabase-backups/roles.sql
 
-      - name: Dump schema (includes RLS, functions, triggers)
+      - name: Dump schema (includes RLS/policies/functions)
         shell: bash
         run: |
           supabase db dump \
