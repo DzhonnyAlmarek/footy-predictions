@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 type Props = {
   matchId: number;
   pred: string; // "2:1" или ""
   canEdit: boolean;
   pointsText?: string; // например " (2.5)"
-  tip?: string; // ✅ теперь НЕобязательный
+  tip?: string;
 };
 
 function parsePred(v: string) {
@@ -21,8 +20,6 @@ function parsePred(v: string) {
 }
 
 export default function PredCellEditable({ matchId, pred, canEdit, pointsText, tip }: Props) {
-  const supabase = useMemo(() => createClient(), []);
-
   const initial = useMemo(() => parsePred(pred), [pred]);
 
   const [home, setHome] = useState(initial.home);
@@ -41,51 +38,39 @@ export default function PredCellEditable({ matchId, pred, canEdit, pointsText, t
 
   async function save() {
     setMsg(null);
-
     if (!canEdit) return;
 
     const h = home.trim();
     const a = away.trim();
 
-    // разрешаем пустое = удалить прогноз
     const homePred = h === "" ? null : Number(h);
     const awayPred = a === "" ? null : Number(a);
 
-    if (homePred !== null && (!Number.isFinite(homePred) || homePred < 0)) {
-      return setMsg("Некорректно");
-    }
-    if (awayPred !== null && (!Number.isFinite(awayPred) || awayPred < 0)) {
-      return setMsg("Некорректно");
-    }
+    if (homePred !== null && (!Number.isFinite(homePred) || homePred < 0)) return setMsg("Некорректно");
+    if (awayPred !== null && (!Number.isFinite(awayPred) || awayPred < 0)) return setMsg("Некорректно");
 
     setSaving(true);
     try {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) {
-        setMsg("Нужен вход");
-        return;
-      }
-
-      // upsert прогноза
-      // ВАЖНО: тут предполагается, что в таблице predictions есть match_id + user_id + home_pred + away_pred
-      // и уникальный ключ (match_id, user_id)
-      const { error } = await supabase.from("predictions").upsert(
-        {
+      const res = await fetch("/api/predictions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           match_id: matchId,
-          user_id: u.user.id,
           home_pred: homePred,
           away_pred: awayPred,
-        },
-        { onConflict: "match_id,user_id" }
-      );
+        }),
+      });
 
-      if (error) throw error;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error === "not_auth" ? "Нужен вход" : (json?.error ?? `Ошибка (${res.status})`));
+      }
+
       setMsg("✅");
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка");
     } finally {
       setSaving(false);
-      // убираем короткое сообщение
       setTimeout(() => setMsg(null), 1200);
     }
   }

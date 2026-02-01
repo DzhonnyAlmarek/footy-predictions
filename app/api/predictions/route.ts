@@ -1,68 +1,69 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 
-export const dynamic = "force-dynamic";
+function mustEnv(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
+}
 
-function isInt(n: any) {
-  return Number.isInteger(n);
+// auth через cookies (как у тебя в API login)
+async function getAuthedSupabase() {
+  const cookieStore = await cookies();
+
+  return createServerClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll() {},
+      },
+    }
+  );
 }
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
+  const supabase = await getAuthedSupabase();
+  const { data: u } = await supabase.auth.getUser();
 
-  const { data: userData, error: userErr } = await supabase.auth.getUser();
-  if (userErr) {
-    return NextResponse.json({ error: userErr.message }, { status: 401 });
-  }
-  const user = userData.user;
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!u?.user) {
+    return NextResponse.json({ error: "not_auth" }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => null);
-  const matchId = body?.matchId;
-  const homePred = body?.homePred;
-  const awayPred = body?.awayPred;
+  const body = await req.json().catch(() => ({}));
 
-  if (!matchId) return NextResponse.json({ error: "matchId_required" }, { status: 400 });
+  const matchId = Number(body.match_id);
+  const homePred = body.home_pred === null || body.home_pred === "" ? null : Number(body.home_pred);
+  const awayPred = body.away_pred === null || body.away_pred === "" ? null : Number(body.away_pred);
 
-  const hp = Number(homePred);
-  const ap = Number(awayPred);
-
-  if (!isInt(hp) || !isInt(ap) || hp < 0 || ap < 0 || hp > 30 || ap > 30) {
-    return NextResponse.json({ error: "invalid_score" }, { status: 400 });
+  if (!Number.isFinite(matchId)) {
+    return NextResponse.json({ error: "match_id_required" }, { status: 400 });
+  }
+  if (homePred !== null && (!Number.isFinite(homePred) || homePred < 0)) {
+    return NextResponse.json({ error: "home_pred_invalid" }, { status: 400 });
+  }
+  if (awayPred !== null && (!Number.isFinite(awayPred) || awayPred < 0)) {
+    return NextResponse.json({ error: "away_pred_invalid" }, { status: 400 });
   }
 
-  // дедлайн: нельзя менять после deadline_at (если он задан)
-  const { data: matchRow, error: matchErr } = await supabase
-    .from("matches")
-    .select("deadline_at")
-    .eq("id", matchId)
-    .maybeSingle();
+  // upsert только для текущего пользователя
+  const { error } = await supabase.from("predictions").upsert(
+    {
+      match_id: matchId,
+      user_id: u.user.id,
+      home_pred: homePred,
+      away_pred: awayPred,
+    },
+    { onConflict: "match_id,user_id" }
+  );
 
-  if (matchErr) return NextResponse.json({ error: matchErr.message }, { status: 500 });
-  if (!matchRow) return NextResponse.json({ error: "match_not_found" }, { status: 404 });
-
-  if (matchRow.deadline_at) {
-    const deadline = new Date(matchRow.deadline_at);
-    if (!Number.isNaN(deadline.getTime()) && Date.now() > deadline.getTime()) {
-      return NextResponse.json({ error: "deadline_passed" }, { status: 403 });
-    }
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
-
-  const { error } = await supabase
-    .from("predictions")
-    .upsert(
-      {
-        match_id: matchId,
-        user_id: user.id,
-        home_pred: hp,
-        away_pred: ap,
-      },
-      { onConflict: "match_id,user_id" }
-    );
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }
