@@ -13,7 +13,8 @@ function mustEnv(name: string) {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => null);
+    const body = await req.json().catch(() => ({}));
+
     const login = String(body?.login ?? "").trim();
     const password = String(body?.password ?? "");
 
@@ -27,59 +28,32 @@ export async function POST(req: Request) {
 
     const cookieStore = await cookies();
 
-    // ✅ создадим “временный” response, но финальный сформируем после redirect
-    // cookies будем ставить в response, который вернём в конце
-    let responseToSetCookiesOn: NextResponse | null = null;
-
-    const supabase = createServerClient(url, anon, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          if (!responseToSetCookiesOn) return; // пока не создали — просто пропустим
-          cookiesToSet.forEach(({ name, value, options }) => {
-            responseToSetCookiesOn!.cookies.set(name, value, {
-              ...(options ?? {}),
-              path: "/", // ✅ критично
-            });
-          });
-        },
-      },
+    // service role (чтобы найти user/email и роль без RLS)
+    const admin = createAdminClient(url, service, {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
 
     // 1) user_id по login
-    const { data: acc, error: accErr } = await supabase
+    const { data: acc, error: accErr } = await admin
       .from("login_accounts")
-      .select("user_id")
+      .select("user_id, must_change_password")
       .eq("login", login)
-      .single();
+      .maybeSingle();
 
     if (accErr || !acc?.user_id) {
       return NextResponse.json({ error: "unknown_login" }, { status: 401 });
     }
 
-    // 2) тех. email по user_id через service_role
-    const admin = createAdminClient(url, service, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
+    // 2) тех. email по user_id
     const { data: userRes, error: userErr } = await admin.auth.admin.getUserById(acc.user_id);
+
     if (userErr || !userRes?.user?.email) {
       return NextResponse.json({ error: "auth_user_not_found" }, { status: 401 });
     }
 
-    // 3) sign in — для корректной записи cookies нужен уже готовый response
-    // поэтому сначала определим redirect по данным (до signIn мы не можем)
-    // Но redirect зависит от must_change_password и роли → их можно читать и без signIn через service role:
-    const { data: acc2 } = await admin
-      .from("login_accounts")
-      .select("must_change_password")
-      .eq("user_id", acc.user_id)
-      .maybeSingle();
-
+    // 3) вычисляем redirect (без зависимостей от cookies)
     let redirectTo = "/dashboard";
-    if (acc2?.must_change_password) {
+    if (acc.must_change_password) {
       redirectTo = "/change-password";
     } else {
       const { data: prof } = await admin
@@ -90,11 +64,27 @@ export async function POST(req: Request) {
       if (prof?.role === "admin") redirectTo = "/admin";
     }
 
-    // ✅ теперь создаём финальный response
+    // ✅ создаём финальный response ОДИН раз
     const res = NextResponse.json({ ok: true, redirect: redirectTo });
-    responseToSetCookiesOn = res;
 
-    // ✅ и только теперь делаем signIn, чтобы supabase cookies записались в res
+    // ✅ supabase server client, который будет писать auth cookies В ОТВЕТ (res.cookies.set)
+    const supabase = createServerClient(url, anon, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            res.cookies.set(name, value, {
+              ...(options ?? {}),
+              path: "/", // ✅ критично
+            });
+          });
+        },
+      },
+    });
+
+    // 4) sign in (запишет sb-* cookies в res)
     const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: userRes.user.email,
       password,
@@ -103,6 +93,14 @@ export async function POST(req: Request) {
     if (signInErr) {
       return NextResponse.json({ error: "wrong_password" }, { status: 401 });
     }
+
+    // ✅ твой маркер для middleware/простых проверок
+    res.cookies.set("fp_auth", "1", {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true, // на *.vercel.app это норм
+    });
 
     return res;
   } catch (e: any) {

@@ -8,7 +8,6 @@ function mustEnv(name: string) {
   return v;
 }
 
-// auth через cookies (как у тебя в API login)
 async function getAuthedSupabase() {
   const cookieStore = await cookies();
 
@@ -20,7 +19,7 @@ async function getAuthedSupabase() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll() {},
+        setAll() {}, // нам тут не нужно писать cookies
       },
     }
   );
@@ -40,17 +39,12 @@ export async function POST(req: Request) {
   const homePred = body.home_pred === null || body.home_pred === "" ? null : Number(body.home_pred);
   const awayPred = body.away_pred === null || body.away_pred === "" ? null : Number(body.away_pred);
 
-  if (!Number.isFinite(matchId)) {
-    return NextResponse.json({ error: "match_id_required" }, { status: 400 });
-  }
-  if (homePred !== null && (!Number.isFinite(homePred) || homePred < 0)) {
+  if (!Number.isFinite(matchId)) return NextResponse.json({ error: "match_id_required" }, { status: 400 });
+  if (homePred !== null && (!Number.isFinite(homePred) || homePred < 0))
     return NextResponse.json({ error: "home_pred_invalid" }, { status: 400 });
-  }
-  if (awayPred !== null && (!Number.isFinite(awayPred) || awayPred < 0)) {
+  if (awayPred !== null && (!Number.isFinite(awayPred) || awayPred < 0))
     return NextResponse.json({ error: "away_pred_invalid" }, { status: 400 });
-  }
 
-  // upsert только для текущего пользователя
   const { error } = await supabase.from("predictions").upsert(
     {
       match_id: matchId,
@@ -61,9 +55,7 @@ export async function POST(req: Request) {
     { onConflict: "match_id,user_id" }
   );
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   return NextResponse.json({ ok: true });
 }
