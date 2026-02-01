@@ -1,94 +1,130 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
-export default function CreateTourForm(props: {
-  stageId: number;
-  stageStatus: string; // draft | published | locked
-}) {
-  const supabase = useMemo(() => createClient(), []);
+export default function CreateTourForm({ stageId }: { stageId: number }) {
   const router = useRouter();
 
-  const locked = props.stageStatus === "locked";
-
-  const [tourNo, setTourNo] = useState("");
-  const [name, setName] = useState("");
+  const [tourNo, setTourNo] = useState<string>("");
+  const [name, setName] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function create() {
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
     setMsg(null);
-    if (locked) return setMsg("Этап закрыт — добавлять туры нельзя");
 
-    const no = Number(tourNo);
-    if (!Number.isInteger(no) || no < 1) return setMsg("Номер тура должен быть целым >= 1");
+    const no = Number(String(tourNo).trim());
+    if (!Number.isFinite(no) || no <= 0) {
+      setMsg("Введите корректный номер тура (например: 1)");
+      return;
+    }
+
+    const tourName = name.trim() || null;
 
     setLoading(true);
     try {
-      const { error } = await supabase.from("tours").insert({
-        stage_id: props.stageId,
-        tour_no: no,
-        name: name.trim() ? name.trim() : null,
+      const res = await fetch("/api/admin/tours", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage_id: stageId,
+          tour_no: no,
+          name: tourName,
+        }),
       });
 
-      if (error) throw error;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error ?? `Ошибка создания тура (${res.status})`);
+      }
 
       setTourNo("");
       setName("");
+      setMsg("Тур создан ✅");
       router.refresh();
-      setMsg("Создано ✅");
     } catch (e: any) {
-      setMsg(e?.message ?? "Ошибка");
+      setMsg(e?.message ?? "Ошибка создания тура");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14 }}>
-      <div style={{ fontWeight: 900 }}>Новый тур</div>
+    <form
+      onSubmit={submit}
+      style={{
+        border: "1px solid #e5e5e5",
+        borderRadius: 12,
+        padding: 14,
+      }}
+    >
+      <div style={{ fontWeight: 900 }}>Создать тур</div>
 
-      {locked && (
-        <div style={{ marginTop: 8, color: "crimson" }}>
-          Этап закрыт (locked) — добавление туров запрещено.
-        </div>
-      )}
-
-      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+      <div
+        style={{
+          marginTop: 10,
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
         <input
           value={tourNo}
           onChange={(e) => setTourNo(e.target.value)}
-          placeholder="Номер тура"
-          disabled={loading || locked}
-          style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", width: 140 }}
+          placeholder="Номер тура (например: 19)"
+          inputMode="numeric"
+          disabled={loading}
+          style={{
+            padding: 10,
+            borderRadius: 10,
+            border: "1px solid #ddd",
+            width: 180,
+          }}
         />
+
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Название (необязательно)"
-          disabled={loading || locked}
-          style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 260 }}
+          disabled={loading}
+          style={{
+            padding: 10,
+            borderRadius: 10,
+            border: "1px solid #ddd",
+            minWidth: 240,
+            flex: "1 1 240px",
+          }}
         />
+
         <button
-          type="button"
-          onClick={create}
-          disabled={loading || locked}
+          type="submit"
+          disabled={loading}
           style={{
             padding: "10px 12px",
             borderRadius: 10,
             border: "1px solid #111",
             background: "#111",
             color: "#fff",
-            opacity: locked ? 0.6 : 1,
+            fontWeight: 900,
+            cursor: loading ? "not-allowed" : "pointer",
           }}
         >
-          {loading ? "..." : "Создать"}
+          {loading ? "Создание..." : "Создать"}
         </button>
       </div>
 
-      {msg && <div style={{ marginTop: 10, color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</div>}
-    </div>
+      {msg ? (
+        <div style={{ marginTop: 10, fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>
+          {msg}
+        </div>
+      ) : null}
+
+      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
+        Создание выполняется через <b>/api/admin/tours</b> (service role), поэтому RLS не блокирует.
+      </div>
+    </form>
   );
 }

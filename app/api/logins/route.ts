@@ -1,20 +1,25 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-  const supabase = createClient(url, anon);
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("login_accounts")
-    .select("login")
+    .select("login,must_change_password,temp_password")
     .order("login", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: error.message, logins: [] }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ logins: (data ?? []).map((x) => x.login) });
+  return NextResponse.json({
+    logins: (data ?? []).map((x) => ({
+      login: x.login,
+      must_change_password: !!x.must_change_password,
+      temp_password: x.temp_password ?? null,
+    })),
+  });
 }

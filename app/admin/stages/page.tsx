@@ -4,19 +4,15 @@ import StageRowActions from "./stage-row-actions";
 import SetCurrentStageButton from "./set-current-stage";
 import Link from "next/link";
 
-function stageStatusRu(s: string) {
-  if (s === "draft") return "Черновик";
-  if (s === "published") return "Опубликован";
-  if (s === "locked") return "Закрыт";
-  return s;
-}
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function AdminStagesPage() {
   const supabase = await createClient();
 
   const { data: stages, error } = await supabase
     .from("stages")
-    .select("id,name,status,created_at,matches_required,is_current")
+    .select("id,name,created_at,matches_required,is_current")
     .order("id", { ascending: false })
     .limit(200);
 
@@ -62,7 +58,7 @@ export default async function AdminStagesPage() {
                   </div>
 
                   <div style={{ marginTop: 6, opacity: 0.8 }}>
-                    статус: <b>{stageStatusRu(s.status)}</b> • матчей: {s.matches_required}
+                    матчей в этапе: <b>{s.matches_required}</b>
                   </div>
 
                   <div style={{ marginTop: 6, opacity: 0.8 }}>
@@ -82,7 +78,11 @@ export default async function AdminStagesPage() {
                   </div>
                 </div>
 
-                <StageRowActions stageId={s.id} initialName={s.name} initialStatus={s.status} />
+                <StageRowActions
+                  stageId={s.id}
+                  initialName={s.name}
+                  initialMatchesRequired={Number(s.matches_required ?? 56)}
+                />
               </div>
             ))}
           </div>

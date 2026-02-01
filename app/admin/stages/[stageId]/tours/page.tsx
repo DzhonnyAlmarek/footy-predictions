@@ -128,7 +128,7 @@ export default async function AdminStageToursPage({
       </section>
 
       <section style={{ marginTop: 18 }}>
-        <CreateTourForm stageId={sid} stageStatus={stage.status} />
+        <CreateTourForm stageId={sid} />
       </section>
 
       {error && (

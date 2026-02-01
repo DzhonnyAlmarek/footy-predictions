@@ -3,6 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import PredictionForm from "./prediction-form";
 import AllPredictions from "./all-predictions";
 
+function teamName(team: any): string {
+  if (Array.isArray(team)) return String(team?.[0]?.name ?? "");
+  return String(team?.name ?? "");
+}
+
 export default async function MatchPage({
   params,
 }: {
@@ -113,6 +118,9 @@ export default async function MatchPage({
       ? `/dashboard/stages/${stageInfo.id}/tours/${tourInfo.id}/matches`
       : null;
 
+  const homeName = teamName(match.home_team);
+  const awayName = teamName(match.away_team);
+
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
       <p style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -125,7 +133,7 @@ export default async function MatchPage({
       </p>
 
       <h1 style={{ fontSize: 28, fontWeight: 800, marginTop: 12 }}>
-        {match.home_team.name} — {match.away_team.name}
+        {homeName} — {awayName}
       </h1>
 
       {(stageInfo || tourInfo) && (
@@ -138,7 +146,11 @@ export default async function MatchPage({
           {stageInfo && tourInfo ? " • " : null}
           {tourInfo ? (
             <>
-              Тур: <b>{tourInfo.tour_no}{tourInfo.name ? ` — ${tourInfo.name}` : ""}</b>
+              Тур:{" "}
+              <b>
+                {tourInfo.tour_no}
+                {tourInfo.name ? ` — ${tourInfo.name}` : ""}
+              </b>
             </>
           ) : null}
         </p>
@@ -172,8 +184,7 @@ export default async function MatchPage({
           })}
         </div>
         <div style={{ marginTop: 6 }}>
-          <b>Статус приёма прогнозов:</b>{" "}
-          {isOpen ? "открыто" : "закрыто"}
+          <b>Статус приёма прогнозов:</b> {isOpen ? "открыто" : "закрыто"}
         </div>
 
         {userData.user && (
@@ -184,7 +195,9 @@ export default async function MatchPage({
             ) : (
               <>
                 <span style={{ fontWeight: 900 }}>{myPoints}</span>
-                {myReason ? <span style={{ opacity: 0.8 }}> ({myReason})</span> : null}
+                {myReason ? (
+                  <span style={{ opacity: 0.8 }}> ({myReason})</span>
+                ) : null}
               </>
             )}
           </div>
@@ -201,8 +214,8 @@ export default async function MatchPage({
         <div style={{ marginTop: 12 }}>
           <PredictionForm
             matchId={matchId}
-            homeName={match.home_team.name}
-            awayName={match.away_team.name}
+            homeName={homeName}
+            awayName={awayName}
             deadlineAt={match.deadline_at}
           />
         </div>

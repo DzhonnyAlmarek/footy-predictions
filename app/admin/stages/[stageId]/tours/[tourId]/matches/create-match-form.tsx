@@ -4,149 +4,146 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type Team = { id: number; name: string; slug: string };
+type Team = { id: number; name: string };
 
-export default function CreateMatchInTourForm(props: {
-  stageId: number;
-  tourId: number;
-  stageStatus: string;
-  teams: Team[];
-  usedTeamIds: number[]; // 👈 добавили
-}) {
-  const supabase = useMemo(() => createClient(), []);
+export default function CreateMatchForm({ stageId, tourId }: { stageId: number; tourId: number }) {
   const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
 
-  const disabled = props.stageStatus !== "draft";
+  const [teams, setTeams] = useState<Team[] | null>(null);
+  const [homeTeamId, setHomeTeamId] = useState<string>("");
+  const [awayTeamId, setAwayTeamId] = useState<string>("");
 
-  // Скрываем уже использованные команды тура
-  const availableTeams = props.teams.filter((t) => !props.usedTeamIds.includes(t.id));
-
-  const [homeTeamId, setHomeTeamId] = useState<number | "">(availableTeams[0]?.id ?? "");
-  const [awayTeamId, setAwayTeamId] = useState<number | "">(availableTeams[1]?.id ?? "");
-  const [kickoffAt, setKickoffAt] = useState<string>("");
-
-  const [msg, setMsg] = useState<string | null>(null);
+  const [date, setDate] = useState<string>(""); // YYYY-MM-DD
   const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  async function create() {
+  async function ensureTeams() {
+    if (teams) return;
+    setMsg(null);
+    const { data, error } = await supabase.from("teams").select("id,name").order("name", { ascending: true });
+    if (error) {
+      setMsg(error.message);
+      setTeams([]);
+      return;
+    }
+    setTeams(data ?? []);
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
     setMsg(null);
 
-    if (disabled) return setMsg("Этап не в draft — добавлять матчи нельзя.");
-    if (!homeTeamId || !awayTeamId) return setMsg("Выберите команды");
-    if (homeTeamId === awayTeamId) return setMsg("Команды должны быть разными");
-    if (!kickoffAt) return setMsg("Укажите дату матча");
-
-    const kickoff = new Date(kickoffAt);
-    if (Number.isNaN(kickoff.getTime())) return setMsg("Некорректная дата");
+    const h = Number(homeTeamId);
+    const a = Number(awayTeamId);
+    if (!Number.isFinite(h)) return setMsg("Выберите хозяев");
+    if (!Number.isFinite(a)) return setMsg("Выберите гостей");
+    if (h === a) return setMsg("Команды должны быть разными");
 
     setLoading(true);
     try {
-      // дедлайн = дата матча
-      const iso = kickoff.toISOString();
-
-      const { error } = await supabase.from("matches").insert({
-        stage_id: props.stageId,
-        tour_id: props.tourId,
-        home_team_id: homeTeamId,
-        away_team_id: awayTeamId,
-        kickoff_at: iso,
-        deadline_at: iso,
-        status: "scheduled",
-        // stage_match_no не задаём — БД поставит автоматически
+      const res = await fetch("/api/admin/matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage_id: stageId,
+          tour_id: tourId,
+          home_team_id: h,
+          away_team_id: a,
+          date: date || "", // YYYY-MM-DD или пусто
+        }),
       });
 
-      if (error) throw error;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `Ошибка создания матча (${res.status})`);
 
-      setMsg("Матч добавлен ✅");
-      setKickoffAt("");
+      setHomeTeamId("");
+      setAwayTeamId("");
+      setDate("");
+      setMsg(`Матч создан ✅ (№ ${json?.stage_match_no ?? "?"})`);
       router.refresh();
     } catch (e: any) {
-      setMsg(e?.message ?? "Ошибка");
+      // "Failed to fetch" теперь почти не должно быть, но если сервер упал — увидим
+      setMsg(e?.message ?? "Ошибка создания матча");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14 }}>
-      <div style={{ fontWeight: 800 }}>Добавить матч в тур</div>
+    <form onSubmit={submit} style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14 }}>
+      <div style={{ fontWeight: 900 }}>Добавить матч в тур</div>
 
-      {disabled && (
-        <div style={{ marginTop: 8, color: "crimson" }}>
-          Этап не в draft — добавлять/удалять матчи нельзя.
-        </div>
-      )}
+      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <select
+          value={homeTeamId}
+          onChange={(e) => setHomeTeamId(e.target.value)}
+          onFocus={ensureTeams}
+          onClick={ensureTeams}
+          disabled={loading}
+          style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 220 }}
+        >
+          <option value="">Хозяева…</option>
+          {(teams ?? []).map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
 
-      {availableTeams.length < 2 && (
-        <div style={{ marginTop: 8, color: "crimson" }}>
-          В этом туре уже использованы почти все команды — добавить матч нельзя.
-        </div>
-      )}
+        <select
+          value={awayTeamId}
+          onChange={(e) => setAwayTeamId(e.target.value)}
+          onFocus={ensureTeams}
+          onClick={ensureTeams}
+          disabled={loading}
+          style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 220 }}
+        >
+          <option value="">Гости…</option>
+          {(teams ?? []).map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
 
-      <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Хозяева</span>
-            <select
-              value={homeTeamId}
-              onChange={(e) => setHomeTeamId(Number(e.target.value))}
-              disabled={disabled || availableTeams.length < 2}
-              style={{ padding: 12, borderRadius: 12, border: "1px solid #ddd" }}
-            >
-              {availableTeams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Гости</span>
-            <select
-              value={awayTeamId}
-              onChange={(e) => setAwayTeamId(Number(e.target.value))}
-              disabled={disabled || availableTeams.length < 2}
-              style={{ padding: 12, borderRadius: 12, border: "1px solid #ddd" }}
-            >
-              {availableTeams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Дата матча (это же дедлайн)</span>
-          <input
-            type="datetime-local"
-            value={kickoffAt}
-            onChange={(e) => setKickoffAt(e.target.value)}
-            disabled={disabled || availableTeams.length < 2}
-            style={{ padding: 12, borderRadius: 12, border: "1px solid #ddd" }}
-          />
-        </label>
+        {/* ✅ только дата, без времени */}
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          onInput={(e) => setDate((e.target as HTMLInputElement).value)}
+          disabled={loading}
+          style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
+          title="Дата матча (время не требуется)"
+        />
 
         <button
-          onClick={create}
-          disabled={disabled || loading || availableTeams.length < 2}
+          type="submit"
+          disabled={loading}
           style={{
-            padding: "12px 14px",
-            borderRadius: 12,
+            padding: "10px 12px",
+            borderRadius: 10,
             border: "1px solid #111",
-            background: disabled || availableTeams.length < 2 ? "#777" : "#111",
+            background: "#111",
             color: "#fff",
-            cursor: disabled || availableTeams.length < 2 ? "not-allowed" : "pointer",
-            width: 220,
+            fontWeight: 900,
+            cursor: loading ? "not-allowed" : "pointer",
           }}
         >
-          {loading ? "..." : "Добавить матч"}
+          {loading ? "Создание..." : "Добавить"}
         </button>
-
-        {msg && <div style={{ color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</div>}
       </div>
-    </div>
+
+      {msg ? (
+        <div style={{ marginTop: 10, fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>
+          {msg}
+        </div>
+      ) : null}
+
+      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
+        Дата фиксируется сразу при выборе. Время не вводим (на сервере ставится техническое 12:00 UTC).
+      </div>
+    </form>
   );
 }

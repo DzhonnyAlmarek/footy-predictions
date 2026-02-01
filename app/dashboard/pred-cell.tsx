@@ -1,202 +1,156 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-function parsePred(initialPred: string) {
-  const m = (initialPred || "").match(/^(\d+)\s*:\s*(\d+)$/);
-  if (!m) return { h: "", a: "" };
-  return { h: m[1], a: m[2] };
+type Props = {
+  matchId: number;
+  pred: string; // "2:1" или ""
+  canEdit: boolean;
+  pointsText?: string; // например " (2.5)"
+  tip?: string; // ✅ теперь НЕобязательный
+};
+
+function parsePred(v: string) {
+  const s = String(v ?? "").trim();
+  if (!s) return { home: "", away: "" };
+
+  const m = s.match(/^(\d+)\s*:\s*(\d+)$/);
+  if (!m) return { home: "", away: "" };
+  return { home: m[1], away: m[2] };
 }
 
-export default function MyPredictionCell(props: {
-  matchId: number;
-  deadlineAt: string;        // ISO
-  initialPred: string;       // "h:a" или ""
-  initialPoints: number | null;
-}) {
+export default function PredCellEditable({ matchId, pred, canEdit, pointsText, tip }: Props) {
   const supabase = useMemo(() => createClient(), []);
 
-  const init = parsePred(props.initialPred);
+  const initial = useMemo(() => parsePred(pred), [pred]);
 
-  const [h, setH] = useState(init.h);
-  const [a, setA] = useState(init.a);
+  const [home, setHome] = useState(initial.home);
+  const [away, setAway] = useState(initial.away);
+
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  // ✅ мягкая подсветка после сохранения
-  const [flashOk, setFlashOk] = useState(false);
-  const flashTimerRef = useRef<any>(null);
-
-  const homeRef = useRef<HTMLInputElement | null>(null);
-  const awayRef = useRef<HTMLInputElement | null>(null);
-
-  const deadlineMs = useMemo(() => new Date(props.deadlineAt).getTime(), [props.deadlineAt]);
-  const locked = Date.now() >= deadlineMs;
-
-  // запоминаем последнее сохранённое значение, чтобы не слать одинаковые upsert
-  const lastSavedRef = useRef<string>(props.initialPred || "");
-
+  // если pred поменялся извне — синхронизируем
   useEffect(() => {
-    const p = parsePred(props.initialPred);
-    setH(p.h);
-    setA(p.a);
-    setErr(null);
-    lastSavedRef.current = props.initialPred || "";
-  }, [props.initialPred, props.initialPoints]);
-
-  useEffect(() => {
-    return () => {
-      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    };
-  }, []);
-
-  function normalizeNum(v: string) {
-    return v.replace(/[^\d]/g, "");
-  }
-
-  function triggerFlash() {
-    setFlashOk(true);
-    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    flashTimerRef.current = setTimeout(() => setFlashOk(false), 500);
-  }
+    const p = parsePred(pred);
+    setHome(p.home);
+    setAway(p.away);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pred]);
 
   async function save() {
-    setErr(null);
+    setMsg(null);
 
-    if (locked) {
-      setErr("дедлайн прошёл");
-      return;
+    if (!canEdit) return;
+
+    const h = home.trim();
+    const a = away.trim();
+
+    // разрешаем пустое = удалить прогноз
+    const homePred = h === "" ? null : Number(h);
+    const awayPred = a === "" ? null : Number(a);
+
+    if (homePred !== null && (!Number.isFinite(homePred) || homePred < 0)) {
+      return setMsg("Некорректно");
     }
-
-    // пустое не сохраняем
-    if (h === "" || a === "") return;
-
-    const hh = Number(h);
-    const aa = Number(a);
-
-    if (!Number.isInteger(hh) || !Number.isInteger(aa) || hh < 0 || aa < 0) {
-      setErr("целые числа ≥ 0");
-      return;
+    if (awayPred !== null && (!Number.isFinite(awayPred) || awayPred < 0)) {
+      return setMsg("Некорректно");
     }
-
-    const predStr = `${hh}:${aa}`;
-    if (predStr === lastSavedRef.current) return; // уже сохранено
 
     setSaving(true);
     try {
       const { data: u } = await supabase.auth.getUser();
-      const uid = u.user?.id;
-      if (!uid) throw new Error("not_authenticated");
+      if (!u.user) {
+        setMsg("Нужен вход");
+        return;
+      }
 
-      const { error } = await supabase
-        .from("predictions")
-        .upsert(
-          { user_id: uid, match_id: props.matchId, home_pred: hh, away_pred: aa },
-          { onConflict: "user_id,match_id" }
-        );
+      // upsert прогноза
+      // ВАЖНО: тут предполагается, что в таблице predictions есть match_id + user_id + home_pred + away_pred
+      // и уникальный ключ (match_id, user_id)
+      const { error } = await supabase.from("predictions").upsert(
+        {
+          match_id: matchId,
+          user_id: u.user.id,
+          home_pred: homePred,
+          away_pred: awayPred,
+        },
+        { onConflict: "match_id,user_id" }
+      );
 
       if (error) throw error;
-
-      lastSavedRef.current = predStr;
-
-      // ✅ подсветка "успешно" без галочек/текста
-      triggerFlash();
+      setMsg("✅");
     } catch (e: any) {
-      setErr(e?.message ?? "ошибка сохранения");
+      setMsg(e?.message ?? "Ошибка");
     } finally {
       setSaving(false);
+      // убираем короткое сообщение
+      setTimeout(() => setMsg(null), 1200);
     }
   }
 
-  function onHomeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      awayRef.current?.focus();
-    }
-  }
+  const cellStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  };
 
-  function onAwayKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      save();
-    }
-  }
-
-  function onBlur() {
-    save();
-  }
-
-  // дедлайн прошёл — только отображение
-  if (locked) {
-    const text = props.initialPred ? props.initialPred : "—";
-    return (
-      <div style={{ fontWeight: 900, textAlign: "center" }}>
-        {text}
-        {typeof props.initialPoints === "number" ? (
-          <span style={{ opacity: 0.85 }}> ({props.initialPoints})</span>
-        ) : null}
-      </div>
-    );
-  }
+  const inputStyle: React.CSSProperties = {
+    width: 46,
+    padding: "6px 8px",
+    borderRadius: 10,
+    border: "1px solid #ddd",
+    fontWeight: 800,
+  };
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: 6,
-        justifyItems: "center",
-        borderRadius: 10,
-        padding: "2px 4px",
-        background: flashOk ? "#eaffea" : "transparent", // ✅ мягкий зелёный
-        transition: "background 150ms ease",
-      }}
-    >
-      <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
-        <input
-          ref={homeRef}
-          value={h}
-          onChange={(e) => setH(normalizeNum(e.target.value))}
-          onKeyDown={onHomeKeyDown}
-          onBlur={onBlur}
-          inputMode="numeric"
-          disabled={saving}
-          style={{
-            width: 42,
-            padding: "8px 6px",
-            borderRadius: 10,
-            border: "1px solid #ddd",
-            textAlign: "center",
-            fontWeight: 900,
-            opacity: saving ? 0.7 : 1,
-          }}
-        />
-        <span style={{ fontWeight: 900 }}>:</span>
-        <input
-          ref={awayRef}
-          value={a}
-          onChange={(e) => setA(normalizeNum(e.target.value))}
-          onKeyDown={onAwayKeyDown}
-          onBlur={onBlur}
-          inputMode="numeric"
-          disabled={saving}
-          style={{
-            width: 42,
-            padding: "8px 6px",
-            borderRadius: 10,
-            border: "1px solid #ddd",
-            textAlign: "center",
-            fontWeight: 900,
-            opacity: saving ? 0.7 : 1,
-          }}
-        />
-      </div>
+    <div style={cellStyle} title={tip}>
+      {canEdit ? (
+        <>
+          <input
+            value={home}
+            onChange={(e) => setHome(e.target.value)}
+            inputMode="numeric"
+            disabled={saving}
+            style={inputStyle}
+          />
+          <span style={{ fontWeight: 900 }}>:</span>
+          <input
+            value={away}
+            onChange={(e) => setAway(e.target.value)}
+            inputMode="numeric"
+            disabled={saving}
+            style={inputStyle}
+          />
 
-      {err ? (
-        <div style={{ fontSize: 12, color: "crimson", fontWeight: 900, textAlign: "center" }}>
-          {err}
-        </div>
-      ) : null}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 10,
+              border: "1px solid #111",
+              background: "#111",
+              color: "#fff",
+              fontWeight: 900,
+              cursor: saving ? "not-allowed" : "pointer",
+            }}
+          >
+            {saving ? "..." : "OK"}
+          </button>
+
+          {pointsText ? <span style={{ opacity: 0.85 }}>{pointsText}</span> : null}
+          {msg ? <span style={{ opacity: 0.85 }}>{msg}</span> : null}
+        </>
+      ) : (
+        <>
+          <span style={{ fontWeight: 900 }}>{pred}</span>
+          {pointsText ? <span style={{ opacity: 0.85 }}>{pointsText}</span> : null}
+        </>
+      )}
     </div>
   );
 }

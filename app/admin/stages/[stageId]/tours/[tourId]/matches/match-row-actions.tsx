@@ -1,77 +1,143 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Team = { id: number; name: string };
 
-export default function MatchRowActions(props: {
-  stageStatus: string; // draft | published | locked
+type Props = {
   matchId: number;
+  kickoffAt?: string | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
+  homeTeamId: number;
+  awayTeamId: number;
+};
 
-  initialHomeTeamId: number;
-  initialAwayTeamId: number;
-  initialKickoffAt: string;   // ISO
-  initialDeadlineAt: string;  // ISO (равен kickoff)
-  initialStatus: string;
+function isoToDateValue(iso?: string | null) {
+  if (!iso) return "";
+  if (String(iso).startsWith("2099-01-01")) return "";
+  return String(iso).slice(0, 10);
+}
 
-  teams: Team[];
-}) {
-  const supabase = useMemo(() => createClient(), []);
+export default function MatchRowActions({
+  matchId,
+  kickoffAt,
+  homeScore,
+  awayScore,
+  homeTeamId,
+  awayTeamId,
+}: Props) {
   const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
 
-  // ✅ НОВОЕ: запрещаем только в locked
-  const locked = props.stageStatus === "locked";
+  const [teams, setTeams] = useState<Team[] | null>(null);
 
-  const [editing, setEditing] = useState(false);
-  const [homeTeamId, setHomeTeamId] = useState<number>(props.initialHomeTeamId);
-  const [awayTeamId, setAwayTeamId] = useState<number>(props.initialAwayTeamId);
+  const [date, setDate] = useState<string>(() => isoToDateValue(kickoffAt));
+  const [h, setH] = useState<string>(() => (homeScore == null ? "" : String(homeScore)));
+  const [a, setA] = useState<string>(() => (awayScore == null ? "" : String(awayScore)));
 
-  const isoToLocal = (iso: string) => {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
+  const [homeId, setHomeId] = useState<string>(String(homeTeamId));
+  const [awayId, setAwayId] = useState<string>(String(awayTeamId));
 
-  const [kickoffLocal, setKickoffLocal] = useState<string>(isoToLocal(props.initialKickoffAt));
-  const [status, setStatus] = useState<string>(props.initialStatus);
-
-  const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  async function save() {
+  const mountedRef = useRef(false);
+
+  async function patch(body: any) {
+    const res = await fetch("/api/admin/matches", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ match_id: matchId, ...body }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error ?? `Ошибка (${res.status})`);
+    return json;
+  }
+
+  async function ensureTeams() {
+    if (teams) return;
+    const { data, error } = await supabase.from("teams").select("id,name").order("name", { ascending: true });
+    if (error) {
+      setMsg(error.message);
+      setTeams([]);
+      return;
+    }
+    setTeams(data ?? []);
+  }
+
+  // ✅ Автосохранение даты
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+
+    setMsg("сохраняю дату…");
+
+    const t = setTimeout(async () => {
+      try {
+        setLoading(true);
+        await patch({ date: date || "" });
+        setMsg("дата сохранена ✅");
+        router.refresh();
+      } catch (e: any) {
+        setMsg(e?.message ?? "ошибка сохранения даты");
+      } finally {
+        setLoading(false);
+      }
+    }, 450);
+
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, matchId]);
+
+  async function saveTeams() {
     setMsg(null);
-    if (locked) return setMsg("Этап закрыт (locked) — редактирование запрещено");
 
-    if (homeTeamId === awayTeamId) return setMsg("Команды должны быть разными");
-    if (!kickoffLocal) return setMsg("Укажите дату матча");
+    const hId = Number(homeId);
+    const aId = Number(awayId);
 
-    const kickoff = new Date(kickoffLocal);
-    if (Number.isNaN(kickoff.getTime())) return setMsg("Некорректная дата");
+    if (!Number.isFinite(hId)) return setMsg("Выберите хозяев");
+    if (!Number.isFinite(aId)) return setMsg("Выберите гостей");
+    if (hId === aId) return setMsg("Команды должны быть разными");
 
     setLoading(true);
     try {
-      const iso = kickoff.toISOString(); // дедлайн = дата матча
-
-      const { error } = await supabase
-        .from("matches")
-        .update({
-          home_team_id: homeTeamId,
-          away_team_id: awayTeamId,
-          kickoff_at: iso,
-          deadline_at: iso,
-          status,
-        })
-        .eq("id", props.matchId);
-
-      if (error) throw error;
-
-      setEditing(false);
+      await patch({ home_team_id: hId, away_team_id: aId });
+      setMsg("команды сохранены ✅");
       router.refresh();
-      setMsg("Сохранено ✅");
     } catch (e: any) {
-      setMsg(e?.message ?? "Ошибка сохранения");
+      setMsg(e?.message ?? "Ошибка сохранения команд");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveScore() {
+    setMsg(null);
+
+    const hh = h.trim();
+    const aa = a.trim();
+
+    const home = hh === "" ? "" : Number(hh);
+    const away = aa === "" ? "" : Number(aa);
+
+    if (home !== "" && (!Number.isFinite(home) || home < 0)) return setMsg("Некорректный счёт хозяев");
+    if (away !== "" && (!Number.isFinite(away) || away < 0)) return setMsg("Некорректный счёт гостей");
+
+    setLoading(true);
+    try {
+      await patch({
+        home_score: hh === "" ? "" : Number(hh),
+        away_score: aa === "" ? "" : Number(aa),
+      });
+      setMsg("счёт сохранён ✅");
+      router.refresh();
+    } catch (e: any) {
+      setMsg(e?.message ?? "Ошибка сохранения счёта");
     } finally {
       setLoading(false);
     }
@@ -79,17 +145,20 @@ export default function MatchRowActions(props: {
 
   async function remove() {
     setMsg(null);
-    if (locked) return setMsg("Этап закрыт (locked) — удаление запрещено");
-
     if (!confirm("Удалить матч?")) return;
 
     setLoading(true);
     try {
-      const { error } = await supabase.from("matches").delete().eq("id", props.matchId);
-      if (error) throw error;
+      const res = await fetch("/api/admin/matches", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ match_id: matchId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `Ошибка (${res.status})`);
 
+      setMsg("удалено ✅");
       router.refresh();
-      setMsg("Удалено ✅");
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка удаления");
     } finally {
@@ -97,161 +166,106 @@ export default function MatchRowActions(props: {
     }
   }
 
-  if (!editing) {
-    return (
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          disabled={locked || loading}
-          title={locked ? "Этап locked — редактирование запрещено" : "Редактировать матч"}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid #111",
-            background: "#fff",
-            cursor: locked ? "not-allowed" : "pointer",
-            opacity: locked ? 0.6 : 1,
-          }}
-        >
-          Редактировать
-        </button>
-
-        <button
-          type="button"
-          onClick={remove}
-          disabled={locked || loading}
-          title={locked ? "Этап locked — удаление запрещено" : "Удалить матч"}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid #111",
-            background: "#fff",
-            cursor: locked ? "not-allowed" : "pointer",
-            opacity: locked ? 0.6 : 1,
-          }}
-        >
-          {loading ? "..." : "Удалить"}
-        </button>
-
-        {msg && <div style={{ color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</div>}
-      </div>
-    );
-  }
-
   return (
-    <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
-      <div style={{ fontWeight: 800 }}>Редактирование</div>
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        onInput={(e) => setDate((e.target as HTMLInputElement).value)}
+        disabled={loading}
+        style={{ padding: 8, borderRadius: 10, border: "1px solid #ddd" }}
+        title="Дата матча (сохраняется автоматически)"
+      />
 
-      {locked && (
-        <div style={{ marginTop: 8, color: "crimson" }}>
-          Этап закрыт (locked) — редактирование запрещено.
-        </div>
-      )}
+      <select
+        value={homeId}
+        onChange={(e) => setHomeId(e.target.value)}
+        onFocus={ensureTeams}
+        onClick={ensureTeams}
+        disabled={loading}
+        style={{ padding: 8, borderRadius: 10, border: "1px solid #ddd", minWidth: 200 }}
+        title="Хозяева"
+      >
+        {(teams ?? []).length === 0 ? <option value={homeId}>Хозяева</option> : null}
+        {(teams ?? []).map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </select>
 
-      <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Хозяева</span>
-            <select
-              value={homeTeamId}
-              onChange={(e) => setHomeTeamId(Number(e.target.value))}
-              disabled={loading || locked}
-              style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
-            >
-              {props.teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
+      <select
+        value={awayId}
+        onChange={(e) => setAwayId(e.target.value)}
+        onFocus={ensureTeams}
+        onClick={ensureTeams}
+        disabled={loading}
+        style={{ padding: 8, borderRadius: 10, border: "1px solid #ddd", minWidth: 200 }}
+        title="Гости"
+      >
+        {(teams ?? []).length === 0 ? <option value={awayId}>Гости</option> : null}
+        {(teams ?? []).map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </select>
 
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Гости</span>
-            <select
-              value={awayTeamId}
-              onChange={(e) => setAwayTeamId(Number(e.target.value))}
-              disabled={loading || locked}
-              style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
-            >
-              {props.teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+      <button
+        type="button"
+        onClick={saveTeams}
+        disabled={loading}
+        style={{
+          padding: "8px 10px",
+          borderRadius: 10,
+          border: "1px solid #111",
+          background: "#111",
+          color: "#fff",
+          fontWeight: 900,
+        }}
+      >
+        {loading ? "..." : "Сохранить пару"}
+      </button>
 
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Дата матча (это же дедлайн)</span>
-          <input
-            type="datetime-local"
-            value={kickoffLocal}
-            onChange={(e) => setKickoffLocal(e.target.value)}
-            disabled={loading || locked}
-            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
-          />
-        </label>
-
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Статус</span>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            disabled={loading || locked}
-            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", width: 220 }}
-          >
-            <option value="scheduled">scheduled</option>
-            <option value="live">live</option>
-            <option value="finished">finished</option>
-            <option value="canceled">canceled</option>
-          </select>
-        </label>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={save}
-            disabled={loading || locked}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 10,
-              border: "1px solid #111",
-              background: "#111",
-              color: "#fff",
-              cursor: locked ? "not-allowed" : "pointer",
-              opacity: locked ? 0.6 : 1,
-            }}
-          >
-            {loading ? "..." : "Сохранить"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setEditing(false);
-              setHomeTeamId(props.initialHomeTeamId);
-              setAwayTeamId(props.initialAwayTeamId);
-              setKickoffLocal(isoToLocal(props.initialKickoffAt));
-              setStatus(props.initialStatus);
-              setMsg(null);
-            }}
-            disabled={loading}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 10,
-              border: "1px solid #111",
-              background: "#fff",
-            }}
-          >
-            Отмена
-          </button>
-        </div>
-
-        {msg && <div style={{ color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</div>}
+      <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+        <input
+          value={h}
+          onChange={(e) => setH(e.target.value)}
+          disabled={loading}
+          placeholder="х"
+          style={{ width: 60, padding: 8, borderRadius: 10, border: "1px solid #ddd" }}
+        />
+        <span style={{ fontWeight: 900 }}>:</span>
+        <input
+          value={a}
+          onChange={(e) => setA(e.target.value)}
+          disabled={loading}
+          placeholder="г"
+          style={{ width: 60, padding: 8, borderRadius: 10, border: "1px solid #ddd" }}
+        />
+        <button
+          type="button"
+          onClick={saveScore}
+          disabled={loading}
+          style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #111", background: "#fff", fontWeight: 900 }}
+        >
+          Сохранить счёт
+        </button>
       </div>
+
+      <button
+        type="button"
+        onClick={remove}
+        disabled={loading}
+        style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #111", background: "#fff", fontWeight: 900 }}
+      >
+        Удалить
+      </button>
+
+      {msg ? (
+        <span style={{ fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</span>
+      ) : null}
     </div>
   );
 }

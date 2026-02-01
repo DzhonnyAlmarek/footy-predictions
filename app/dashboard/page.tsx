@@ -1,412 +1,346 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import MyPredictionCell from "./pred-cell";
+import type { CSSProperties } from "react";
+import PointsPopover from "@/app/_components/points-popover";
+import PredCellEditable from "./pred-cell";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type Tour = { id: number; tour_no: number; name: string | null };
-type MatchRow = {
-  id: number;
-  tour_id: number;
-  stage_match_no: number | null;
-  kickoff_at: string;
-  deadline_at: string;
-  home: string;
-  away: string;
-  home_score: number | null;
-  away_score: number | null;
-};
-
-function stageStatusRu(s: string) {
-  if (s === "draft") return "Черновик";
-  if (s === "published") return "Опубликован";
-  if (s === "locked") return "Закрыт";
-  return s;
+function fmt(x: number) {
+  return Number(x ?? 0).toFixed(2).replace(/\.00$/, "");
 }
 
-async function fetchLoginsWithRetry(supabase: any, retries = 1) {
-  let lastErr: any = null;
-  for (let i = 0; i <= retries; i++) {
-    const res = await supabase
-      .from("login_accounts")
-      .select("login,user_id")
-      .neq("login", "ADMIN")
-      .order("login", { ascending: true });
+function plus(x: number) {
+  const v = Number(x ?? 0);
+  return (v > 0 ? "+" : "") + fmt(v);
+}
 
-    if (!res.error) return res;
-    lastErr = res.error;
-  }
-  return { data: null, error: lastErr };
+function winnersCountFromBonus(bonus: number) {
+  const b = Number(bonus ?? 0);
+  if (b >= 1.49) return 1;
+  if (b >= 0.99) return 2;
+  if (b >= 0.49) return 3;
+  return null;
+}
+
+type Breakdown = {
+  outcomeBase: number;
+  outcomeBonus: number;
+  diffBase: number;
+  diffBonus: number;
+  h1: number;
+  h2: number;
+  bonus: number;
+};
+
+function isExactPred(pred: string, homeScore: number | null, awayScore: number | null) {
+  if (!pred) return false;
+  if (homeScore === null || awayScore === null) return false;
+
+  const [ph, pa] = pred.split(":").map((x) => Number(x));
+  if (!Number.isFinite(ph) || !Number.isFinite(pa)) return false;
+
+  return ph === homeScore && pa === awayScore;
+}
+
+/**
+ * ВАЖНО:
+ * - ОДИНАКОВЫЙ стиль для всех ячеек (чтобы не было смещений)
+ * - Подсветка ТОЛЬКО exact
+ * - Подсветка не меняет размеры (нет border, только background + inset shadow)
+ */
+function cellStyleBase(): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 24,
+    padding: "2px 6px",
+    borderRadius: 6,
+    lineHeight: 1.2,
+  };
+}
+
+function cellStyleExact(exact: boolean): CSSProperties {
+  const base = cellStyleBase();
+  if (!exact) return base;
+
+  return {
+    ...base,
+    fontWeight: 800,
+    color: "#14532d",
+    background: "rgba(34,197,94,0.14)",
+    boxShadow: "inset 0 0 0 1px rgba(34,197,94,0.35)",
+  };
 }
 
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  // user
-  const { data: u, error: uErr } = await supabase.auth.getUser();
-  const user = u.user;
-
-  if (uErr || !user) {
+  const { data: auth } = await supabase.auth.getUser();
+  const me = auth.user;
+  if (!me) {
     return (
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-        <p>
-          Вы не авторизованы. Перейдите на <Link href="/">вход</Link>.
-        </p>
+      <main style={{ padding: 24 }}>
+        <Link href="/">Войти</Link>
       </main>
     );
   }
 
-  // stage (current)
-  const { data: stage, error: stageErr } = await supabase
+  const { data: stage } = await supabase
     .from("stages")
     .select("id,name,status")
     .eq("is_current", true)
     .maybeSingle();
 
-  if (stageErr) {
-    return (
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
-        <p style={{ marginTop: 12, color: "crimson" }}>Ошибка этапа: {stageErr.message}</p>
-      </main>
-    );
-  }
+  if (!stage) return <main style={{ padding: 24 }}>Текущий этап не выбран</main>;
 
-  if (!stage) {
-    return (
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
-        <p style={{ marginTop: 12 }}>Текущий этап не выбран админом.</p>
-      </main>
-    );
-  }
+  const stageLocked = stage.status === "locked";
 
-  // my login
-  const myAccPromise = supabase
+  const { data: users } = await supabase
     .from("login_accounts")
-    .select("login")
-    .eq("user_id", user.id)
-    .maybeSingle();
+    .select("login,user_id")
+    .neq("login", "ADMIN")
+    .order("login", { ascending: true });
 
-  // parallel: logins + tours + matches + my login
-  const [accsRes, toursRes, matchesRes, myAccRes] = await Promise.all([
-    fetchLoginsWithRetry(supabase, 1),
-    supabase
-      .from("tours")
-      .select("id,tour_no,name")
-      .eq("stage_id", stage.id)
-      .order("tour_no", { ascending: true }),
-    supabase
-      .from("matches")
-      .select(
-        `
-        id,
-        tour_id,
-        stage_match_no,
-        kickoff_at,
-        deadline_at,
-        home_score,
-        away_score,
-        home_team:teams!matches_home_team_id_fkey ( name ),
-        away_team:teams!matches_away_team_id_fkey ( name )
+  const logins = users?.map((u) => u.login) ?? [];
+  const userIds = users?.map((u) => u.user_id) ?? [];
+  const userIdToLogin = new Map(users?.map((u) => [u.user_id, u.login]));
+  const myLogin = userIdToLogin.get(me.id) ?? null;
+
+  const { data: tours } = await supabase
+    .from("tours")
+    .select("id,tour_no,name")
+    .eq("stage_id", stage.id)
+    .order("tour_no", { ascending: true });
+
+  const { data: matches } = await supabase
+    .from("matches")
+    .select(
       `
-      )
-      .eq("stage_id", stage.id)
-      .order("tour_id", { ascending: true })
-      .order("kickoff_at", { ascending: true }),
-    myAccPromise,
-  ]);
+      id,tour_id,stage_match_no,kickoff_at,deadline_at,home_score,away_score,
+      home_team:teams!matches_home_team_id_fkey(name),
+      away_team:teams!matches_away_team_id_fkey(name)
+    `
+    )
+    .eq("stage_id", stage.id)
+    .order("tour_id", { ascending: true })
+    .order("kickoff_at", { ascending: true });
 
-  if (accsRes.error) {
-    return (
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
-        <p style={{ marginTop: 12, color: "crimson" }}>
-          Не удалось загрузить участников (login_accounts): {accsRes.error.message}
-        </p>
-      </main>
-    );
+  const matchIds = (matches ?? []).map((m: any) => m.id);
+
+  const { data: preds } = await supabase
+    .from("predictions")
+    .select("match_id,user_id,home_pred,away_pred")
+    .in("match_id", matchIds);
+
+  // для подсветки "нет вашего прогноза"
+  const myPredMatchIds = new Set<number>();
+  for (const p of preds ?? []) {
+    if (p.user_id === me.id) myPredMatchIds.add(Number(p.match_id));
   }
 
-  if (toursRes.error) {
-    return (
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
-        <p style={{ marginTop: 12, color: "crimson" }}>Не удалось загрузить туры: {toursRes.error.message}</p>
-      </main>
-    );
+  // предсказания по сетке
+  const predMap = new Map<string, string>();
+  for (const p of preds ?? []) {
+    const l = userIdToLogin.get(p.user_id);
+    if (l) predMap.set(`${p.match_id}::${l}`, `${p.home_pred}:${p.away_pred}`);
   }
 
-  if (matchesRes.error) {
-    return (
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
-        <p style={{ marginTop: 12, color: "crimson" }}>Не удалось загрузить матчи: {matchesRes.error.message}</p>
-      </main>
-    );
-  }
+  // начисления
+  const { data: rows } = await supabase
+    .from("points_ledger")
+    .select(
+      "match_id,user_id,points,points_outcome_base,points_outcome_bonus,points_diff_base,points_diff_bonus,points_h1,points_h2,points_bonus"
+    )
+    .in("match_id", matchIds)
+    .in("user_id", userIds);
 
-  const myLogin = myAccRes.data?.login ?? "ME";
+  const pointsMap = new Map<string, number>();
+  const breakdownMap = new Map<string, Breakdown>();
+  const totalByLogin = new Map<string, number>();
 
-  const users = (accsRes.data ?? []) as any[];
-  const logins: string[] = users.map((x) => x.login);
-
-  const userIdToLogin = new Map<string, string>(users.map((x) => [x.user_id, x.login]));
-  const userIds = users.map((x) => x.user_id);
-
-  const allTours: Tour[] = (toursRes.data ?? []) as any[];
-
-  const matchList: MatchRow[] =
-    (matchesRes.data ?? []).map((m: any) => ({
-      id: m.id,
-      tour_id: m.tour_id,
-      stage_match_no: m.stage_match_no ?? null,
-      kickoff_at: m.kickoff_at,
-      deadline_at: m.deadline_at,
-      home: m.home_team?.name ?? "?",
-      away: m.away_team?.name ?? "?",
-      home_score: m.home_score ?? null,
-      away_score: m.away_score ?? null,
-    })) ?? [];
-
-  const matchIds = matchList.map((m) => m.id);
-
-  // predictions + points_ledger параллельно
-  const [predsRes, pointsRes] = await Promise.all([
-    matchIds.length === 0
-      ? Promise.resolve({ data: [] as any[], error: null as any })
-      : supabase
-          .from("predictions")
-          .select("match_id,user_id,home_pred,away_pred")
-          .in("match_id", matchIds),
-    matchIds.length === 0 || userIds.length === 0
-      ? Promise.resolve({ data: [] as any[], error: null as any })
-      : supabase
-          .from("points_ledger")
-          .select("match_id,user_id,points")
-          .in("match_id", matchIds)
-          .in("user_id", userIds),
-  ]);
-
-  if (predsRes.error) {
-    return (
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
-        <p style={{ marginTop: 12, color: "crimson" }}>Не удалось загрузить прогнозы: {predsRes.error.message}</p>
-      </main>
-    );
-  }
-
-  if (pointsRes.error) {
-    return (
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
-        <p style={{ marginTop: 12, color: "crimson" }}>
-          Не удалось загрузить баллы (points_ledger): {pointsRes.error.message}
-        </p>
-      </main>
-    );
-  }
-
-  // build maps
-  const predMap = new Map<string, string>(); // matchId::login -> "h:a"
-  for (const p of predsRes.data ?? []) {
-    const login = userIdToLogin.get(p.user_id);
-    if (!login) continue;
-    predMap.set(`${p.match_id}::${login}`, `${p.home_pred}:${p.away_pred}`);
-  }
-
-  const pointsMap = new Map<string, number>(); // matchId::login -> points
-  const totalByLogin = new Map<string, number>(); // login -> total points
-  for (const r of pointsRes.data ?? []) {
+  for (const r of rows ?? []) {
     const login = userIdToLogin.get(r.user_id);
     if (!login) continue;
+
     const pts = Number(r.points ?? 0);
     pointsMap.set(`${r.match_id}::${login}`, pts);
     totalByLogin.set(login, (totalByLogin.get(login) ?? 0) + pts);
+
+    breakdownMap.set(`${r.match_id}::${login}`, {
+      outcomeBase: Number(r.points_outcome_base ?? 0),
+      outcomeBonus: Number(r.points_outcome_bonus ?? 0),
+      diffBase: Number(r.points_diff_base ?? 0),
+      diffBonus: Number(r.points_diff_bonus ?? 0),
+      h1: Number(r.points_h1 ?? 0),
+      h2: Number(r.points_h2 ?? 0),
+      bonus: Number(r.points_bonus ?? 0),
+    });
   }
 
-  // group matches by tour
-  const matchesByTour = new Map<number, MatchRow[]>();
-  for (const m of matchList) {
-    matchesByTour.set(m.tour_id, [...(matchesByTour.get(m.tour_id) ?? []), m]);
-  }
-
-  // ✅ show only tours having matches
-  const tourList = allTours.filter((t) => (matchesByTour.get(t.id) ?? []).length > 0);
-
-  const now = Date.now();
-  const needCount = matchList.filter((m) => {
-    const key = `${m.id}::${myLogin}`;
-    const hasPred = predMap.has(key);
-    const dl = new Date(m.deadline_at).getTime();
-    return !hasPred && now < dl;
-  }).length;
-
-  const gridCols = `420px 110px repeat(${logins.length}, minmax(120px, 1fr))`;
+  const gridCols = `minmax(260px, 1.6fr) 80px repeat(${logins.length}, minmax(140px, 1fr))`;
 
   return (
     <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-      <header>
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
-        <p style={{ marginTop: 6, opacity: 0.85 }}>
-          Этап: <b>{stage.name}</b> • статус: <b>{stageStatusRu(stage.status)}</b>
-        </p>
+      <div style={{ fontSize: 22, fontWeight: 900 }}>Текущая таблица — {stage.name}</div>
 
-        {matchList.length === 0 ? (
-          <div style={{ marginTop: 12, border: "1px solid #e5e5e5", borderRadius: 12, padding: 12, fontWeight: 900 }}>
-            Матчи текущего этапа ещё не назначены.
-          </div>
-        ) : needCount === 0 ? (
-          <div style={{ marginTop: 12, border: "1px solid #e5e5e5", borderRadius: 12, padding: 12, fontWeight: 900 }}>
-            Все прогнозы внесены
-          </div>
-        ) : (
-          <div style={{ marginTop: 12, border: "1px solid #ffe08a", background: "#fff7d6", borderRadius: 12, padding: 12, fontWeight: 900 }}>
-            Нужно внести прогнозы: {needCount}
-          </div>
-        )}
-      </header>
+      <div style={{ marginTop: 16, border: "1px solid #e5e5e5", borderRadius: 12, overflow: "hidden" }}>
+        {/* header */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: gridCols,
+            padding: "8px 10px",
+            background: "#f7f7f7",
+            fontWeight: 900,
+            columnGap: 8,
+            alignItems: "center",
+          }}
+        >
+          <div>Матч</div>
+          <div style={{ textAlign: "center" }}>Рез.</div>
+          {logins.map((l) => (
+            <div key={l}>
+              {l} <span style={{ opacity: 0.75 }}>({fmt(totalByLogin.get(l) ?? 0)})</span>
+            </div>
+          ))}
+        </div>
 
-      <section style={{ marginTop: 18 }}>
-        {tourList.length === 0 ? (
-          <p>В текущем этапе пока нет туров с назначенными матчами.</p>
-        ) : (
-          <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, overflow: "hidden" }}>
-            {/* HEADER */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: gridCols,
-                padding: "10px 12px",
-                background: "#f7f7f7",
-                fontWeight: 900,
-                borderBottom: "1px solid #eee",
-                alignItems: "center",
-              }}
-            >
-              <div>Тур / Матч (№ этапа)</div>
-              <div style={{ textAlign: "center" }}>Результат</div>
-              {logins.map((l) => {
-                const isMe = l === myLogin;
+        {(tours ?? []).map((t: any) => {
+          const list = (matches ?? []).filter((m: any) => m.tour_id === t.id);
+          if (!list.length) return null;
+
+          return (
+            <div key={t.id}>
+              <div style={{ padding: "8px 10px", fontWeight: 900, background: "#fafafa" }}>
+                Тур {t.tour_no}
+                {t.name ? ` — ${t.name}` : ""}
+              </div>
+
+              {list.map((m: any) => {
+                const result =
+                  m.home_score !== null && m.away_score !== null ? `${m.home_score}:${m.away_score}` : "";
+
+                const missingMyPred = myLogin ? !myPredMatchIds.has(Number(m.id)) : false;
+
+                // canEdit: не locked, дедлайн не прошёл
+                const deadlineOk = m.deadline_at ? Date.now() <= new Date(m.deadline_at).getTime() : true;
+                const canEdit = !!myLogin && !stageLocked && deadlineOk;
+
                 return (
                   <div
-                    key={l}
+                    key={m.id}
                     style={{
-                      textAlign: "center",
-                      background: isMe ? "#eef6ff" : "transparent",
-                      borderRadius: 8,
-                      padding: "2px 0",
+                      display: "grid",
+                      gridTemplateColumns: gridCols,
+                      padding: "6px 10px",
+                      borderTop: "1px solid #eee",
+                      columnGap: 8,
+                      alignItems: "center",
+                      background: missingMyPred ? "rgba(234,179,8,0.12)" : "transparent",
                     }}
                   >
-                    {l}{" "}
-                    <span style={{ opacity: 0.75, fontWeight: 800 }}>
-                      ({totalByLogin.get(l) ?? 0})
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* BODY */}
-            <div style={{ display: "grid", gap: 0 }}>
-              {tourList.map((t) => {
-                const tourMatches = matchesByTour.get(t.id) ?? [];
-                return (
-                  <div key={t.id} style={{ borderTop: "1px solid #eee" }}>
+                    {/* Матч + бейдж */}
                     <div
                       style={{
-                        padding: "10px 12px",
-                        background: "#fafafa",
-                        fontWeight: 900,
-                        borderBottom: "1px solid #eee",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        minWidth: 0,
                       }}
                     >
-                      Тур {t.tour_no}
-                      {t.name ? ` — ${t.name}` : ""}{" "}
-                      <span style={{ opacity: 0.75, fontWeight: 700 }}>(матчей: {tourMatches.length})</span>
-                    </div>
+                      <div style={{ minWidth: 0 }}>
+                        <b>{m.stage_match_no}.</b>{" "}
+                        {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
+                      </div>
 
-                    {tourMatches.map((m) => {
-                      const kickoff = new Date(m.kickoff_at).toLocaleString("ru-RU", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      });
-
-                      const dl = new Date(m.deadline_at).getTime();
-                      const result =
-                        m.home_score === null || m.away_score === null ? "" : `${m.home_score}:${m.away_score}`;
-
-                      const myKey = `${m.id}::${myLogin}`;
-                      const needPred = !predMap.has(myKey) && now < dl;
-
-                      return (
-                        <div
-                          key={m.id}
+                      {missingMyPred ? (
+                        <span
                           style={{
-                            display: "grid",
-                            gridTemplateColumns: gridCols,
-                            padding: "10px 12px",
-                            borderTop: "1px solid #f0f0f0",
-                            alignItems: "center",
-                            background: needPred ? "#fff1f1" : "#fff",
+                            padding: "2px 8px",
+                            borderRadius: 999,
+                            border: "1px solid rgba(234,179,8,0.45)",
+                            background: "rgba(234,179,8,0.18)",
+                            fontSize: 12,
+                            fontWeight: 900,
+                            whiteSpace: "nowrap",
                           }}
                         >
-                          <div>
-                            <div style={{ fontWeight: 800 }}>
-                              {m.stage_match_no ?? "—"}. {m.home} — {m.away}
-                              {needPred ? (
-                                <span style={{ marginLeft: 8, color: "crimson", fontWeight: 900 }}>
-                                  нужно внести прогноз
-                                </span>
-                              ) : null}
-                            </div>
-                            <div style={{ marginTop: 4, opacity: 0.75, fontSize: 12 }}>{kickoff}</div>
+                          нет вашего прогноза
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div style={{ textAlign: "center", fontWeight: 900 }}>{result}</div>
+
+                    {/* Колонки участников */}
+                    {logins.map((l) => {
+                      const key = `${m.id}::${l}`;
+                      const pred = predMap.get(key) ?? "";
+                      const pts = pointsMap.get(key);
+                      const bd = breakdownMap.get(key);
+
+                      const outcomeX = bd ? winnersCountFromBonus(bd.outcomeBonus) : null;
+                      const diffX = bd ? winnersCountFromBonus(bd.diffBonus) : null;
+
+                      const tip = bd
+                        ? `Исход: ${fmt(bd.outcomeBase)}
+${outcomeX ? `Надбавка за ${outcomeX} угадавших исход: ${plus(bd.outcomeBonus)}` : `Надбавка за угадавших исход: ${plus(bd.outcomeBonus)}`}
+Итого за исход: ${fmt(bd.outcomeBase + bd.outcomeBonus)}
+
+Разница: ${fmt(bd.diffBase)}
+${diffX ? `Надбавка за ${diffX} угадавших разницу: ${plus(bd.diffBonus)}` : `Надбавка за угадавших разницу: ${plus(bd.diffBonus)}`}
+Итого за разницу: ${fmt(bd.diffBase + bd.diffBonus)}
+
+Голы 1-й команды: ${fmt(bd.h1)}
+Голы 2-й команды: ${fmt(bd.h2)}
+Бонус за отклонение 1 мяч: ${fmt(bd.bonus)}
+
+Итого: ${fmt(
+                            bd.outcomeBase +
+                              bd.outcomeBonus +
+                              bd.diffBase +
+                              bd.diffBonus +
+                              bd.h1 +
+                              bd.h2 +
+                              bd.bonus
+                          )}`
+                        : "";
+
+                      const exact = isExactPred(pred, m.home_score, m.away_score);
+
+                      // ✅ ТОЛЬКО моя колонка редактируемая
+                      if (myLogin && l === myLogin) {
+                        const pointsText = typeof pts === "number" ? ` (${fmt(pts)})` : "";
+
+                        return (
+                          <div key={l} style={{ minHeight: 26 }}>
+                            <PredCellEditable
+                              matchId={m.id}
+                              pred={pred}
+                              canEdit={canEdit}
+                              pointsText={pointsText}
+                              // если компонент не использует — не страшно
+                            />
+                            {tip ? <PointsPopover tip={tip} /> : null}
                           </div>
+                        );
+                      }
 
-                          <div style={{ textAlign: "center", fontWeight: 900 }}>{result}</div>
-
-                          {logins.map((login) => {
-                            const key = `${m.id}::${login}`;
-                            const pred = predMap.get(key) ?? "";
-                            const pts = pointsMap.get(key);
-                            const isMe = login === myLogin;
-
-                            if (!isMe) {
-                              return (
-                                <div key={login} style={{ textAlign: "center", fontWeight: 800 }}>
-                                  {pred ? (
-                                    <>
-                                      {pred}
-                                      {typeof pts === "number" ? <span style={{ opacity: 0.85 }}> ({pts})</span> : null}
-                                    </>
-                                  ) : (
-                                    ""
-                                  )}
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <div
-                                key={login}
-                                style={{
-                                  textAlign: "center",
-                                  background: "#eef6ff",
-                                  borderRadius: 10,
-                                  padding: "6px 4px",
-                                }}
-                              >
-                                <MyPredictionCell
-                                  matchId={m.id}
-                                  deadlineAt={m.deadline_at}
-                                  initialPred={pred}
-                                  initialPoints={typeof pts === "number" ? pts : null}
-                                />
-                              </div>
-                            );
-                          })}
+                      return (
+                        <div key={l} style={{ minHeight: 26 }}>
+                          <span style={cellStyleExact(exact)}>
+                            {/* 🎯 только для 100% */}
+                            {exact ? <span aria-label="точно" title="Точное попадание">🎯</span> : null}
+                            <span>{pred}</span>
+                            {typeof pts === "number" ? (
+                              <span style={{ opacity: 0.85 }}> ({fmt(pts)})</span>
+                            ) : null}
+                          </span>
+                          {tip ? <PointsPopover tip={tip} /> : null}
                         </div>
                       );
                     })}
@@ -414,9 +348,9 @@ export default async function DashboardPage() {
                 );
               })}
             </div>
-          </div>
-        )}
-      </section>
+          );
+        })}
+      </div>
     </main>
   );
 }

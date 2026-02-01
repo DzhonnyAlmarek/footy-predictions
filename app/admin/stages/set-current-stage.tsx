@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function SetCurrentStageButton({
   stageId,
@@ -11,7 +10,6 @@ export default function SetCurrentStageButton({
   stageId: number;
   isCurrent: boolean;
 }) {
-  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -19,9 +17,20 @@ export default function SetCurrentStageButton({
   async function makeCurrent() {
     setMsg(null);
     setLoading(true);
+
     try {
-      const { error } = await supabase.rpc("set_current_stage", { p_stage_id: stageId });
-      if (error) throw error;
+      const res = await fetch("/api/admin/stages", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage_id: stageId, set_current: true }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // покажем понятную ошибку
+        throw new Error(json?.error ?? `Ошибка (${res.status})`);
+      }
+
       router.refresh();
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка");
@@ -42,13 +51,15 @@ export default function SetCurrentStageButton({
           border: "1px solid #111",
           background: isCurrent ? "#111" : "#fff",
           color: isCurrent ? "#fff" : "#111",
-          cursor: isCurrent ? "default" : "pointer",
+          cursor: isCurrent ? "default" : loading ? "not-allowed" : "pointer",
+          fontWeight: 900,
         }}
         title={isCurrent ? "Этот этап уже текущий" : "Сделать этап текущим"}
       >
         {isCurrent ? "Текущий этап" : loading ? "..." : "Сделать текущим"}
       </button>
-      {msg && <span style={{ color: "crimson" }}>{msg}</span>}
+
+      {msg ? <span style={{ color: "crimson", fontWeight: 800 }}>{msg}</span> : null}
     </div>
   );
 }

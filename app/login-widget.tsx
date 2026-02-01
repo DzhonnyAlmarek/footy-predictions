@@ -1,30 +1,53 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-type Account = { login: string };
+type Account = {
+  login: string;
+  must_change_password?: boolean;
+  temp_password?: string | null;
+};
+
+function fetchWithTimeout(
+  input: RequestInfo,
+  init: RequestInit & { timeoutMs?: number } = {}
+) {
+  const { timeoutMs = 10000, ...rest } = init;
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(input, { ...rest, signal: controller.signal }).finally(() => clearTimeout(t));
+}
 
 export default function LoginWidget() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [login, setLogin] = useState("");
-  const [password, setPassword] = useState(""); // всегда пусто
-
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [capsOn, setCapsOn] = useState(false);
 
   const passRef = useRef<HTMLInputElement | null>(null);
+  const selectRef = useRef<HTMLSelectElement | null>(null);
 
-  // загрузка логинов
+  const selectedAcc = useMemo(
+    () => accounts.find((a) => a.login === login),
+    [accounts, login]
+  );
+
+  const showTempHint = !!selectedAcc?.must_change_password;
+  const tempPwd = (selectedAcc?.temp_password ?? "").trim() || "123456";
+
   useEffect(() => {
     let mounted = true;
 
     async function load() {
       setMsg(null);
       try {
-        const res = await fetch("/api/logins", { cache: "no-store" });
+        const res = await fetchWithTimeout("/api/logins", {
+          cache: "no-store",
+          timeoutMs: 10000,
+        });
         const json = await res.json().catch(() => ({}));
-
         if (!mounted) return;
 
         if (!res.ok) {
@@ -32,20 +55,28 @@ export default function LoginWidget() {
           return;
         }
 
-        const list = (json?.logins ?? []) as string[];
-        const items = list.map((l) => ({ login: l }));
+        const raw = json?.logins ?? [];
+        const items: Account[] = (raw as any[]).map((x) =>
+          typeof x === "string"
+            ? { login: x }
+            : {
+                login: String(x.login),
+                must_change_password: !!x.must_change_password,
+                temp_password: x.temp_password ?? null,
+              }
+        );
+
         setAccounts(items);
 
         if (items.length > 0) {
           setLogin(items[0].login);
-          // фокус в пароль после первичной загрузки
           requestAnimationFrame(() => passRef.current?.focus());
         } else {
           setMsg("Список логинов пуст");
         }
-      } catch {
+      } catch (e: any) {
         if (!mounted) return;
-        setMsg("Ошибка загрузки логинов");
+        setMsg(e?.name === "AbortError" ? "Таймаут загрузки логинов" : "Ошибка загрузки логинов");
       }
     }
 
@@ -55,33 +86,45 @@ export default function LoginWidget() {
     };
   }, []);
 
-  function onLoginChange(v: string) {
-    setLogin(v);
-    requestAnimationFrame(() => passRef.current?.focus());
-  }
-
   function onPasswordKey(e: React.KeyboardEvent<HTMLInputElement>) {
     setCapsOn(!!e.getModifierState?.("CapsLock"));
+  }
+
+  async function copyTempPassword() {
+    try {
+      await navigator.clipboard.writeText(tempPwd);
+      setMsg("Временный пароль скопирован ✅");
+    } catch {
+      setMsg("Не удалось скопировать пароль");
+    }
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
 
-    if (!login) return setMsg("Выберите логин");
-    if (!password) return setMsg("Введите пароль");
+    if (!login) {
+      setMsg("Выберите логин");
+      requestAnimationFrame(() => selectRef.current?.focus());
+      return;
+    }
+    if (!password) {
+      setMsg("Введите пароль");
+      requestAnimationFrame(() => passRef.current?.focus());
+      return;
+    }
 
     setLoading(true);
     try {
-      // ✅ ВХОД ТОЛЬКО через /api/login
-      const res = await fetch("/api/login", {
+      const res = await fetchWithTimeout("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ login, password }),
+        cache: "no-store",
+        timeoutMs: 10000,
       });
 
       const json = await res.json().catch(() => ({}));
-
       if (!res.ok) {
         const err = json?.error;
         setMsg(
@@ -94,9 +137,9 @@ export default function LoginWidget() {
         return;
       }
 
-      window.location.href = json.redirect ?? "/dashboard";
-    } catch {
-      setMsg("Ошибка входа");
+      window.location.href = json?.redirect ?? "/dashboard";
+    } catch (e: any) {
+      setMsg(e?.name === "AbortError" ? "Таймаут входа. Проверь сеть/сервер." : "Ошибка входа");
     } finally {
       setLoading(false);
     }
@@ -110,35 +153,64 @@ export default function LoginWidget() {
         borderRadius: 12,
         padding: 20,
         maxWidth: 420,
+        boxSizing: "border-box",
       }}
     >
-      <h2 style={{ fontSize: 20, fontWeight: 900 }}>Вход</h2>
+      {showTempHint ? (
+        <div
+          style={{
+            padding: 10,
+            borderRadius: 10,
+            background: "#f7f7f7",
+            fontSize: 13,
+            lineHeight: 1.4,
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div>
+              Временный пароль: <b style={{ fontFamily: "monospace" }}>{tempPwd}</b>
+            </div>
 
-      {/* Подсказка про первый вход */}
-      <div
-        style={{
-          marginTop: 10,
-          padding: 10,
-          borderRadius: 10,
-          background: "#f7f7f7",
-          fontSize: 13,
-        }}
-      >
-        При первом входе пароль по умолчанию: <b>12345</b>. После входа его нужно сменить.
-      </div>
+            <button
+              type="button"
+              onClick={copyTempPassword}
+              disabled={loading}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 10,
+                border: "1px solid rgba(0,0,0,0.2)",
+                background: "#fff",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Скопировать
+            </button>
+          </div>
 
-      <div style={{ marginTop: 14 }}>
+          <div style={{ marginTop: 6 }}>После входа его нужно сменить.</div>
+        </div>
+      ) : null}
+
+      <div>
         <label style={{ display: "block", fontWeight: 700 }}>Логин</label>
         <select
+          ref={selectRef}
           value={login}
-          onChange={(e) => onLoginChange(e.target.value)}
+          onChange={(e) => {
+            setLogin(e.target.value);
+            requestAnimationFrame(() => passRef.current?.focus());
+          }}
           disabled={loading || accounts.length === 0}
           style={{
-            marginTop: 6,
+            marginTop: 8,
             width: "100%",
             padding: 10,
             borderRadius: 10,
             border: "1px solid #ddd",
+            boxSizing: "border-box",
+            background: "#fff",
           }}
         >
           {accounts.map((a) => (
@@ -149,7 +221,7 @@ export default function LoginWidget() {
         </select>
       </div>
 
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 16 }}>
         <label style={{ display: "block", fontWeight: 700 }}>Пароль</label>
         <input
           ref={passRef}
@@ -162,26 +234,22 @@ export default function LoginWidget() {
           disabled={loading}
           autoComplete="current-password"
           style={{
-            marginTop: 6,
+            marginTop: 8,
             width: "100%",
             padding: 10,
             borderRadius: 10,
             border: "1px solid #ddd",
+            boxSizing: "border-box",
           }}
         />
-
-        {capsOn && (
-          <div style={{ marginTop: 4, color: "crimson", fontSize: 12 }}>
+        {capsOn ? (
+          <div style={{ marginTop: 8, color: "crimson", fontSize: 12 }}>
             Включён Caps Lock
           </div>
-        )}
+        ) : null}
       </div>
 
-      {msg && (
-        <div style={{ marginTop: 10, color: "crimson", fontWeight: 700 }}>
-          {msg}
-        </div>
-      )}
+      {msg ? <div style={{ marginTop: 12, color: msg.includes("✅") ? "inherit" : "crimson", fontWeight: 700 }}>{msg}</div> : null}
 
       <button
         type="submit"
@@ -192,10 +260,10 @@ export default function LoginWidget() {
           padding: 12,
           borderRadius: 12,
           border: "1px solid #111",
-          background: loading || accounts.length === 0 ? "#777" : "#111",
+          background: loading ? "#777" : "#111",
           color: "#fff",
           fontWeight: 800,
-          cursor: loading || accounts.length === 0 ? "not-allowed" : "pointer",
+          cursor: loading ? "not-allowed" : "pointer",
         }}
       >
         {loading ? "Вход..." : "Войти"}

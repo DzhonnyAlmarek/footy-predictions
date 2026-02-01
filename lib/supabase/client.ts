@@ -1,17 +1,27 @@
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 
-export function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// ВАЖНО: читать env только статически, чтобы Next подставил значения в клиентский бандл
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !anon) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  }
+function assertClientEnv() {
+  if (!SUPABASE_URL) throw new Error("Missing env: NEXT_PUBLIC_SUPABASE_URL");
+  if (!SUPABASE_ANON_KEY) throw new Error("Missing env: NEXT_PUBLIC_SUPABASE_ANON_KEY");
+}
 
-  return createBrowserClient(url, anon, {
+export function createClient(): SupabaseClient {
+  assertClientEnv();
+
+  return createSupabaseClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
     auth: {
-      persistSession: false, // ключевое: не сохранять сессию в localStorage
-      autoRefreshToken: false, // не обязательно, но помогает избежать “зависаний”
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
     },
   });
 }
+
+// singleton для client components
+const supabaseClient = createClient();
+export default supabaseClient;
+export { supabaseClient };

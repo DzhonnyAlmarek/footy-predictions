@@ -2,40 +2,55 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function StageRowActions(props: {
   stageId: number;
   initialName: string;
-  initialStatus: string;
+  initialMatchesRequired: number;
 }) {
-  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(props.initialName);
-  const [status, setStatus] = useState(props.initialStatus);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [name, setName] = useState(props.initialName ?? "");
+  const [matchesRequired, setMatchesRequired] = useState<string>(String(props.initialMatchesRequired ?? 56));
+
   const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const dirty = useMemo(() => {
+    return (
+      name.trim() !== String(props.initialName ?? "").trim() ||
+      Number(matchesRequired) !== Number(props.initialMatchesRequired)
+    );
+  }, [name, matchesRequired, props.initialName, props.initialMatchesRequired]);
 
   async function save() {
     setMsg(null);
-    const trimmed = name.trim();
-    if (!trimmed) return setMsg("Название не может быть пустым");
+
+    const newName = name.trim();
+    if (!newName) return setMsg("Название не может быть пустым");
+
+    const mr = Number(matchesRequired);
+    if (!Number.isFinite(mr) || mr <= 0) return setMsg("Матчей в этапе должно быть числом > 0");
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from("stages")
-        .update({ name: trimmed, status })
-        .eq("id", props.stageId);
+      const res = await fetch("/api/admin/stages", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage_id: props.stageId,
+          name: newName,
+          matches_required: mr,
+        }),
+      });
 
-      if (error) throw error;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `Ошибка сохранения (${res.status})`);
 
-      setEditing(false);
+      setMsg("Сохранено ✅");
       router.refresh();
     } catch (e: any) {
-      setMsg(e?.message ?? "Ошибка");
+      setMsg(e?.message ?? "Ошибка сохранения");
     } finally {
       setLoading(false);
     }
@@ -43,18 +58,20 @@ export default function StageRowActions(props: {
 
   async function remove() {
     setMsg(null);
-    if (!confirm("Удалить этап? Будут удалены туры и матчи этапа.")) return;
+    if (!confirm("Удалить этап? Это удалит туры и матчи этапа.")) return;
 
     setLoading(true);
     try {
-      // ВАЖНО: у stages -> tours CASCADE, но matches stage_id RESTRICT.
-      // Поэтому сначала удаляем матчи этапа, потом этап.
-      const { error: mErr } = await supabase.from("matches").delete().eq("stage_id", props.stageId);
-      if (mErr) throw mErr;
+      const res = await fetch("/api/admin/stages", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage_id: props.stageId }),
+      });
 
-      const { error } = await supabase.from("stages").delete().eq("id", props.stageId);
-      if (error) throw error;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `Ошибка удаления (${res.status})`);
 
+      setMsg("Этап удалён ✅");
       router.refresh();
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка удаления");
@@ -65,63 +82,67 @@ export default function StageRowActions(props: {
 
   return (
     <div style={{ minWidth: 320 }}>
-      {editing ? (
-        <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ display: "grid", gap: 10 }}>
+        <div>
+          <div style={{ fontWeight: 900, marginBottom: 6 }}>Название</div>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={loading}
-            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
+            style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
           />
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            disabled={loading}
-            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
-          >
-            <option value="draft">draft</option>
-            <option value="published">published</option>
-            <option value="locked">locked</option>
-          </select>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              onClick={save}
-              disabled={loading}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#111", color: "#fff" }}
-            >
-              {loading ? "..." : "Сохранить"}
-            </button>
-            <button
-              onClick={() => { setEditing(false); setName(props.initialName); setStatus(props.initialStatus); }}
-              disabled={loading}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#fff" }}
-            >
-              Отмена
-            </button>
-          </div>
-
-          {msg && <div style={{ color: "crimson" }}>{msg}</div>}
         </div>
-      ) : (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <button
-            onClick={() => setEditing(true)}
+
+        <div>
+          <div style={{ fontWeight: 900, marginBottom: 6 }}>Матчей в этапе</div>
+          <input
+            value={matchesRequired}
+            onChange={(e) => setMatchesRequired(e.target.value)}
+            inputMode="numeric"
             disabled={loading}
-            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#fff" }}
-          >
-            Редактировать
-          </button>
+            style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button
+            type="button"
+            onClick={save}
+            disabled={loading || !dirty}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid #111",
+              background: "#111",
+              color: "#fff",
+              fontWeight: 900,
+              cursor: loading || !dirty ? "not-allowed" : "pointer",
+            }}
+          >
+            {loading ? "..." : "Сохранить"}
+          </button>
+
+          <button
+            type="button"
             onClick={remove}
             disabled={loading}
-            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#fff" }}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid #111",
+              background: "#fff",
+              fontWeight: 900,
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
           >
-            Удалить
+            {loading ? "..." : "Удалить этап"}
           </button>
-          {msg && <div style={{ color: "crimson" }}>{msg}</div>}
         </div>
-      )}
+
+        {msg ? (
+          <div style={{ fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</div>
+        ) : null}
+      </div>
     </div>
   );
 }

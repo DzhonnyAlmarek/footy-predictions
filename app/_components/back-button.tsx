@@ -1,19 +1,28 @@
 "use client";
 
-export default function BackButton({ label = "Вернуться" }: { label?: string }) {
+import { useRouter } from "next/navigation";
+
+export default function BackButton() {
+  const router = useRouter();
+
   return (
     <button
-      type="button"
-      onClick={() => window.history.back()}
+      onClick={() => router.back()}
       style={{
-        padding: "8px 12px",
-        borderRadius: 10,
-        border: "1px solid #111",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "6px 10px",
+        borderRadius: 8,
+        border: "1px solid #ddd",
         background: "#fff",
         cursor: "pointer",
+        fontWeight: 600,
       }}
+      aria-label="Назад"
     >
-      {label}
+      <span aria-hidden="true">←</span>
+      Назад
     </button>
   );
 }
