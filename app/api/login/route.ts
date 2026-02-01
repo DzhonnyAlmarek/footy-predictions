@@ -27,9 +27,13 @@ export async function POST(req: Request) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            // session-only cookies (без expires/maxAge)
-            const { maxAge, expires, ...rest } = options ?? {};
-            cookieStore.set(name, value, rest);
+            // ✅ КРИТИЧНО: всегда ставим path="/", иначе на проде cookie может прилипнуть к /api/login
+            cookieStore.set(name, value, {
+              ...(options ?? {}),
+              path: "/",
+              // для *.vercel.app это ок; secure обычно приходит от Supabase, но на всякий можно:
+              // secure: true,
+            });
           });
         },
       },
@@ -76,7 +80,6 @@ export async function POST(req: Request) {
 
     let redirectTo = "/dashboard";
 
-
     if (acc2?.must_change_password) {
       redirectTo = "/change-password";
     } else {
@@ -89,14 +92,15 @@ export async function POST(req: Request) {
       if (prof?.role === "admin") redirectTo = "/admin";
     }
 
-    // 5) ставим маркер (session cookie)
+    // 5) ответ
     const res = NextResponse.json({ ok: true, redirect: redirectTo });
 
-    // session cookie без maxAge/expires
+    // маркер (session cookie)
     res.cookies.set("fp_auth", "1", {
       path: "/",
       httpOnly: true,
       sameSite: "lax",
+      secure: true, // ✅ на проде лучше всегда secure
     });
 
     return res;
