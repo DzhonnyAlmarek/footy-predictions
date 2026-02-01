@@ -1,140 +1,96 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   matchId: number;
-  pred: string; // "2:1" или ""
+  pred: string;
   canEdit: boolean;
-  pointsText?: string; // например " (2.5)"
+  pointsText?: string;
   tip?: string;
 };
 
-function parsePred(v: string) {
-  const s = String(v ?? "").trim();
-  if (!s) return { home: "", away: "" };
-
-  const m = s.match(/^(\d+)\s*:\s*(\d+)$/);
-  if (!m) return { home: "", away: "" };
-  return { home: m[1], away: m[2] };
-}
-
-export default function PredCellEditable({ matchId, pred, canEdit, pointsText, tip }: Props) {
-  const initial = useMemo(() => parsePred(pred), [pred]);
-
-  const [home, setHome] = useState(initial.home);
-  const [away, setAway] = useState(initial.away);
-
+export default function PredCellEditable({
+  matchId,
+  pred,
+  canEdit,
+  pointsText,
+  tip,
+}: Props) {
+  const [value, setValue] = useState(pred ?? "");
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // если pred поменялся извне — синхронизируем
   useEffect(() => {
-    const p = parsePred(pred);
-    setHome(p.home);
-    setAway(p.away);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setValue(pred ?? "");
   }, [pred]);
 
   async function save() {
-    setMsg(null);
     if (!canEdit) return;
+    setError(null);
 
-    const h = home.trim();
-    const a = away.trim();
-
-    const homePred = h === "" ? null : Number(h);
-    const awayPred = a === "" ? null : Number(a);
-
-    if (homePred !== null && (!Number.isFinite(homePred) || homePred < 0)) return setMsg("Некорректно");
-    if (awayPred !== null && (!Number.isFinite(awayPred) || awayPred < 0)) return setMsg("Некорректно");
+    const m = value.trim().match(/^(\d+):(\d+)$/);
+    if (!m) {
+      setError("Формат прогноза: 1:0");
+      return;
+    }
 
     setSaving(true);
     try {
       const res = await fetch("/api/predictions", {
         method: "POST",
+        credentials: "include", // 🔴 КРИТИЧНО ДЛЯ ПРОДА
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           match_id: matchId,
-          home_pred: homePred,
-          away_pred: awayPred,
+          home_pred: Number(m[1]),
+          away_pred: Number(m[2]),
         }),
       });
 
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(json?.error === "not_auth" ? "Нужен вход" : (json?.error ?? `Ошибка (${res.status})`));
+        throw new Error(json?.error || "Ошибка сохранения");
       }
-
-      setMsg("✅");
     } catch (e: any) {
-      setMsg(e?.message ?? "Ошибка");
+      setError(e.message || "Ошибка");
     } finally {
       setSaving(false);
-      setTimeout(() => setMsg(null), 1200);
     }
   }
 
-  const cellStyle: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-  };
+  // 🟢 РЕЖИМ ПРОСМОТРА
+  if (!canEdit) {
+    return (
+      <div title={tip} style={{ minHeight: 24 }}>
+        {pred || <span style={{ opacity: 0.4 }}>—</span>}
+        {pointsText && <span style={{ opacity: 0.75 }}> {pointsText}</span>}
+      </div>
+    );
+  }
 
-  const inputStyle: React.CSSProperties = {
-    width: 46,
-    padding: "6px 8px",
-    borderRadius: 10,
-    border: "1px solid #ddd",
-    fontWeight: 800,
-  };
-
+  // ✏️ РЕЖИМ ВВОДА
   return (
-    <div style={cellStyle} title={tip}>
-      {canEdit ? (
-        <>
-          <input
-            value={home}
-            onChange={(e) => setHome(e.target.value)}
-            inputMode="numeric"
-            disabled={saving}
-            style={inputStyle}
-          />
-          <span style={{ fontWeight: 900 }}>:</span>
-          <input
-            value={away}
-            onChange={(e) => setAway(e.target.value)}
-            inputMode="numeric"
-            disabled={saving}
-            style={inputStyle}
-          />
-
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 10,
-              border: "1px solid #111",
-              background: "#111",
-              color: "#fff",
-              fontWeight: 900,
-              cursor: saving ? "not-allowed" : "pointer",
-            }}
-          >
-            {saving ? "..." : "OK"}
-          </button>
-
-          {pointsText ? <span style={{ opacity: 0.85 }}>{pointsText}</span> : null}
-          {msg ? <span style={{ opacity: 0.85 }}>{msg}</span> : null}
-        </>
-      ) : (
-        <>
-          <span style={{ fontWeight: 900 }}>{pred}</span>
-          {pointsText ? <span style={{ opacity: 0.85 }}>{pointsText}</span> : null}
-        </>
+    <div style={{ minHeight: 26 }} title={tip}>
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        disabled={saving}
+        placeholder="1:0"
+        style={{
+          width: 56,
+          padding: "2px 4px",
+          borderRadius: 6,
+          border: "1px solid #ccc",
+          fontSize: 13,
+        }}
+      />
+      {saving && <span style={{ marginLeft: 4, opacity: 0.6 }}>…</span>}
+      {error && (
+        <div style={{ color: "crimson", fontSize: 12, marginTop: 2 }}>
+          {error}
+        </div>
       )}
     </div>
   );

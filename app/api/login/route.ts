@@ -3,36 +3,45 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
+export const runtime = "nodejs";
+
+function mustEnv(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null);
-    const login = body?.login;
-    const password = body?.password;
+    const login = String(body?.login ?? "").trim();
+    const password = String(body?.password ?? "");
 
     if (!login || !password) {
       return NextResponse.json({ error: "login_and_password_required" }, { status: 400 });
     }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const service = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const url = mustEnv("NEXT_PUBLIC_SUPABASE_URL");
+    const anon = mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    const service = mustEnv("SUPABASE_SERVICE_ROLE_KEY");
 
     const cookieStore = await cookies();
 
-    // Server client (anon) with cookies
+    // ✅ создадим “временный” response, но финальный сформируем после redirect
+    // cookies будем ставить в response, который вернём в конце
+    let responseToSetCookiesOn: NextResponse | null = null;
+
     const supabase = createServerClient(url, anon, {
       cookies: {
         getAll() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
+          if (!responseToSetCookiesOn) return; // пока не создали — просто пропустим
           cookiesToSet.forEach(({ name, value, options }) => {
-            // ✅ КРИТИЧНО: всегда ставим path="/", иначе на проде cookie может прилипнуть к /api/login
-            cookieStore.set(name, value, {
+            responseToSetCookiesOn!.cookies.set(name, value, {
               ...(options ?? {}),
-              path: "/",
-              // для *.vercel.app это ок; secure обычно приходит от Supabase, но на всякий можно:
-              // secure: true,
+              path: "/", // ✅ критично
             });
           });
         },
@@ -56,12 +65,36 @@ export async function POST(req: Request) {
     });
 
     const { data: userRes, error: userErr } = await admin.auth.admin.getUserById(acc.user_id);
-
     if (userErr || !userRes?.user?.email) {
       return NextResponse.json({ error: "auth_user_not_found" }, { status: 401 });
     }
 
-    // 3) sign in (ставит supabase cookies)
+    // 3) sign in — для корректной записи cookies нужен уже готовый response
+    // поэтому сначала определим redirect по данным (до signIn мы не можем)
+    // Но redirect зависит от must_change_password и роли → их можно читать и без signIn через service role:
+    const { data: acc2 } = await admin
+      .from("login_accounts")
+      .select("must_change_password")
+      .eq("user_id", acc.user_id)
+      .maybeSingle();
+
+    let redirectTo = "/dashboard";
+    if (acc2?.must_change_password) {
+      redirectTo = "/change-password";
+    } else {
+      const { data: prof } = await admin
+        .from("profiles")
+        .select("role")
+        .eq("id", acc.user_id)
+        .maybeSingle();
+      if (prof?.role === "admin") redirectTo = "/admin";
+    }
+
+    // ✅ теперь создаём финальный response
+    const res = NextResponse.json({ ok: true, redirect: redirectTo });
+    responseToSetCookiesOn = res;
+
+    // ✅ и только теперь делаем signIn, чтобы supabase cookies записались в res
     const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: userRes.user.email,
       password,
@@ -71,40 +104,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "wrong_password" }, { status: 401 });
     }
 
-    // 4) решаем redirect: смена пароля / admin / user
-    const { data: acc2 } = await supabase
-      .from("login_accounts")
-      .select("must_change_password")
-      .eq("user_id", acc.user_id)
-      .maybeSingle();
-
-    let redirectTo = "/dashboard";
-
-    if (acc2?.must_change_password) {
-      redirectTo = "/change-password";
-    } else {
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", acc.user_id)
-        .maybeSingle();
-
-      if (prof?.role === "admin") redirectTo = "/admin";
-    }
-
-    // 5) ответ
-    const res = NextResponse.json({ ok: true, redirect: redirectTo });
-
-    // маркер (session cookie)
-    res.cookies.set("fp_auth", "1", {
-      path: "/",
-      httpOnly: true,
-      sameSite: "lax",
-      secure: true, // ✅ на проде лучше всегда secure
-    });
-
     return res;
-  } catch {
-    return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "bad_request" }, { status: 400 });
   }
 }
