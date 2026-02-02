@@ -28,12 +28,10 @@ export async function POST(req: Request) {
 
     const cookieStore = await cookies();
 
-    // service role (чтобы найти user/email и роль без RLS)
     const admin = createAdminClient(url, service, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // 1) user_id по login
     const { data: acc, error: accErr } = await admin
       .from("login_accounts")
       .select("user_id, must_change_password")
@@ -44,14 +42,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "unknown_login" }, { status: 401 });
     }
 
-    // 2) тех. email по user_id
     const { data: userRes, error: userErr } = await admin.auth.admin.getUserById(acc.user_id);
-
     if (userErr || !userRes?.user?.email) {
       return NextResponse.json({ error: "auth_user_not_found" }, { status: 401 });
     }
 
-    // 3) вычисляем redirect (без зависимостей от cookies)
     let redirectTo = "/dashboard";
     if (acc.must_change_password) {
       redirectTo = "/change-password";
@@ -64,10 +59,10 @@ export async function POST(req: Request) {
       if (prof?.role === "admin") redirectTo = "/admin";
     }
 
-    // ✅ создаём финальный response ОДИН раз
+    // ✅ один финальный response
     const res = NextResponse.json({ ok: true, redirect: redirectTo });
+    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
 
-    // ✅ supabase server client, который будет писать auth cookies В ОТВЕТ (res.cookies.set)
     const supabase = createServerClient(url, anon, {
       cookies: {
         getAll() {
@@ -77,14 +72,17 @@ export async function POST(req: Request) {
           cookiesToSet.forEach(({ name, value, options }) => {
             res.cookies.set(name, value, {
               ...(options ?? {}),
-              path: "/", // ✅ критично
+              path: "/",
+              // ✅ страхуем атрибуты на Vercel
+              httpOnly: options?.httpOnly ?? true,
+              sameSite: (options?.sameSite as any) ?? "lax",
+              secure: options?.secure ?? true,
             });
           });
         },
       },
     });
 
-    // 4) sign in (запишет sb-* cookies в res)
     const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: userRes.user.email,
       password,
@@ -94,12 +92,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "wrong_password" }, { status: 401 });
     }
 
-    // ✅ твой маркер для middleware/простых проверок
+    // ✅ маркер для твоей логики защиты (если нужен)
     res.cookies.set("fp_auth", "1", {
       path: "/",
       httpOnly: true,
       sameSite: "lax",
-      secure: true, // на *.vercel.app это норм
+      secure: true,
     });
 
     return res;

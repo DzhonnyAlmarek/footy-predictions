@@ -122,6 +122,7 @@ export default function LoginWidget() {
         body: JSON.stringify({ login, password }),
         cache: "no-store",
         timeoutMs: 10000,
+        credentials: "include", // ✅ добавить
       });
 
       const json = await res.json().catch(() => ({}));
