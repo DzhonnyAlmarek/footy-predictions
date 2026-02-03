@@ -235,3 +235,28 @@ body {
 
   scrollbar-width: thin;
 }
+/* ===== Admin UI helpers ===== */
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-actions > * {
+  flex: 0 0 auto;
+}
+
+.admin-card {
+  border: 1px solid rgba(0,0,0,0.10);
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.admin-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+

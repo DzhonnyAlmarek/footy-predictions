@@ -31,7 +31,7 @@ async function readLogin() {
   return { rawLogin, fpLogin };
 }
 
-// GET — получить прогнозы пользователя
+// GET — прогнозы текущего пользователя
 export async function GET() {
   try {
     const { rawLogin, fpLogin } = await readLogin();
@@ -51,9 +51,7 @@ export async function GET() {
       .eq("login", fpLogin)
       .maybeSingle();
 
-    if (accErr) {
-      return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
-    }
+    if (accErr) return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
     if (!acc?.user_id) {
       return NextResponse.json(
         { ok: false, error: "not_auth", where: "login_accounts", rawLogin, fpLogin },
@@ -66,9 +64,7 @@ export async function GET() {
       .select("*")
       .eq("user_id", acc.user_id);
 
-    if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    }
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
     return NextResponse.json({ ok: true, data });
   } catch (e: any) {
@@ -79,7 +75,7 @@ export async function GET() {
   }
 }
 
-// POST — upsert прогноза
+// POST — upsert прогноза (match_id + user_id уникальны)
 export async function POST(req: Request) {
   try {
     const { rawLogin, fpLogin } = await readLogin();
@@ -108,9 +104,7 @@ export async function POST(req: Request) {
       .eq("login", fpLogin)
       .maybeSingle();
 
-    if (accErr) {
-      return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
-    }
+    if (accErr) return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
     if (!acc?.user_id) {
       return NextResponse.json(
         { ok: false, error: "not_auth", where: "login_accounts", rawLogin, fpLogin },
@@ -125,7 +119,11 @@ export async function POST(req: Request) {
       away_pred,
     };
 
-    const { error } = await sb.from("predictions").upsert(row);
+    // ✅ ВАЖНО: upsert по уникальному ключу (match_id,user_id)
+    const { error } = await sb
+      .from("predictions")
+      .upsert(row, { onConflict: "match_id,user_id" });
+
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     }
