@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
     const { supabase, applyCookies } = await createSupabaseServerClient();
 
-    // проверяем логин в login_accounts
+    // проверяем логин
     const { data: acc, error: accErr } = await supabase
       .from("login_accounts")
       .select("login,must_change_password")
@@ -59,10 +59,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "unknown_login" }, { status: 401 });
     }
 
-    const { error: authErr } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: authErr } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
     if (authErr) {
       return NextResponse.json({ ok: false, error: "wrong_password" }, { status: 401 });
     }
+
+    // 🔴 КРИТИЧНО: дожимаем запись sb-* cookies
+    await supabase.auth.getSession();
 
     const redirectTo = acc.must_change_password
       ? "/change-password"
@@ -70,20 +77,20 @@ export async function POST(req: Request) {
         ? "/admin"
         : "/dashboard";
 
-    const jsonRes = NextResponse.json({ ok: true, redirect: redirectTo });
+    const res = NextResponse.json({ ok: true, redirect: redirectTo });
 
-    // ✅ ВАЖНО: выставляем sb-* cookies с правильными options
-    applyCookies(jsonRes);
+    // sb-* cookies
+    applyCookies(res);
 
     // fp_auth для middleware
-    jsonRes.cookies.set("fp_auth", "1", {
+    res.cookies.set("fp_auth", "1", {
       path: "/",
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
     });
 
-    return jsonRes;
+    return res;
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: e?.message ?? "unknown error" },
