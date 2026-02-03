@@ -5,6 +5,8 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
+/* ================= helpers ================= */
+
 function mustEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
@@ -19,18 +21,15 @@ export async function POST(req: Request) {
     const password = String(body?.password ?? "");
 
     if (!login || !password) {
-      return NextResponse.json(
-        { error: "login_and_password_required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "login_and_password_required" }, { status: 400 });
     }
 
     const url = mustEnv("NEXT_PUBLIC_SUPABASE_URL");
     const anon = mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
     const service = mustEnv("SUPABASE_SERVICE_ROLE_KEY");
 
-    // ✅ Next 15: cookies() async
-    const cookieStore = await cookies();
+    // ✅ Next 15: cookies() синхронная
+    const cookieStore = cookies();
 
     // service role (чтобы найти user/email и роль без RLS)
     const admin = createAdminClient(url, service, {
@@ -49,9 +48,7 @@ export async function POST(req: Request) {
     }
 
     // 2) тех. email по user_id
-    const { data: userRes, error: userErr } = await admin.auth.admin.getUserById(
-      acc.user_id
-    );
+    const { data: userRes, error: userErr } = await admin.auth.admin.getUserById(acc.user_id);
 
     if (userErr || !userRes?.user?.email) {
       return NextResponse.json({ error: "auth_user_not_found" }, { status: 401 });
@@ -62,36 +59,31 @@ export async function POST(req: Request) {
     if (acc.must_change_password) {
       redirectTo = "/change-password";
     } else {
-      const { data: prof } = await admin
-        .from("profiles")
-        .select("role")
-        .eq("id", acc.user_id)
-        .maybeSingle();
+      const { data: prof } = await admin.from("profiles").select("role").eq("id", acc.user_id).maybeSingle();
       if (prof?.role === "admin") redirectTo = "/admin";
     }
 
-    // ✅ создаём финальный response ОДИН раз
+    // ✅ создаём response один раз
     const res = NextResponse.json({ ok: true, redirect: redirectTo });
 
-    // ✅ supabase server client, который будет писать auth cookies В ОТВЕТ (res.cookies.set)
+    // ✅ server client: читает cookies из запроса, пишет cookies в response
     const supabase = createServerClient(url, anon, {
       cookies: {
         getAll() {
-          // ✅ cookieStore уже НЕ Promise
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
             res.cookies.set(name, value, {
               ...(options ?? {}),
-              path: "/", // ✅ критично
+              path: "/", // ✅ обязательно
             });
           });
         },
       },
     });
 
-    // 4) sign in (запишет sb-* cookies в res)
+    // 4) sign in (запишет sb-* cookies через setAll в res)
     const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: userRes.user.email,
       password,
@@ -101,19 +93,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "wrong_password" }, { status: 401 });
     }
 
-    // ✅ твой маркер
+    // 5) наш маркер
     res.cookies.set("fp_auth", "1", {
       path: "/",
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
     });
 
     return res;
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? "bad_request" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: e?.message ?? "bad_request" }, { status: 400 });
   }
 }
