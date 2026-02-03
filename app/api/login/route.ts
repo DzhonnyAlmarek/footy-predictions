@@ -6,7 +6,7 @@ type LoginBody = {
   password?: string;
 };
 
-// Технические email как в scripts/seed-logins.mjs + scripts/fix-admin.mjs
+// Технические email (как в scripts/seed-logins.mjs / fix-*.mjs)
 function techEmail(login: string): string | null {
   const map: Record<string, string> = {
     "СВС": "cvs",
@@ -17,7 +17,7 @@ function techEmail(login: string): string | null {
     "ADMIN": "admin",
   };
 
-  const key = (login ?? "").trim().toUpperCase();
+  const key = login.trim().toUpperCase();
   const slug = map[key];
   if (!slug) return null;
 
@@ -42,50 +42,64 @@ export async function POST(req: Request) {
 
     const { supabase, res } = await createSupabaseServerClient();
 
-    // 1) Проверяем логин в login_accounts и сразу берём флаги для redirect
+    // 1️⃣ Проверяем, что логин существует
     const { data: acc, error: accErr } = await supabase
       .from("login_accounts")
-      .select("login,must_change_password,role")
+      .select("login,must_change_password")
       .eq("login", login)
       .maybeSingle();
 
     if (accErr) {
-      return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
-    }
-    if (!acc?.login) {
-      return NextResponse.json({ ok: false, error: "unknown_login" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: accErr.message },
+        { status: 500 }
+      );
     }
 
-    // 2) Берём тех. email по детерминированному маппингу (как в seed-скриптах)
+    if (!acc) {
+      return NextResponse.json(
+        { ok: false, error: "unknown_login" },
+        { status: 401 }
+      );
+    }
+
+    // 2️⃣ Получаем технический email
     const email = techEmail(login);
     if (!email) {
-      // логин есть в БД, но нет тех-email маппинга => тоже считаем неизвестным (чтобы не палить детали)
-      return NextResponse.json({ ok: false, error: "unknown_login" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "unknown_login" },
+        { status: 401 }
+      );
     }
 
-    // 3) Авторизация через Supabase Auth
+    // 3️⃣ Авторизация через Supabase Auth
     const { error: authErr } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (authErr) {
-      // UI ожидает wrong_password
-      return NextResponse.json({ ok: false, error: "wrong_password" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "wrong_password" },
+        { status: 401 }
+      );
     }
 
-    // 4) Формируем ответ + прокидываем supabase cookies (sb-*)
-    const redirect =
-      acc.must_change_password ? "/change-password" : acc.role === "admin" ? "/admin" : "/dashboard";
+    // 4️⃣ Куда редиректить
+    const redirect = acc.must_change_password
+      ? "/change-password"
+      : login === "ADMIN"
+        ? "/admin"
+        : "/dashboard";
 
     const jsonRes = NextResponse.json({ ok: true, redirect });
 
-    // переносим cookies, которые Supabase выставил в res
+    // 5️⃣ Прокидываем Supabase cookies
     res.cookies.getAll().forEach((c) => {
       jsonRes.cookies.set(c.name, c.value, { path: "/" });
     });
 
-    // 5) Ставим fp_auth (его проверяет middleware.ts)
+    // 6️⃣ fp_auth (его проверяет middleware.ts)
     jsonRes.cookies.set("fp_auth", "1", {
       path: "/",
       httpOnly: true,
