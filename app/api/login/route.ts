@@ -5,40 +5,36 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-/* ================= helpers ================= */
-
 function mustEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
 }
 
-/* ================= POST /api/login ================= */
-
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
+
     const login = String(body?.login ?? "").trim();
     const password = String(body?.password ?? "");
 
     if (!login || !password) {
-      return NextResponse.json(
-        { error: "login_and_password_required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "login_and_password_required" }, { status: 400 });
     }
 
     const url = mustEnv("NEXT_PUBLIC_SUPABASE_URL");
-    const anonKey = mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-    const serviceKey = mustEnv("SUPABASE_SERVICE_ROLE_KEY");
+    const anon = mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    const service = mustEnv("SUPABASE_SERVICE_ROLE_KEY");
 
+    // В Next 15 cookies() синхронный.
     const cookieStore = cookies();
 
-    /* === 1. service-role: ищем user_id по login === */
-    const admin = createAdminClient(url, serviceKey, {
+    // service role: ищем user_id, must_change_password, роль
+    const admin = createAdminClient(url, service, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    // 1) user_id по login
     const { data: acc, error: accErr } = await admin
       .from("login_accounts")
       .select("user_id, must_change_password")
@@ -49,18 +45,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "unknown_login" }, { status: 401 });
     }
 
-    /* === 2. получаем тех. email === */
-    const { data: userRes, error: userErr } =
-      await admin.auth.admin.getUserById(acc.user_id);
+    // 2) тех. email по user_id
+    const { data: userRes, error: userErr } = await admin.auth.admin.getUserById(acc.user_id);
 
     if (userErr || !userRes?.user?.email) {
-      return NextResponse.json(
-        { error: "auth_user_not_found" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "auth_user_not_found" }, { status: 401 });
     }
 
-    /* === 3. вычисляем redirect === */
+    // 3) вычисляем redirect
     let redirectTo = "/dashboard";
 
     if (acc.must_change_password) {
@@ -72,16 +64,14 @@ export async function POST(req: Request) {
         .eq("id", acc.user_id)
         .maybeSingle();
 
-      if (prof?.role === "admin") {
-        redirectTo = "/admin";
-      }
+      if (prof?.role === "admin") redirectTo = "/admin";
     }
 
-    /* === 4. создаём ОДИН response === */
+    // ✅ создаём финальный response ОДИН раз
     const res = NextResponse.json({ ok: true, redirect: redirectTo });
 
-    /* === 5. supabase server client (пишет cookies в res) === */
-    const supabase = createServerClient(url, anonKey, {
+    // ✅ server client который пишет cookies в res
+    const supabase = createServerClient(url, anon, {
       cookies: {
         getAll() {
           return cookieStore.getAll();
@@ -90,42 +80,35 @@ export async function POST(req: Request) {
           cookiesToSet.forEach(({ name, value, options }) => {
             res.cookies.set(name, value, {
               ...(options ?? {}),
-              path: "/",          // 🔴 критично
-              sameSite: "lax",
-              secure: true,       // *.vercel.app
+              path: "/", // ✅ критично
+              // secure/samesite supabase обычно выставляет сам,
+              // но path нужно зафиксировать.
             });
           });
         },
       },
     });
 
-    /* === 6. sign in === */
-    const { error: signInErr } =
-      await supabase.auth.signInWithPassword({
-        email: userRes.user.email,
-        password,
-      });
+    // 4) sign in (запишет sb-* cookies в res)
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: userRes.user.email,
+      password,
+    });
 
     if (signInErr) {
-      return NextResponse.json(
-        { error: "wrong_password" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "wrong_password" }, { status: 401 });
     }
 
-    /* === 7. твой маркер (не для Supabase, а для UI) === */
+    // дополнительный маркер (если ты его используешь в middleware)
     res.cookies.set("fp_auth", "1", {
       path: "/",
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
+      secure: true, // на https (vercel) ок
     });
 
     return res;
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? "bad_request" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: e?.message ?? "bad_request" }, { status: 400 });
   }
 }
