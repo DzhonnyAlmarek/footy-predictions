@@ -1,13 +1,99 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
+import PredCellEditable from "../pred-cell";
 
-export default async function UserMatchesPage() {
-  const supabase = await createClient();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) redirect("/");
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-  const { data, error } = await supabase
+function mustEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
+}
+
+function decodeMaybe(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+function service() {
+  return createClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    { auth: { persistSession: false } }
+  );
+}
+
+type MatchRow = {
+  id: string;
+  kickoff_at: string | null;
+  deadline_at: string | null;
+  status: string | null;
+  home_team: { name: string; slug: string } | null;
+  away_team: { name: string; slug: string } | null;
+};
+
+export default async function DashboardMatchesPage() {
+  // ✅ авторизация через fp_login
+  const cs = await cookies();
+  const rawLogin = cs.get("fp_login")?.value ?? "";
+  const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
+  if (!fpLogin) redirect("/");
+
+  const sb = service();
+
+  // user_id по login
+  const { data: acc, error: accErr } = await sb
+    .from("login_accounts")
+    .select("user_id")
+    .eq("login", fpLogin)
+    .maybeSingle();
+
+  if (accErr) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
+        Ошибка login_accounts: {accErr.message}
+      </main>
+    );
+  }
+  if (!acc?.user_id) redirect("/");
+
+  // текущий этап
+  const { data: stage, error: stageErr } = await sb
+    .from("stages")
+    .select("id,name,status")
+    .eq("is_current", true)
+    .maybeSingle();
+
+  if (stageErr) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
+        Ошибка stages: {stageErr.message}
+      </main>
+    );
+  }
+
+  if (!stage) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
+        <p style={{ marginTop: 8, opacity: 0.8 }}>Текущий этап не выбран.</p>
+        <div style={{ marginTop: 14 }}>
+          <Link href="/" style={{ textDecoration: "underline" }}>
+            На главную
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  // матчи текущего этапа
+  const { data: matches, error: matchesErr } = await sb
     .from("matches")
     .select(
       `
@@ -15,82 +101,141 @@ export default async function UserMatchesPage() {
       kickoff_at,
       deadline_at,
       status,
-      tournaments ( name, slug ),
       home_team:teams!matches_home_team_id_fkey ( name, slug ),
       away_team:teams!matches_away_team_id_fkey ( name, slug )
     `
     )
-    .in("status", ["scheduled", "live"])
-    .order("kickoff_at", { ascending: true })
-    .limit(50);
+    .eq("stage_id", stage.id)
+    .order("kickoff_at", { ascending: true });
+
+  if (matchesErr) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
+        Ошибка matches: {matchesErr.message}
+      </main>
+    );
+  }
+
+  const matchIds = (matches ?? []).map((m: any) => m.id);
+
+  // прогнозы пользователя по этим матчам
+  const { data: preds, error: predsErr } = await sb
+    .from("predictions")
+    .select("match_id,home_pred,away_pred")
+    .eq("user_id", acc.user_id)
+    .in("match_id", matchIds);
+
+  if (predsErr) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
+        Ошибка predictions: {predsErr.message}
+      </main>
+    );
+  }
+
+  const predByMatch = new Map<string, { h: number | null; a: number | null }>();
+  for (const p of preds ?? []) {
+    predByMatch.set(p.match_id, {
+      h: p.home_pred == null ? null : Number(p.home_pred),
+      a: p.away_pred == null ? null : Number(p.away_pred),
+    });
+  }
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+    <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          alignItems: "flex-end",
+        }}
+      >
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800 }}>Матчи</h1>
-          <p style={{ marginTop: 6, opacity: 0.8 }}>Ближайшие игры</p>
+          <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
+          <div style={{ marginTop: 6, opacity: 0.8 }}>
+            Этап: <b>{stage.name ?? `#${stage.id}`}</b>
+            {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
+          </div>
         </div>
-        <nav style={{ display: "flex", gap: 12 }}>
-          <Link href="/dashboard">Мои прогнозы</Link>
+
+        <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <Link href="/dashboard/matches">Матчи</Link>
+          <Link href="/golden-boot">Золотая бутса</Link>
+          <Link href="/rating">Рейтинг</Link>
           <Link href="/leaderboard">Лидерборд</Link>
           <a href="/logout">Выйти</a>
         </nav>
       </header>
 
-      {error && (
-        <p style={{ marginTop: 16, color: "crimson" }}>Ошибка: {error.message}</p>
-      )}
-
-      <section style={{ marginTop: 24 }}>
-        {!data || data.length === 0 ? (
-          <p>Нет ближайших матчей.</p>
+      <section style={{ marginTop: 18 }}>
+        {!matches || matches.length === 0 ? (
+          <p style={{ marginTop: 14 }}>Матчей нет.</p>
         ) : (
-          <div style={{ display: "grid", gap: 12 }}>
-            {data.map((m: any) => {
-              const kickoff = new Date(m.kickoff_at);
-              const deadline = new Date(m.deadline_at);
+          <div style={{ marginTop: 14, overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+              <thead>
+                <tr style={{ textAlign: "left" }}>
+                  <th style={{ padding: "10px 10px", width: 160 }}>Дата</th>
+                  <th style={{ padding: "10px 10px" }}>Матч</th>
+                  <th style={{ padding: "10px 10px", width: 180 }}>Дедлайн</th>
+                  <th style={{ padding: "10px 10px", width: 160 }}>Прогноз</th>
+                </tr>
+              </thead>
 
-              return (
-                <Link
-                  key={m.id}
-                  href={`/match/${m.id}`}
-                  style={{
-                    border: "1px solid #e5e5e5",
-                    borderRadius: 12,
-                    padding: 14,
-                    textDecoration: "none",
-                    color: "inherit",
-                    display: "block",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 700 }}>
-                        {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
-                      </div>
-                      <div style={{ marginTop: 6, opacity: 0.8 }}>
-                        {m.tournaments?.name ?? "Без турнира"}
-                      </div>
-                    </div>
+              <tbody>
+                {(matches as any[]).map((m: MatchRow) => {
+                  const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
+                  const deadline = m.deadline_at ? new Date(m.deadline_at) : null;
 
-                    <div style={{ textAlign: "right" }}>
-                      <div>
-                        <b>Kickoff:</b>{" "}
-                        {kickoff.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}
-                      </div>
-                      <div style={{ marginTop: 4 }}>
-                        <b>Дедлайн:</b>{" "}
-                        {deadline.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
+                  const pr = predByMatch.get(m.id) ?? { h: null, a: null };
+
+                  return (
+                    <tr key={m.id} style={{ borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                      <td style={{ padding: "10px 10px", whiteSpace: "nowrap" }}>
+                        {kickoff
+                          ? kickoff.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })
+                          : "—"}
+                      </td>
+
+                      <td style={{ padding: "10px 10px" }}>
+                        <div style={{ fontWeight: 900 }}>
+                          {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
+                        </div>
+                        <div style={{ marginTop: 4, opacity: 0.7, fontSize: 12 }}>
+                          {m.status ?? ""}
+                        </div>
+                      </td>
+
+                      <td style={{ padding: "10px 10px", whiteSpace: "nowrap" }}>
+                        {deadline
+                          ? deadline.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })
+                          : "—"}
+                      </td>
+
+                      <td style={{ padding: "10px 10px" }}>
+                        <PredCellEditable
+                          matchId={Number(m.id)}
+                          homePred={pr.h}
+                          awayPred={pr.a}
+                          canEdit={true}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
+
+      <div style={{ marginTop: 18, opacity: 0.75 }}>
+        <Link href="/dashboard" style={{ textDecoration: "underline" }}>
+          Назад
+        </Link>
+      </div>
     </main>
   );
 }
