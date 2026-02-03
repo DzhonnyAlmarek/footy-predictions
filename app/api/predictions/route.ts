@@ -8,24 +8,41 @@ function mustEnv(name: string): string {
   return v;
 }
 
-const service = () =>
-  createClient(
+function decodeMaybe(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+function service() {
+  return createClient(
     mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
     mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
     { auth: { persistSession: false } }
   );
+}
+
+async function readAuth() {
+  const cs = await cookies();
+  const fpAuth = cs.get("fp_auth")?.value ?? "";
+  const rawLogin = cs.get("fp_login")?.value ?? "";
+  const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
+  return { fpAuth, rawLogin, fpLogin };
+}
 
 export async function GET() {
   try {
-    const cs = await cookies();
-    const fpAuth = cs.get("fp_auth")?.value;
-    const fpLogin = cs.get("fp_login")?.value;
+    const { fpAuth, rawLogin, fpLogin } = await readAuth();
 
     if (!fpAuth || !fpLogin) {
-      return NextResponse.json({ ok: false, error: "not_auth" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "not_auth", where: "cookies", fpAuth: !!fpAuth, rawLogin, fpLogin },
+        { status: 401 }
+      );
     }
 
-    // если нужно — можно отдавать прогнозы только текущего пользователя (рекомендую)
     const sb = service();
 
     const { data: acc, error: accErr } = await sb
@@ -34,30 +51,43 @@ export async function GET() {
       .eq("login", fpLogin)
       .maybeSingle();
 
-    if (accErr) return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
-    if (!acc?.user_id) return NextResponse.json({ ok: false, error: "not_auth" }, { status: 401 });
+    if (accErr) {
+      return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
+    }
+    if (!acc?.user_id) {
+      return NextResponse.json(
+        { ok: false, error: "not_auth", where: "login_accounts", rawLogin, fpLogin },
+        { status: 401 }
+      );
+    }
 
     const { data, error } = await sb
       .from("predictions")
       .select("*")
       .eq("user_id", acc.user_id);
 
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
 
     return NextResponse.json({ ok: true, data });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "unknown error" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "unknown error" },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const cs = await cookies();
-    const fpAuth = cs.get("fp_auth")?.value;
-    const fpLogin = cs.get("fp_login")?.value;
+    const { fpAuth, rawLogin, fpLogin } = await readAuth();
 
     if (!fpAuth || !fpLogin) {
-      return NextResponse.json({ ok: false, error: "not_auth" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "not_auth", where: "cookies", fpAuth: !!fpAuth, rawLogin, fpLogin },
+        { status: 401 }
+      );
     }
 
     const payload = await req.json();
@@ -77,10 +107,16 @@ export async function POST(req: Request) {
       .eq("login", fpLogin)
       .maybeSingle();
 
-    if (accErr) return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
-    if (!acc?.user_id) return NextResponse.json({ ok: false, error: "not_auth" }, { status: 401 });
+    if (accErr) {
+      return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
+    }
+    if (!acc?.user_id) {
+      return NextResponse.json(
+        { ok: false, error: "not_auth", where: "login_accounts", rawLogin, fpLogin },
+        { status: 401 }
+      );
+    }
 
-    // ✅ пишем прогноз от имени user_id (RLS можно вообще не трогать)
     const row = {
       user_id: acc.user_id,
       match_id,
@@ -89,10 +125,15 @@ export async function POST(req: Request) {
     };
 
     const { error } = await sb.from("predictions").upsert(row);
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "unknown error" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "unknown error" },
+      { status: 500 }
+    );
   }
 }
