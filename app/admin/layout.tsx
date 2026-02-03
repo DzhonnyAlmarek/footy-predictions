@@ -7,7 +7,7 @@ export default function AdminLayout({
 }) {
   return (
     <div className="min-h-screen flex">
-      <AdminNav />
+      <AdminNav loginLabel="ADMIN" />
       <main className="flex-1 p-6">{children}</main>
     </div>
   );
