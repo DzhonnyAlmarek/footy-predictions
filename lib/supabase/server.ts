@@ -1,32 +1,58 @@
-import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse } from "next/server";
 
-export async function createClient() {
+function mustEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
+}
+
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: any;
+};
+
+/**
+ * Supabase Server Client для Next.js App Router (15+ / 16)
+ * Возвращает { supabase, res } — res нужен, если надо прокинуть обновлённые cookies в ответ.
+ */
+export async function createSupabaseServerClient() {
+  // Next 15+ / 16: cookies() async
   const cookieStore = await cookies();
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Response-заглушка, в неё пишем cookies
+  const res = NextResponse.next();
 
-  if (!url || !anon) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  }
-
-  return createServerClient(url, anon, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
+  const supabase = createServerClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet: CookieToSet[]) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            // Делаем cookie сессионной: убираем expires/maxAge
-            const { maxAge, expires, ...rest } = options ?? {};
-            cookieStore.set(name, value, rest);
+            res.cookies.set(name, value, {
+              ...options,
+              path: "/",
+            });
           });
-        } catch {
-          // в Server Components set может быть запрещён — это ок
-        }
+        },
       },
-    },
-  });
+    }
+  );
+
+  return { supabase, res };
+}
+
+/**
+ * ✅ Alias под старые импорты в проекте:
+ * import { createClient } from "@/lib/supabase/server"
+ */
+export async function createClient() {
+  const { supabase } = await createSupabaseServerClient();
+  return supabase;
 }

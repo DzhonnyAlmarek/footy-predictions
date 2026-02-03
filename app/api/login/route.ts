@@ -1,108 +1,50 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export const runtime = "nodejs";
-
-/* ================= helpers ================= */
-
-function mustEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
+type LoginBody = {
+  email?: string;
+  password?: string;
+};
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = (await req.json()) as LoginBody;
+    const email = (body.email ?? "").trim();
+    const password = body.password ?? "";
 
-    const login = String(body?.login ?? "").trim();
-    const password = String(body?.password ?? "");
-
-    if (!login || !password) {
-      return NextResponse.json({ error: "login_and_password_required" }, { status: 400 });
+    if (!email || !password) {
+      return NextResponse.json(
+        { ok: false, error: "email and password required" },
+        { status: 400 }
+      );
     }
 
-    const url = mustEnv("NEXT_PUBLIC_SUPABASE_URL");
-    const anon = mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-    const service = mustEnv("SUPABASE_SERVICE_ROLE_KEY");
+    const { supabase, res } = await createSupabaseServerClient();
 
-    // ✅ Next 15: cookies() синхронная
-    const cookieStore = cookies();
-
-    // service role (чтобы найти user/email и роль без RLS)
-    const admin = createAdminClient(url, service, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    // 1) user_id по login
-    const { data: acc, error: accErr } = await admin
-      .from("login_accounts")
-      .select("user_id, must_change_password")
-      .eq("login", login)
-      .maybeSingle();
-
-    if (accErr || !acc?.user_id) {
-      return NextResponse.json({ error: "unknown_login" }, { status: 401 });
-    }
-
-    // 2) тех. email по user_id
-    const { data: userRes, error: userErr } = await admin.auth.admin.getUserById(acc.user_id);
-
-    if (userErr || !userRes?.user?.email) {
-      return NextResponse.json({ error: "auth_user_not_found" }, { status: 401 });
-    }
-
-    // 3) redirect
-    let redirectTo = "/dashboard";
-    if (acc.must_change_password) {
-      redirectTo = "/change-password";
-    } else {
-      const { data: prof } = await admin.from("profiles").select("role").eq("id", acc.user_id).maybeSingle();
-      if (prof?.role === "admin") redirectTo = "/admin";
-    }
-
-    // ✅ создаём response один раз
-    const res = NextResponse.json({ ok: true, redirect: redirectTo });
-
-    // ✅ server client: читает cookies из запроса, пишет cookies в response
-    const supabase = createServerClient(url, anon, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            res.cookies.set(name, value, {
-              ...(options ?? {}),
-              path: "/", // ✅ обязательно
-            });
-          });
-        },
-      },
-    });
-
-    // 4) sign in (запишет sb-* cookies через setAll в res)
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: userRes.user.email,
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
       password,
     });
 
-    if (signInErr) {
-      return NextResponse.json({ error: "wrong_password" }, { status: 401 });
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 401 }
+      );
     }
 
-    // 5) наш маркер
-    res.cookies.set("fp_auth", "1", {
-      path: "/",
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+    const jsonRes = NextResponse.json({ ok: true });
+
+    // переливаем cookies из res
+    res.cookies.getAll().forEach((c) => {
+      jsonRes.cookies.set(c.name, c.value, { path: "/" });
     });
 
-    return res;
+    return jsonRes;
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "bad_request" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "unknown error" },
+      { status: 500 }
+    );
   }
 }
