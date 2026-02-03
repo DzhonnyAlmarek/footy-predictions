@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // 🔹 публичные пути (НИЧЕГО НЕ ДЕЛАЕМ)
+  // 🔹 публичные пути
   if (
     pathname === "/" ||
     pathname.startsWith("/api/login") ||
@@ -31,10 +31,10 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 🔹 проверяем маркер логина
-  const fpAuth = req.cookies.get("fp_auth")?.value;
+  // ✅ проверяем логин (а не fp_auth)
+  const fpLogin = req.cookies.get("fp_login")?.value;
 
-  if (!fpAuth) {
+  if (!fpLogin) {
     const url = req.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

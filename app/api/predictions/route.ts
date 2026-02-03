@@ -24,21 +24,21 @@ function service() {
   );
 }
 
-async function readAuth() {
+async function readLogin() {
   const cs = await cookies();
-  const fpAuth = cs.get("fp_auth")?.value ?? "";
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
-  return { fpAuth, rawLogin, fpLogin };
+  return { rawLogin, fpLogin };
 }
 
+// GET — получить прогнозы пользователя
 export async function GET() {
   try {
-    const { fpAuth, rawLogin, fpLogin } = await readAuth();
+    const { rawLogin, fpLogin } = await readLogin();
 
-    if (!fpAuth || !fpLogin) {
+    if (!fpLogin) {
       return NextResponse.json(
-        { ok: false, error: "not_auth", where: "cookies", fpAuth: !!fpAuth, rawLogin, fpLogin },
+        { ok: false, error: "not_auth", where: "cookies", rawLogin, fpLogin },
         { status: 401 }
       );
     }
@@ -79,13 +79,14 @@ export async function GET() {
   }
 }
 
+// POST — upsert прогноза
 export async function POST(req: Request) {
   try {
-    const { fpAuth, rawLogin, fpLogin } = await readAuth();
+    const { rawLogin, fpLogin } = await readLogin();
 
-    if (!fpAuth || !fpLogin) {
+    if (!fpLogin) {
       return NextResponse.json(
-        { ok: false, error: "not_auth", where: "cookies", fpAuth: !!fpAuth, rawLogin, fpLogin },
+        { ok: false, error: "not_auth", where: "cookies", rawLogin, fpLogin },
         { status: 401 }
       );
     }
