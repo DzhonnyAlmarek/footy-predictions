@@ -6,7 +6,6 @@ type LoginBody = {
   password?: string;
 };
 
-// Технические email (как в scripts/seed-logins.mjs / fix-*.mjs)
 function techEmail(login: string): string | null {
   const map: Record<string, string> = {
     "СВС": "cvs",
@@ -20,7 +19,6 @@ function techEmail(login: string): string | null {
   const key = login.trim().toUpperCase();
   const slug = map[key];
   if (!slug) return null;
-
   return `${slug}@local`;
 }
 
@@ -40,9 +38,9 @@ export async function POST(req: Request) {
 
     const login = loginRaw.toUpperCase();
 
-    const { supabase, res } = await createSupabaseServerClient();
+    const { supabase, applyCookies } = await createSupabaseServerClient();
 
-    // 1️⃣ Проверяем, что логин существует
+    // проверяем логин в login_accounts
     const { data: acc, error: accErr } = await supabase
       .from("login_accounts")
       .select("login,must_change_password")
@@ -50,56 +48,34 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (accErr) {
-      return NextResponse.json(
-        { ok: false, error: accErr.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
     }
-
     if (!acc) {
-      return NextResponse.json(
-        { ok: false, error: "unknown_login" },
-        { status: 401 }
-      );
+      return NextResponse.json({ ok: false, error: "unknown_login" }, { status: 401 });
     }
 
-    // 2️⃣ Получаем технический email
     const email = techEmail(login);
     if (!email) {
-      return NextResponse.json(
-        { ok: false, error: "unknown_login" },
-        { status: 401 }
-      );
+      return NextResponse.json({ ok: false, error: "unknown_login" }, { status: 401 });
     }
 
-    // 3️⃣ Авторизация через Supabase Auth
-    const { error: authErr } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
+    const { error: authErr } = await supabase.auth.signInWithPassword({ email, password });
     if (authErr) {
-      return NextResponse.json(
-        { ok: false, error: "wrong_password" },
-        { status: 401 }
-      );
+      return NextResponse.json({ ok: false, error: "wrong_password" }, { status: 401 });
     }
 
-    // 4️⃣ Куда редиректить
-    const redirect = acc.must_change_password
+    const redirectTo = acc.must_change_password
       ? "/change-password"
       : login === "ADMIN"
         ? "/admin"
         : "/dashboard";
 
-    const jsonRes = NextResponse.json({ ok: true, redirect });
+    const jsonRes = NextResponse.json({ ok: true, redirect: redirectTo });
 
-    // 5️⃣ Прокидываем Supabase cookies
-    res.cookies.getAll().forEach((c) => {
-      jsonRes.cookies.set(c.name, c.value, { path: "/" });
-    });
+    // ✅ ВАЖНО: выставляем sb-* cookies с правильными options
+    applyCookies(jsonRes);
 
-    // 6️⃣ fp_auth (его проверяет middleware.ts)
+    // fp_auth для middleware
     jsonRes.cookies.set("fp_auth", "1", {
       path: "/",
       httpOnly: true,
