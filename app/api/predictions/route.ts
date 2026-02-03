@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET() {
   try {
-    const { supabase, res } = await createSupabaseServerClient();
+    const { supabase, applyCookies } = await createSupabaseServerClient();
 
     const { data, error } = await supabase
       .from("predictions")
@@ -18,10 +18,8 @@ export async function GET() {
 
     const jsonRes = NextResponse.json({ ok: true, data });
 
-    // если Supabase обновил сессию — прокидываем cookies
-    res.cookies.getAll().forEach((c) => {
-      jsonRes.cookies.set(c.name, c.value, { path: "/" });
-    });
+    // ✅ важно: если Supabase обновил токены — вернуть cookies клиенту
+    applyCookies(jsonRes);
 
     return jsonRes;
   } catch (e: any) {
