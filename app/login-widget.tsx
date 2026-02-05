@@ -15,7 +15,13 @@ function fetchWithTimeout(
   const { timeoutMs = 10000, ...rest } = init;
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(input, { ...rest, signal: controller.signal }).finally(() => clearTimeout(t));
+  return fetch(input, { ...rest, signal: controller.signal }).finally(() =>
+    clearTimeout(t)
+  );
+}
+
+function normalizeLogin(v: string) {
+  return String(v ?? "").trim().toUpperCase();
 }
 
 export default function LoginWidget() {
@@ -41,12 +47,26 @@ export default function LoginWidget() {
     let mounted = true;
 
     async function load() {
-      setMsg(null);
+      // ⚠️ не затираем msg, если оно уже выставлено из sessionStorage
+      setMsg((prev) => prev ?? null);
+
+      // 1) читаем query и sessionStorage
+      const sp = new URLSearchParams(window.location.search);
+      const qpLogin = normalizeLogin(sp.get("login") ?? "");
+      const changedParam = sp.get("changed");
+      const changed =
+        changedParam === "1" ||
+        changedParam === "true" ||
+        changedParam === "yes";
+
+      const changedOnce = sessionStorage.getItem("fp_pwd_changed") === "1";
+
       try {
         const res = await fetchWithTimeout("/api/logins", {
           cache: "no-store",
           timeoutMs: 10000,
         });
+
         const json = await res.json().catch(() => ({}));
         if (!mounted) return;
 
@@ -73,28 +93,39 @@ export default function LoginWidget() {
           return;
         }
 
-        // ✅ читаем query params
-        const sp = new URLSearchParams(window.location.search);
-        const qpLoginRaw = sp.get("login") ?? "";
-        const qpLogin = qpLoginRaw.trim().toUpperCase();
-        const changed = sp.get("changed") === "1";
-
+        // 2) выбираем логин из query (если есть)
         const found = qpLogin
-          ? items.find((x) => String(x.login).trim().toUpperCase() === qpLogin)
+          ? items.find((x) => normalizeLogin(x.login) === qpLogin)
           : null;
 
-        setLogin(found?.login ?? items[0].login);
+        const chosen = found?.login ?? items[0].login;
+        setLogin(chosen);
+
+        // 3) показываем сообщение (query или sessionStorage)
+        if (changed || changedOnce) {
+          setMsg("Пароль успешно изменён ✅ Войдите с новым паролем.");
+          // гарантируем показ даже если URL дальше очистят/перезагрузят
+          sessionStorage.setItem("fp_pwd_changed", "0");
+        }
 
         if (changed) {
-          setMsg("Пароль успешно изменён ✅ Войдите с новым паролем.");
-          // чтобы сообщение не висело при обновлениях — чистим URL
-          window.history.replaceState({}, "", "/?login=" + encodeURIComponent(found?.login ?? items[0].login));
+          // если пришли с changed=1 — сохраним флаг на один показ и очистим URL
+          sessionStorage.setItem("fp_pwd_changed", "1");
+          window.history.replaceState(
+            {},
+            "",
+            "/?login=" + encodeURIComponent(chosen)
+          );
         }
 
         requestAnimationFrame(() => passRef.current?.focus());
       } catch (e: any) {
         if (!mounted) return;
-        setMsg(e?.name === "AbortError" ? "Таймаут загрузки логинов" : "Ошибка загрузки логинов");
+        setMsg(
+          e?.name === "AbortError"
+            ? "Таймаут загрузки логинов"
+            : "Ошибка загрузки логинов"
+        );
       }
     }
 
@@ -158,7 +189,11 @@ export default function LoginWidget() {
 
       window.location.href = json?.redirect ?? "/dashboard";
     } catch (e: any) {
-      setMsg(e?.name === "AbortError" ? "Таймаут входа. Проверь сеть/сервер." : "Ошибка входа");
+      setMsg(
+        e?.name === "AbortError"
+          ? "Таймаут входа. Проверь сеть/сервер."
+          : "Ошибка входа"
+      );
     } finally {
       setLoading(false);
     }
@@ -262,18 +297,14 @@ export default function LoginWidget() {
           }}
         />
         {capsOn ? (
-          <div style={{ marginTop: 8, color: "crimson", fontSize: 12 }}>Включён Caps Lock</div>
+          <div style={{ marginTop: 8, color: "crimson", fontSize: 12 }}>
+            Включён Caps Lock
+          </div>
         ) : null}
       </div>
 
       {msg ? (
-        <div
-          style={{
-            marginTop: 12,
-            color: msg.includes("✅") ? "inherit" : "crimson",
-            fontWeight: 700,
-          }}
-        >
+        <div style={{ marginTop: 12, color: msg.includes("✅") ? "inherit" : "crimson", fontWeight: 700 }}>
           {msg}
         </div>
       ) : null}
