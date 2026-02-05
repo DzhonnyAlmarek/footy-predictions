@@ -22,8 +22,15 @@ function normalizeLogin(v: string) {
   return String(v ?? "").trim().toUpperCase();
 }
 
-function isAdminLogin(v: string) {
-  return normalizeLogin(v) === "ADMIN";
+function readCookie(name: string): string | null {
+  const p = document.cookie.split("; ").find((x) => x.startsWith(name + "="));
+  if (!p) return null;
+  const v = p.slice((name + "=").length);
+  return v ?? null;
+}
+
+function deleteCookie(name: string) {
+  document.cookie = `${name}=; Max-Age=0; path=/`;
 }
 
 export default function LoginWidget() {
@@ -49,22 +56,30 @@ export default function LoginWidget() {
     let mounted = true;
 
     async function load() {
-      // ✅ flash-сообщение после смены пароля через cookie fp_flash
-      const flash = document.cookie
-        .split("; ")
-        .find((x) => x.startsWith("fp_flash="))
-        ?.split("=")[1];
-
+      // ✅ 1) флеш-сообщение
+      const flash = readCookie("fp_flash");
       if (flash === "pwd_changed") {
         setMsg("Пароль успешно изменён ✅ Войдите с новым паролем.");
-        document.cookie = "fp_flash=; Max-Age=0; path=/";
+        deleteCookie("fp_flash");
       } else {
         setMsg(null);
       }
 
-      // ✅ логин из query (?login=КЕН)
-      const sp = new URLSearchParams(window.location.search);
-      const qpLogin = normalizeLogin(sp.get("login") ?? "");
+      // ✅ 2) самый приоритетный логин: fp_flash_login (тот, кто только что менял пароль)
+      const flashLoginRaw = readCookie("fp_flash_login");
+      let preferredLogin = "";
+      if (flashLoginRaw) {
+        try {
+          preferredLogin = normalizeLogin(decodeURIComponent(flashLoginRaw));
+        } catch {
+          preferredLogin = normalizeLogin(flashLoginRaw);
+        }
+        deleteCookie("fp_flash_login");
+      } else {
+        // запасной вариант: query ?login=
+        const sp = new URLSearchParams(window.location.search);
+        preferredLogin = normalizeLogin(sp.get("login") ?? "");
+      }
 
       try {
         const res = await fetchWithTimeout("/api/logins", {
@@ -91,14 +106,6 @@ export default function LoginWidget() {
               }
         );
 
-        // ✅ всегда уводим ADMIN в конец списка (чтобы по умолчанию не попадал первым)
-        items.sort((a, b) => {
-          const aa = isAdminLogin(a.login) ? 1 : 0;
-          const bb = isAdminLogin(b.login) ? 1 : 0;
-          if (aa !== bb) return aa - bb; // не-admin выше, admin ниже
-          return normalizeLogin(a.login).localeCompare(normalizeLogin(b.login), "ru");
-        });
-
         setAccounts(items);
 
         if (items.length === 0) {
@@ -106,19 +113,16 @@ export default function LoginWidget() {
           return;
         }
 
-        // ✅ 1) сначала пытаемся выбрать логин из query по нормализованному совпадению
-        const foundFromQuery = qpLogin
-          ? items.find((x) => normalizeLogin(x.login) === qpLogin)
-          : null;
+        // ✅ выбираем именно preferredLogin, если он есть в списке
+        const found =
+          preferredLogin
+            ? items.find((x) => normalizeLogin(x.login) === preferredLogin)
+            : null;
 
-        // ✅ 2) если query не нашли — берём первый НЕ ADMIN
-        const firstNonAdmin = items.find((x) => !isAdminLogin(x.login)) ?? items[0];
-
-        const chosen = foundFromQuery?.login ?? firstNonAdmin.login;
-
+        const chosen = found?.login ?? items[0].login;
         setLogin(chosen);
 
-        // ✅ чистим URL, но оставляем login выбранного (чтобы при обновлении не сбрасывался)
+        // ✅ чтобы при обновлении не сбрасывалось
         window.history.replaceState({}, "", "/?login=" + encodeURIComponent(chosen));
 
         requestAnimationFrame(() => passRef.current?.focus());
@@ -277,8 +281,8 @@ export default function LoginWidget() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={onPasswordKey}
-          onKeyUp={onPasswordKey}
+          onKeyDown={(e) => setCapsOn(!!e.getModifierState?.("CapsLock"))}
+          onKeyUp={(e) => setCapsOn(!!e.getModifierState?.("CapsLock"))}
           placeholder="Введите пароль"
           disabled={loading}
           autoComplete="current-password"

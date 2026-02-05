@@ -78,8 +78,8 @@ export async function POST(req: Request) {
       .update({ must_change_password: false, temp_password: null })
       .eq("login", fpLogin);
 
-    // ✅ редирект на логин с выбранным пользователем (без changed=1 — теперь покажем через cookie)
-    const redirect = `/?login=${encodeURIComponent(fpLogin)}`;
+    // ✅ редирект на логин-страницу (логин выберем по cookie fp_flash_login)
+    const redirect = "/";
 
     const res = NextResponse.json(
       flagErr
@@ -88,8 +88,16 @@ export async function POST(req: Request) {
       { status: 200 }
     );
 
-    // ✅ flash-cookie на 30 секунд: логин-страница покажет "Пароль успешно изменён"
+    // ✅ flash: сообщение
     res.cookies.set("fp_flash", "pwd_changed", {
+      path: "/",
+      maxAge: 30,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    // ✅ flash: КАКОЙ ЛОГИН НУЖНО ВЫБРАТЬ (самое важное)
+    res.cookies.set("fp_flash_login", encodeURIComponent(fpLogin), {
       path: "/",
       maxAge: 30,
       sameSite: "lax",
