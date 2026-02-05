@@ -15,9 +15,7 @@ function fetchWithTimeout(
   const { timeoutMs = 10000, ...rest } = init;
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(input, { ...rest, signal: controller.signal }).finally(() =>
-    clearTimeout(t)
-  );
+  return fetch(input, { ...rest, signal: controller.signal }).finally(() => clearTimeout(t));
 }
 
 function normalizeLogin(v: string) {
@@ -47,19 +45,24 @@ export default function LoginWidget() {
     let mounted = true;
 
     async function load() {
-      // ⚠️ не затираем msg, если оно уже выставлено из sessionStorage
-      setMsg((prev) => prev ?? null);
+      // ✅ 1) flash-сообщение после смены пароля через cookie fp_flash
+      // (не зависит от query и не потеряется при редиректах)
+      const flash = document.cookie
+        .split("; ")
+        .find((x) => x.startsWith("fp_flash="))
+        ?.split("=")[1];
 
-      // 1) читаем query и sessionStorage
+      if (flash === "pwd_changed") {
+        setMsg("Пароль успешно изменён ✅ Войдите с новым паролем.");
+        // удалить, чтобы показывалось один раз
+        document.cookie = "fp_flash=; Max-Age=0; path=/";
+      } else {
+        setMsg(null);
+      }
+
+      // ✅ 2) логин из query (?login=КЕН)
       const sp = new URLSearchParams(window.location.search);
       const qpLogin = normalizeLogin(sp.get("login") ?? "");
-      const changedParam = sp.get("changed");
-      const changed =
-        changedParam === "1" ||
-        changedParam === "true" ||
-        changedParam === "yes";
-
-      const changedOnce = sessionStorage.getItem("fp_pwd_changed") === "1";
 
       try {
         const res = await fetchWithTimeout("/api/logins", {
@@ -89,11 +92,11 @@ export default function LoginWidget() {
         setAccounts(items);
 
         if (items.length === 0) {
-          setMsg("Список логинов пуст");
+          setMsg((prev) => prev ?? "Список логинов пуст");
           return;
         }
 
-        // 2) выбираем логин из query (если есть)
+        // выбрать логин из query, иначе первый
         const found = qpLogin
           ? items.find((x) => normalizeLogin(x.login) === qpLogin)
           : null;
@@ -101,31 +104,15 @@ export default function LoginWidget() {
         const chosen = found?.login ?? items[0].login;
         setLogin(chosen);
 
-        // 3) показываем сообщение (query или sessionStorage)
-        if (changed || changedOnce) {
-          setMsg("Пароль успешно изменён ✅ Войдите с новым паролем.");
-          // гарантируем показ даже если URL дальше очистят/перезагрузят
-          sessionStorage.setItem("fp_pwd_changed", "0");
-        }
-
-        if (changed) {
-          // если пришли с changed=1 — сохраним флаг на один показ и очистим URL
-          sessionStorage.setItem("fp_pwd_changed", "1");
-          window.history.replaceState(
-            {},
-            "",
-            "/?login=" + encodeURIComponent(chosen)
-          );
+        // ✅ чистим URL от мусора, но оставляем login (чтобы не было "стартовой" пустой страницы)
+        if (qpLogin) {
+          window.history.replaceState({}, "", "/?login=" + encodeURIComponent(chosen));
         }
 
         requestAnimationFrame(() => passRef.current?.focus());
       } catch (e: any) {
         if (!mounted) return;
-        setMsg(
-          e?.name === "AbortError"
-            ? "Таймаут загрузки логинов"
-            : "Ошибка загрузки логинов"
-        );
+        setMsg(e?.name === "AbortError" ? "Таймаут загрузки логинов" : "Ошибка загрузки логинов");
       }
     }
 
@@ -189,11 +176,7 @@ export default function LoginWidget() {
 
       window.location.href = json?.redirect ?? "/dashboard";
     } catch (e: any) {
-      setMsg(
-        e?.name === "AbortError"
-          ? "Таймаут входа. Проверь сеть/сервер."
-          : "Ошибка входа"
-      );
+      setMsg(e?.name === "AbortError" ? "Таймаут входа. Проверь сеть/сервер." : "Ошибка входа");
     } finally {
       setLoading(false);
     }

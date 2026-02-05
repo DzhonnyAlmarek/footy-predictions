@@ -78,14 +78,25 @@ export async function POST(req: Request) {
       .update({ must_change_password: false, temp_password: null })
       .eq("login", fpLogin);
 
-    // даже если флаги не обновились — пароль уже сменили
-    const redirect = `/?login=${encodeURIComponent(fpLogin)}&changed=1`;
+    // ✅ редирект на логин с выбранным пользователем (без changed=1 — теперь покажем через cookie)
+    const redirect = `/?login=${encodeURIComponent(fpLogin)}`;
 
-    if (flagErr) {
-      return NextResponse.json({ ok: true, warn: "flags_not_updated", redirect }, { status: 200 });
-    }
+    const res = NextResponse.json(
+      flagErr
+        ? { ok: true, warn: "flags_not_updated", redirect }
+        : { ok: true, redirect },
+      { status: 200 }
+    );
 
-    return NextResponse.json({ ok: true, redirect }, { status: 200 });
+    // ✅ flash-cookie на 30 секунд: логин-страница покажет "Пароль успешно изменён"
+    res.cookies.set("fp_flash", "pwd_changed", {
+      path: "/",
+      maxAge: 30,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    return res;
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: e?.message ?? "unknown error" },
