@@ -22,6 +22,10 @@ function normalizeLogin(v: string) {
   return String(v ?? "").trim().toUpperCase();
 }
 
+function isAdminLogin(v: string) {
+  return normalizeLogin(v) === "ADMIN";
+}
+
 export default function LoginWidget() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [login, setLogin] = useState("");
@@ -45,8 +49,7 @@ export default function LoginWidget() {
     let mounted = true;
 
     async function load() {
-      // ✅ 1) flash-сообщение после смены пароля через cookie fp_flash
-      // (не зависит от query и не потеряется при редиректах)
+      // ✅ flash-сообщение после смены пароля через cookie fp_flash
       const flash = document.cookie
         .split("; ")
         .find((x) => x.startsWith("fp_flash="))
@@ -54,13 +57,12 @@ export default function LoginWidget() {
 
       if (flash === "pwd_changed") {
         setMsg("Пароль успешно изменён ✅ Войдите с новым паролем.");
-        // удалить, чтобы показывалось один раз
         document.cookie = "fp_flash=; Max-Age=0; path=/";
       } else {
         setMsg(null);
       }
 
-      // ✅ 2) логин из query (?login=КЕН)
+      // ✅ логин из query (?login=КЕН)
       const sp = new URLSearchParams(window.location.search);
       const qpLogin = normalizeLogin(sp.get("login") ?? "");
 
@@ -89,6 +91,14 @@ export default function LoginWidget() {
               }
         );
 
+        // ✅ всегда уводим ADMIN в конец списка (чтобы по умолчанию не попадал первым)
+        items.sort((a, b) => {
+          const aa = isAdminLogin(a.login) ? 1 : 0;
+          const bb = isAdminLogin(b.login) ? 1 : 0;
+          if (aa !== bb) return aa - bb; // не-admin выше, admin ниже
+          return normalizeLogin(a.login).localeCompare(normalizeLogin(b.login), "ru");
+        });
+
         setAccounts(items);
 
         if (items.length === 0) {
@@ -96,18 +106,20 @@ export default function LoginWidget() {
           return;
         }
 
-        // выбрать логин из query, иначе первый
-        const found = qpLogin
+        // ✅ 1) сначала пытаемся выбрать логин из query по нормализованному совпадению
+        const foundFromQuery = qpLogin
           ? items.find((x) => normalizeLogin(x.login) === qpLogin)
           : null;
 
-        const chosen = found?.login ?? items[0].login;
+        // ✅ 2) если query не нашли — берём первый НЕ ADMIN
+        const firstNonAdmin = items.find((x) => !isAdminLogin(x.login)) ?? items[0];
+
+        const chosen = foundFromQuery?.login ?? firstNonAdmin.login;
+
         setLogin(chosen);
 
-        // ✅ чистим URL от мусора, но оставляем login (чтобы не было "стартовой" пустой страницы)
-        if (qpLogin) {
-          window.history.replaceState({}, "", "/?login=" + encodeURIComponent(chosen));
-        }
+        // ✅ чистим URL, но оставляем login выбранного (чтобы при обновлении не сбрасывался)
+        window.history.replaceState({}, "", "/?login=" + encodeURIComponent(chosen));
 
         requestAnimationFrame(() => passRef.current?.focus());
       } catch (e: any) {
