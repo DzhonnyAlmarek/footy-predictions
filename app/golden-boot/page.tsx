@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +15,23 @@ function medal(i: number) {
   return "";
 }
 
-export default async function GoldenBootPage() {
-  const supabase = await createClient();
+function decodeMaybe(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
 
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) redirect("/");
+export default async function GoldenBootPage() {
+  const cs = await cookies();
+  const raw = cs.get("fp_login")?.value ?? "";
+  const fpLogin = decodeMaybe(raw).trim();
+
+  // ✅ не кидаем на логин при клике из приложения
+  if (!fpLogin) redirect("/dashboard");
+
+  const supabase = await createClient();
 
   const { data: stage } = await supabase
     .from("stages")
@@ -45,8 +58,8 @@ export default async function GoldenBootPage() {
     .neq("login", "ADMIN")
     .order("login", { ascending: true });
 
-  const userIdToLogin = new Map<string, string>((users ?? []).map((u) => [u.user_id, u.login]));
-  const userIds = (users ?? []).map((u) => u.user_id);
+  const userIdToLogin = new Map<string, string>((users ?? []).map((u: any) => [u.user_id, u.login]));
+  const userIds = (users ?? []).map((u: any) => u.user_id);
 
   const { data: matches } = await supabase
     .from("matches")
@@ -55,7 +68,7 @@ export default async function GoldenBootPage() {
     .not("home_score", "is", null)
     .not("away_score", "is", null);
 
-  const matchIds = (matches ?? []).map((m) => m.id);
+  const matchIds = (matches ?? []).map((m: any) => m.id);
 
   const { data: preds } = await supabase
     .from("predictions")
@@ -81,12 +94,12 @@ export default async function GoldenBootPage() {
     }
   }
 
-  const rows: Row[] = (users ?? []).map((u) => ({
+  const rows: Row[] = (users ?? []).map((u: any) => ({
     login: u.login,
     exact: exactByLogin.get(u.login) ?? 0,
   }));
 
-  rows.sort((a, b) => (b.exact - a.exact) || a.login.localeCompare(b.login, "ru"));
+  rows.sort((a, b) => b.exact - a.exact || a.login.localeCompare(b.login, "ru"));
 
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
@@ -125,15 +138,7 @@ export default async function GoldenBootPage() {
                     }}
                   >
                     <td style={{ padding: "8px 10px" }}>
-                      <div
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                          whiteSpace: "nowrap",
-                          fontWeight: 900,
-                        }}
-                      >
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", fontWeight: 900 }}>
                         <span>{idx + 1}</span>
                         <span>{medal(idx)}</span>
                       </div>

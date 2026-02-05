@@ -4,7 +4,6 @@ import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import PredCellEditable from "./pred-cell";
 
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -40,7 +39,6 @@ type MatchRow = {
 };
 
 export default async function DashboardPage() {
-  // ✅ авторизация через fp_login
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
@@ -48,7 +46,6 @@ export default async function DashboardPage() {
 
   const sb = service();
 
-  // user_id по login
   const { data: acc, error: accErr } = await sb
     .from("login_accounts")
     .select("user_id")
@@ -64,7 +61,6 @@ export default async function DashboardPage() {
   }
   if (!acc?.user_id) redirect("/");
 
-  // текущий этап
   const { data: stage, error: stageErr } = await sb
     .from("stages")
     .select("id,name,status")
@@ -82,7 +78,7 @@ export default async function DashboardPage() {
   if (!stage) {
     return (
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
+        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
         <p style={{ marginTop: 8, opacity: 0.8 }}>Текущий этап не выбран.</p>
         <div style={{ marginTop: 14 }}>
           <Link href="/" style={{ textDecoration: "underline" }}>
@@ -93,7 +89,6 @@ export default async function DashboardPage() {
     );
   }
 
-  // матчи текущего этапа
   const { data: matches, error: matchesErr } = await sb
     .from("matches")
     .select(
@@ -119,7 +114,6 @@ export default async function DashboardPage() {
 
   const matchIds = (matches ?? []).map((m: any) => m.id);
 
-  // прогнозы пользователя по этим матчам
   const { data: preds, error: predsErr } = await sb
     .from("predictions")
     .select("match_id,home_pred,away_pred")
@@ -154,18 +148,17 @@ export default async function DashboardPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
+          <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
           <div style={{ marginTop: 6, opacity: 0.8 }}>
             Этап: <b>{stage.name ?? `#${stage.id}`}</b>
             {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
           </div>
         </div>
 
+        {/* ✅ только нужные разделы */}
         <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <Link href="/dashboard/matches">Матчи</Link>
+          <Link href="/dashboard">Текущая таблица</Link>
           <Link href="/golden-boot">Золотая бутса</Link>
-          <Link href="/rating">Рейтинг</Link>
-          <Link href="/leaderboard">Лидерборд</Link>
           <a href="/logout">Выйти</a>
         </nav>
       </header>
@@ -189,7 +182,6 @@ export default async function DashboardPage() {
                 {(matches as any[]).map((m: MatchRow) => {
                   const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
                   const deadline = m.deadline_at ? new Date(m.deadline_at) : null;
-
                   const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
                   return (
@@ -231,12 +223,6 @@ export default async function DashboardPage() {
           </div>
         )}
       </section>
-
-      <div style={{ marginTop: 18, opacity: 0.75 }}>
-        <Link href="/dashboard" style={{ textDecoration: "underline" }}>
-          Назад
-        </Link>
-      </div>
     </main>
   );
 }

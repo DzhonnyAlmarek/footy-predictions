@@ -6,7 +6,7 @@ export default function AdminNav({ loginLabel }: { loginLabel: string }) {
       <div style={{ fontWeight: 900, fontSize: 14 }}>{loginLabel}</div>
 
       <Link
-        href="/"
+        href="/admin"
         style={{
           display: "inline-block",
           padding: "8px 10px",
