@@ -68,12 +68,30 @@ export default function LoginWidget() {
 
         setAccounts(items);
 
-        if (items.length > 0) {
-          setLogin(items[0].login);
-          requestAnimationFrame(() => passRef.current?.focus());
-        } else {
+        if (items.length === 0) {
           setMsg("Список логинов пуст");
+          return;
         }
+
+        // ✅ читаем query params
+        const sp = new URLSearchParams(window.location.search);
+        const qpLoginRaw = sp.get("login") ?? "";
+        const qpLogin = qpLoginRaw.trim().toUpperCase();
+        const changed = sp.get("changed") === "1";
+
+        const found = qpLogin
+          ? items.find((x) => String(x.login).trim().toUpperCase() === qpLogin)
+          : null;
+
+        setLogin(found?.login ?? items[0].login);
+
+        if (changed) {
+          setMsg("Пароль успешно изменён ✅ Войдите с новым паролем.");
+          // чтобы сообщение не висело при обновлениях — чистим URL
+          window.history.replaceState({}, "", "/?login=" + encodeURIComponent(found?.login ?? items[0].login));
+        }
+
+        requestAnimationFrame(() => passRef.current?.focus());
       } catch (e: any) {
         if (!mounted) return;
         setMsg(e?.name === "AbortError" ? "Таймаут загрузки логинов" : "Ошибка загрузки логинов");
@@ -122,7 +140,7 @@ export default function LoginWidget() {
         body: JSON.stringify({ login, password }),
         cache: "no-store",
         timeoutMs: 10000,
-        credentials: "include", // ✅ добавить
+        credentials: "include",
       });
 
       const json = await res.json().catch(() => ({}));
@@ -244,13 +262,21 @@ export default function LoginWidget() {
           }}
         />
         {capsOn ? (
-          <div style={{ marginTop: 8, color: "crimson", fontSize: 12 }}>
-            Включён Caps Lock
-          </div>
+          <div style={{ marginTop: 8, color: "crimson", fontSize: 12 }}>Включён Caps Lock</div>
         ) : null}
       </div>
 
-      {msg ? <div style={{ marginTop: 12, color: msg.includes("✅") ? "inherit" : "crimson", fontWeight: 700 }}>{msg}</div> : null}
+      {msg ? (
+        <div
+          style={{
+            marginTop: 12,
+            color: msg.includes("✅") ? "inherit" : "crimson",
+            fontWeight: 700,
+          }}
+        >
+          {msg}
+        </div>
+      ) : null}
 
       <button
         type="submit"
