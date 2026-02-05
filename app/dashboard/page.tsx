@@ -1,355 +1,240 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import type { CSSProperties } from "react";
-import PointsPopover from "@/app/_components/points-popover";
-import PredCellEditable from "./pred-cell";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
+import PredCellEditable from "../pred-cell";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function fmt(x: number) {
-  return Number(x ?? 0).toFixed(2).replace(/\.00$/, "");
+function mustEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
 }
 
-function plus(x: number) {
-  const v = Number(x ?? 0);
-  return (v > 0 ? "+" : "") + fmt(v);
+function decodeMaybe(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
 }
 
-function winnersCountFromBonus(bonus: number) {
-  const b = Number(bonus ?? 0);
-  if (b >= 1.49) return 1;
-  if (b >= 0.99) return 2;
-  if (b >= 0.49) return 3;
-  return null;
+function service() {
+  return createClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    { auth: { persistSession: false } }
+  );
 }
 
-type Breakdown = {
-  outcomeBase: number;
-  outcomeBonus: number;
-  diffBase: number;
-  diffBonus: number;
-  h1: number;
-  h2: number;
-  bonus: number;
+type MatchRow = {
+  id: string;
+  kickoff_at: string | null;
+  deadline_at: string | null;
+  status: string | null;
+  home_team: { name: string; slug: string } | null;
+  away_team: { name: string; slug: string } | null;
 };
 
-function isExactPred(pred: string, homeScore: number | null, awayScore: number | null) {
-  if (!pred) return false;
-  if (homeScore === null || awayScore === null) return false;
-
-  const [ph, pa] = pred.split(":").map((x) => Number(x));
-  if (!Number.isFinite(ph) || !Number.isFinite(pa)) return false;
-
-  return ph === homeScore && pa === awayScore;
-}
-
-/**
- * ВАЖНО:
- * - ОДИНАКОВЫЙ стиль для всех ячеек (чтобы не было смещений)
- * - Подсветка ТОЛЬКО exact
- * - Подсветка не меняет размеры (нет border, только background + inset shadow)
- */
-function cellStyleBase(): CSSProperties {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    minHeight: 24,
-    padding: "2px 6px",
-    borderRadius: 6,
-    lineHeight: 1.2,
-  };
-}
-
-function cellStyleExact(exact: boolean): CSSProperties {
-  const base = cellStyleBase();
-  if (!exact) return base;
-
-  return {
-    ...base,
-    fontWeight: 800,
-    color: "#14532d",
-    background: "rgba(34,197,94,0.14)",
-    boxShadow: "inset 0 0 0 1px rgba(34,197,94,0.35)",
-  };
-}
-
 export default async function DashboardPage() {
-  const supabase = await createClient();
+  // ✅ авторизация через fp_login
+  const cs = await cookies();
+  const rawLogin = cs.get("fp_login")?.value ?? "";
+  const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
+  if (!fpLogin) redirect("/");
 
-  const { data: auth } = await supabase.auth.getUser();
-  const me = auth.user;
-  if (!me) {
+  const sb = service();
+
+  // user_id по login
+  const { data: acc, error: accErr } = await sb
+    .from("login_accounts")
+    .select("user_id")
+    .eq("login", fpLogin)
+    .maybeSingle();
+
+  if (accErr) {
     return (
-      <main style={{ padding: 24 }}>
-        <Link href="/">Войти</Link>
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
+        Ошибка login_accounts: {accErr.message}
       </main>
     );
   }
+  if (!acc?.user_id) redirect("/");
 
-  const { data: stage } = await supabase
+  // текущий этап
+  const { data: stage, error: stageErr } = await sb
     .from("stages")
     .select("id,name,status")
     .eq("is_current", true)
     .maybeSingle();
 
-  if (!stage) return <main style={{ padding: 24 }}>Текущий этап не выбран</main>;
+  if (stageErr) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
+        Ошибка stages: {stageErr.message}
+      </main>
+    );
+  }
 
-  const stageLocked = stage.status === "locked";
+  if (!stage) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
+        <p style={{ marginTop: 8, opacity: 0.8 }}>Текущий этап не выбран.</p>
+        <div style={{ marginTop: 14 }}>
+          <Link href="/" style={{ textDecoration: "underline" }}>
+            На главную
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
-  const { data: users } = await supabase
-    .from("login_accounts")
-    .select("login,user_id")
-    .neq("login", "ADMIN")
-    .order("login", { ascending: true });
-
-  const logins = users?.map((u) => u.login) ?? [];
-  const userIds = users?.map((u) => u.user_id) ?? [];
-  const userIdToLogin = new Map(users?.map((u) => [u.user_id, u.login]));
-  const myLogin = userIdToLogin.get(me.id) ?? null;
-
-  const { data: tours } = await supabase
-    .from("tours")
-    .select("id,tour_no,name")
-    .eq("stage_id", stage.id)
-    .order("tour_no", { ascending: true });
-
-  const { data: matches } = await supabase
+  // матчи текущего этапа
+  const { data: matches, error: matchesErr } = await sb
     .from("matches")
     .select(
       `
-      id,tour_id,stage_match_no,kickoff_at,deadline_at,home_score,away_score,
-      home_team:teams!matches_home_team_id_fkey(name),
-      away_team:teams!matches_away_team_id_fkey(name)
+      id,
+      kickoff_at,
+      deadline_at,
+      status,
+      home_team:teams!matches_home_team_id_fkey ( name, slug ),
+      away_team:teams!matches_away_team_id_fkey ( name, slug )
     `
     )
     .eq("stage_id", stage.id)
-    .order("tour_id", { ascending: true })
     .order("kickoff_at", { ascending: true });
+
+  if (matchesErr) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
+        Ошибка matches: {matchesErr.message}
+      </main>
+    );
+  }
 
   const matchIds = (matches ?? []).map((m: any) => m.id);
 
-  const { data: preds } = await supabase
+  // прогнозы пользователя по этим матчам
+  const { data: preds, error: predsErr } = await sb
     .from("predictions")
-    .select("match_id,user_id,home_pred,away_pred")
+    .select("match_id,home_pred,away_pred")
+    .eq("user_id", acc.user_id)
     .in("match_id", matchIds);
 
-  // для подсветки "нет вашего прогноза"
-  const myPredMatchIds = new Set<number>();
-  for (const p of preds ?? []) {
-    if (p.user_id === me.id) myPredMatchIds.add(Number(p.match_id));
+  if (predsErr) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
+        Ошибка predictions: {predsErr.message}
+      </main>
+    );
   }
 
-  // предсказания по сетке
-  const predMap = new Map<string, string>();
+  const predByMatch = new Map<string, { h: number | null; a: number | null }>();
   for (const p of preds ?? []) {
-    const l = userIdToLogin.get(p.user_id);
-    if (l) predMap.set(`${p.match_id}::${l}`, `${p.home_pred}:${p.away_pred}`);
-  }
-
-  // начисления
-  const { data: rows } = await supabase
-    .from("points_ledger")
-    .select(
-      "match_id,user_id,points,points_outcome_base,points_outcome_bonus,points_diff_base,points_diff_bonus,points_h1,points_h2,points_bonus"
-    )
-    .in("match_id", matchIds)
-    .in("user_id", userIds);
-
-  const pointsMap = new Map<string, number>();
-  const breakdownMap = new Map<string, Breakdown>();
-  const totalByLogin = new Map<string, number>();
-
-  for (const r of rows ?? []) {
-    const login = userIdToLogin.get(r.user_id);
-    if (!login) continue;
-
-    const pts = Number(r.points ?? 0);
-    pointsMap.set(`${r.match_id}::${login}`, pts);
-    totalByLogin.set(login, (totalByLogin.get(login) ?? 0) + pts);
-
-    breakdownMap.set(`${r.match_id}::${login}`, {
-      outcomeBase: Number(r.points_outcome_base ?? 0),
-      outcomeBonus: Number(r.points_outcome_bonus ?? 0),
-      diffBase: Number(r.points_diff_base ?? 0),
-      diffBonus: Number(r.points_diff_bonus ?? 0),
-      h1: Number(r.points_h1 ?? 0),
-      h2: Number(r.points_h2 ?? 0),
-      bonus: Number(r.points_bonus ?? 0),
+    predByMatch.set(p.match_id, {
+      h: p.home_pred == null ? null : Number(p.home_pred),
+      a: p.away_pred == null ? null : Number(p.away_pred),
     });
   }
 
-  const gridCols = `minmax(260px, 1.6fr) 80px repeat(${logins.length}, minmax(140px, 1fr))`;
-
   return (
-    <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-      <div style={{ fontSize: 22, fontWeight: 900 }}>Текущая таблица — {stage.name}</div>
-
-      <div style={{ marginTop: 16, border: "1px solid #e5e5e5", borderRadius: 12, overflow: "hidden" }}>
-        {/* header */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: gridCols,
-            padding: "8px 10px",
-            background: "#f7f7f7",
-            fontWeight: 900,
-            columnGap: 8,
-            alignItems: "center",
-          }}
-        >
-          <div>Матч</div>
-          <div style={{ textAlign: "center" }}>Рез.</div>
-          {logins.map((l) => (
-            <div key={l}>
-              {l} <span style={{ opacity: 0.75 }}>({fmt(totalByLogin.get(l) ?? 0)})</span>
-            </div>
-          ))}
+    <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          alignItems: "flex-end",
+        }}
+      >
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
+          <div style={{ marginTop: 6, opacity: 0.8 }}>
+            Этап: <b>{stage.name ?? `#${stage.id}`}</b>
+            {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
+          </div>
         </div>
 
-        {(tours ?? []).map((t: any) => {
-          const list = (matches ?? []).filter((m: any) => m.tour_id === t.id);
-          if (!list.length) return null;
+        <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <Link href="/dashboard/matches">Матчи</Link>
+          <Link href="/golden-boot">Золотая бутса</Link>
+          <Link href="/rating">Рейтинг</Link>
+          <Link href="/leaderboard">Лидерборд</Link>
+          <a href="/logout">Выйти</a>
+        </nav>
+      </header>
 
-          return (
-            <div key={t.id}>
-              <div style={{ padding: "8px 10px", fontWeight: 900, background: "#fafafa" }}>
-                Тур {t.tour_no}
-                {t.name ? ` — ${t.name}` : ""}
-              </div>
+      <section style={{ marginTop: 18 }}>
+        {!matches || matches.length === 0 ? (
+          <p style={{ marginTop: 14 }}>Матчей нет.</p>
+        ) : (
+          <div style={{ marginTop: 14, overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+              <thead>
+                <tr style={{ textAlign: "left" }}>
+                  <th style={{ padding: "10px 10px", width: 160 }}>Дата</th>
+                  <th style={{ padding: "10px 10px" }}>Матч</th>
+                  <th style={{ padding: "10px 10px", width: 180 }}>Дедлайн</th>
+                  <th style={{ padding: "10px 10px", width: 160 }}>Прогноз</th>
+                </tr>
+              </thead>
 
-              {list.map((m: any) => {
-                const result =
-                  m.home_score !== null && m.away_score !== null ? `${m.home_score}:${m.away_score}` : "";
+              <tbody>
+                {(matches as any[]).map((m: MatchRow) => {
+                  const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
+                  const deadline = m.deadline_at ? new Date(m.deadline_at) : null;
 
-                const missingMyPred = myLogin ? !myPredMatchIds.has(Number(m.id)) : false;
+                  const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
-                // canEdit: не locked, дедлайн не прошёл
-                const deadlineOk = m.deadline_at ? Date.now() <= new Date(m.deadline_at).getTime() : true;
-                const canEdit = !!myLogin && !stageLocked && deadlineOk;
+                  return (
+                    <tr key={m.id} style={{ borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                      <td style={{ padding: "10px 10px", whiteSpace: "nowrap" }}>
+                        {kickoff
+                          ? kickoff.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })
+                          : "—"}
+                      </td>
 
-                return (
-                  <div
-                    key={m.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: gridCols,
-                      padding: "6px 10px",
-                      borderTop: "1px solid #eee",
-                      columnGap: 8,
-                      alignItems: "center",
-                      background: missingMyPred ? "rgba(234,179,8,0.12)" : "transparent",
-                    }}
-                  >
-                    {/* Матч + бейдж */}
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        flexWrap: "wrap",
-                        minWidth: 0,
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <b>{m.stage_match_no}.</b>{" "}
-                        {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
-                      </div>
-
-                      {missingMyPred ? (
-                        <span
-                          style={{
-                            padding: "2px 8px",
-                            borderRadius: 999,
-                            border: "1px solid rgba(234,179,8,0.45)",
-                            background: "rgba(234,179,8,0.18)",
-                            fontSize: 12,
-                            fontWeight: 900,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          нет вашего прогноза
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div style={{ textAlign: "center", fontWeight: 900 }}>{result}</div>
-
-                    {/* Колонки участников */}
-                    {logins.map((l) => {
-                      const key = `${m.id}::${l}`;
-                      const pred = predMap.get(key) ?? "";
-                      const pts = pointsMap.get(key);
-                      const bd = breakdownMap.get(key);
-
-                      const outcomeX = bd ? winnersCountFromBonus(bd.outcomeBonus) : null;
-                      const diffX = bd ? winnersCountFromBonus(bd.diffBonus) : null;
-
-                      const tip = bd
-                        ? `Исход: ${fmt(bd.outcomeBase)}
-${outcomeX ? `Надбавка за ${outcomeX} угадавших исход: ${plus(bd.outcomeBonus)}` : `Надбавка за угадавших исход: ${plus(bd.outcomeBonus)}`}
-Итого за исход: ${fmt(bd.outcomeBase + bd.outcomeBonus)}
-
-Разница: ${fmt(bd.diffBase)}
-${diffX ? `Надбавка за ${diffX} угадавших разницу: ${plus(bd.diffBonus)}` : `Надбавка за угадавших разницу: ${plus(bd.diffBonus)}`}
-Итого за разницу: ${fmt(bd.diffBase + bd.diffBonus)}
-
-Голы 1-й команды: ${fmt(bd.h1)}
-Голы 2-й команды: ${fmt(bd.h2)}
-Бонус за отклонение 1 мяч: ${fmt(bd.bonus)}
-
-Итого: ${fmt(
-                            bd.outcomeBase +
-                              bd.outcomeBonus +
-                              bd.diffBase +
-                              bd.diffBonus +
-                              bd.h1 +
-                              bd.h2 +
-                              bd.bonus
-                          )}`
-                        : "";
-
-                      const exact = isExactPred(pred, m.home_score, m.away_score);
-
-                      // ✅ ТОЛЬКО моя колонка редактируемая
-                      if (myLogin && l === myLogin) {
-                        const pointsText = typeof pts === "number" ? ` (${fmt(pts)})` : "";
-
-                        return (
-                          <div key={l} style={{ minHeight: 26 }}>
-                            <PredCellEditable
-                              matchId={m.id}
-                              pred={pred}
-                              canEdit={canEdit}
-                              pointsText={pointsText}
-                              // если компонент не использует — не страшно
-                            />
-                            {tip ? <PointsPopover tip={tip} /> : null}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div key={l} style={{ minHeight: 26 }}>
-                          <span style={cellStyleExact(exact)}>
-                            {/* 🎯 только для 100% */}
-                            {exact ? <span aria-label="точно" title="Точное попадание">🎯</span> : null}
-                            <span>{pred}</span>
-                            {typeof pts === "number" ? (
-                              <span style={{ opacity: 0.85 }}> ({fmt(pts)})</span>
-                            ) : null}
-                          </span>
-                          {tip ? <PointsPopover tip={tip} /> : null}
+                      <td style={{ padding: "10px 10px" }}>
+                        <div style={{ fontWeight: 900 }}>
+                          {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
                         </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+                        <div style={{ marginTop: 4, opacity: 0.7, fontSize: 12 }}>
+                          {m.status ?? ""}
+                        </div>
+                      </td>
+
+                      <td style={{ padding: "10px 10px", whiteSpace: "nowrap" }}>
+                        {deadline
+                          ? deadline.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })
+                          : "—"}
+                      </td>
+
+                      <td style={{ padding: "10px 10px" }}>
+                        <PredCellEditable
+                          matchId={Number(m.id)}
+                          homePred={pr.h}
+                          awayPred={pr.a}
+                          canEdit={true}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <div style={{ marginTop: 18, opacity: 0.75 }}>
+        <Link href="/dashboard" style={{ textDecoration: "underline" }}>
+          Назад
+        </Link>
       </div>
     </main>
   );
