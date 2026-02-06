@@ -19,6 +19,9 @@ body {
   color: #111;
 }
 
+/* ссылки не синие */
+a { color: inherit; }
+
 /* ===== Header centered ===== */
 .siteHeader {
   position: sticky;
@@ -75,20 +78,103 @@ body {
 }
 
 .hasBottomBar {
-  padding-bottom: 86px; /* место под bottom bar на мобиле */
+  padding-bottom: 86px;
 }
 
-.strong {
+/* ===== Dashboard top (user layout) ===== */
+.dashTop {
+  border-bottom: 1px solid #eee;
+  padding: 12px 16px;
+}
+
+.dashTopInner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dashTopLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dashTopLine1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dashTopLine2 {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.dashStageWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dashStageText {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.dashTopNav {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-weight: 800;
+}
+
+.dashTopNav a {
+  text-decoration: underline;
+}
+
+.dashLock {
+  max-width: 1100px;
+  margin: 12px auto 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(220,38,38,0.35);
+  background: rgba(220,38,38,0.08);
+  color: crimson;
   font-weight: 900;
 }
 
-/* ===== Table responsive ===== */
+/* badges */
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(0,0,0,0.04);
+  font-size: 12px;
+  font-weight: 900;
+  opacity: 0.85;
+}
+
+.badgeDanger {
+  border-color: rgba(220,38,38,0.35);
+  background: rgba(220,38,38,0.10);
+  color: crimson;
+  opacity: 1;
+}
+
+/* ===== Tables ===== */
 .tableWrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: 14px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   background: #fff;
+  width: 100%;
 }
 
 .table {
@@ -112,34 +198,75 @@ body {
   background: rgba(0, 0, 0, 0.02);
 }
 
-/* ===== Fixed columns for "Мои прогнозы" ===== */
-.tableFixed {
-  table-layout: fixed;
+/* “Мои прогнозы” — фиксируем ширины аккуратно */
+.userPredTable {
   width: 100%;
+  table-layout: fixed;
+  min-width: 0; /* чтобы на десктопе не создавал лишний скролл */
 }
 
-.colDate {
-  width: 120px;
+.userPredTable .colDate { width: 140px; }
+.userPredTable .colPred { width: 170px; }
+.userPredTable .colMatch { width: auto; }
+
+@media (max-width: 420px) {
+  .userPredTable .colDate { width: 120px; }
+  .userPredTable .colPred { width: 150px; }
 }
 
-.colDeadline {
-  width: 120px;
+/* ===== Row urgency (если прогноз пустой) ===== */
+.rowWarn {
+  background: rgba(234,179,8,0.12);
 }
 
-.colPred {
-  width: 140px;
+.rowDanger {
+  background: rgba(220,38,38,0.10);
 }
 
-@media (min-width: 480px) {
-  .colDate {
-    width: 160px;
-  }
-  .colDeadline {
-    width: 160px;
-  }
-  .colPred {
-    width: 160px;
-  }
+.rowWarnText {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.85;
+}
+
+/* ===== Pred cell 2 inputs ===== */
+.pred2Wrap { min-height: 26px; }
+.pred2Inputs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.pred2Input {
+  width: 44px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.18);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  outline: none;
+  background: #fff;
+}
+
+.pred2Sep {
+  font-weight: 900;
+  opacity: 0.7;
+}
+
+.pred2Saving {
+  margin-left: 4px;
+  opacity: 0.6;
+  font-weight: 900;
+}
+
+.pred2Err {
+  margin-top: 4px;
+  color: crimson;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 /* ===== BottomBar ===== */
@@ -184,6 +311,3 @@ body {
   font-weight: 800;
   opacity: 0.9;
 }
-
-/* ✅ ВАЖНО: на ПК bottom bar можно скрывать, но ты его проверяешь на ПК.
-   Поэтому НЕ скрываем. Если захочешь скрывать — верни media-rule. */

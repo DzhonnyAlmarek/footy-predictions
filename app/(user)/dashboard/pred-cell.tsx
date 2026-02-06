@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   matchId: number;
@@ -23,15 +23,18 @@ export default function PredCellEditable({
   pointsText,
   tip,
 }: Props) {
-  const [h, setH] = useState<string>(toStr(homePred));
-  const [a, setA] = useState<string>(toStr(awayPred));
+  const [h, setH] = useState(toStr(homePred));
+  const [a, setA] = useState(toStr(awayPred));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const hRef = useRef<HTMLInputElement | null>(null);
+  const aRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => setH(toStr(homePred)), [homePred]);
   useEffect(() => setA(toStr(awayPred)), [awayPred]);
 
-  function parseGoal(s: string): number | null {
+  function normInt(s: string) {
     const t = s.trim();
     if (t === "") return null;
     if (!/^\d+$/.test(t)) return NaN;
@@ -40,19 +43,17 @@ export default function PredCellEditable({
 
   async function save() {
     if (!canEdit) return;
+
     setError(null);
 
-    const ph = parseGoal(h);
-    const pa = parseGoal(a);
+    const hh = normInt(h);
+    const aa = normInt(a);
 
-    if (Number.isNaN(ph) || Number.isNaN(pa)) {
-      setError("Только цифры");
-      return;
-    }
+    // если оба пустые — просто не сохраняем (и не ругаемся)
+    if (hh === null && aa === null) return;
 
-    // если один заполнен, а второй пуст — считаем это ошибкой ввода
-    if ((ph == null) !== (pa == null)) {
-      setError("Заполни оба поля");
+    if (hh === null || aa === null || Number.isNaN(hh) || Number.isNaN(aa)) {
+      setError("Введите два числа");
       return;
     }
 
@@ -62,12 +63,12 @@ export default function PredCellEditable({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        cache: "no-store",
         body: JSON.stringify({
           match_id: matchId,
-          home_pred: ph,
-          away_pred: pa,
+          home_pred: hh,
+          away_pred: aa,
         }),
+        cache: "no-store",
       });
 
       const json = await res.json().catch(() => ({}));
@@ -80,60 +81,43 @@ export default function PredCellEditable({
   }
 
   if (!canEdit) {
-    const shown =
-      homePred == null || awayPred == null ? "—" : `${homePred}:${awayPred}`;
+    const show = homePred == null || awayPred == null ? "—" : `${homePred}:${awayPred}`;
     return (
       <div title={tip} style={{ minHeight: 24, whiteSpace: "nowrap" }}>
-        <span style={{ fontFamily: "monospace" }}>{shown}</span>
-        {pointsText && <span style={{ opacity: 0.75 }}> {pointsText}</span>}
+        <span style={{ fontFamily: "monospace" }}>{show}</span>
+        {pointsText ? <span style={{ opacity: 0.75 }}> {pointsText}</span> : null}
       </div>
     );
   }
 
   return (
-    <div title={tip} style={{ minHeight: 26 }}>
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+    <div title={tip} className="pred2Wrap">
+      <div className="pred2Inputs">
         <input
+          ref={hRef}
           value={h}
           onChange={(e) => setH(e.target.value)}
           onBlur={save}
           disabled={saving}
           inputMode="numeric"
           placeholder="0"
-          style={{
-            width: 44,
-            padding: "2px 6px",
-            borderRadius: 10,
-            border: "1px solid rgba(0,0,0,0.22)",
-            fontSize: 13,
-            textAlign: "center",
-          }}
+          className="pred2Input"
         />
-        <span style={{ opacity: 0.7, fontWeight: 800 }}>:</span>
+        <span className="pred2Sep">:</span>
         <input
+          ref={aRef}
           value={a}
           onChange={(e) => setA(e.target.value)}
           onBlur={save}
           disabled={saving}
           inputMode="numeric"
           placeholder="0"
-          style={{
-            width: 44,
-            padding: "2px 6px",
-            borderRadius: 10,
-            border: "1px solid rgba(0,0,0,0.22)",
-            fontSize: 13,
-            textAlign: "center",
-          }}
+          className="pred2Input"
         />
-        {saving && <span style={{ marginLeft: 4, opacity: 0.6 }}>…</span>}
+        {saving ? <span className="pred2Saving">…</span> : null}
       </div>
 
-      {error && (
-        <div style={{ color: "crimson", fontSize: 12, marginTop: 2 }}>
-          {error}
-        </div>
-      )}
+      {error ? <div className="pred2Err">{error}</div> : null}
     </div>
   );
 }
