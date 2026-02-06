@@ -1,53 +1,60 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   matchId: number;
   homePred: number | null;
   awayPred: number | null;
   canEdit: boolean;
+  pointsText?: string;
+  tip?: string;
 };
+
+function toStr(v: number | null) {
+  return v == null ? "" : String(v);
+}
 
 export default function PredCellEditable({
   matchId,
   homePred,
   awayPred,
   canEdit,
+  pointsText,
+  tip,
 }: Props) {
-  const [h, setH] = useState<string>(homePred == null ? "" : String(homePred));
-  const [a, setA] = useState<string>(awayPred == null ? "" : String(awayPred));
+  const [h, setH] = useState<string>(toStr(homePred));
+  const [a, setA] = useState<string>(toStr(awayPred));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setH(homePred == null ? "" : String(homePred));
-  }, [homePred]);
+  useEffect(() => setH(toStr(homePred)), [homePred]);
+  useEffect(() => setA(toStr(awayPred)), [awayPred]);
 
-  useEffect(() => {
-    setA(awayPred == null ? "" : String(awayPred));
-  }, [awayPred]);
-
-  const valueOk = useMemo(() => {
-    // пустые считаем “нет прогноза”
-    if (h.trim() === "" && a.trim() === "") return true;
-    // оба должны быть числами
-    if (!/^\d+$/.test(h.trim())) return false;
-    if (!/^\d+$/.test(a.trim())) return false;
-    return true;
-  }, [h, a]);
+  function parseGoal(s: string): number | null {
+    const t = s.trim();
+    if (t === "") return null;
+    if (!/^\d+$/.test(t)) return NaN;
+    return Number(t);
+  }
 
   async function save() {
     if (!canEdit) return;
     setError(null);
 
-    if (!valueOk) {
-      setError("Только числа");
+    const ph = parseGoal(h);
+    const pa = parseGoal(a);
+
+    if (Number.isNaN(ph) || Number.isNaN(pa)) {
+      setError("Только цифры");
       return;
     }
 
-    // если оба пустые — не сохраняем (можно сделать “очистить” отдельно)
-    if (h.trim() === "" && a.trim() === "") return;
+    // если один заполнен, а второй пуст — считаем это ошибкой ввода
+    if ((ph == null) !== (pa == null)) {
+      setError("Заполни оба поля");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -58,8 +65,8 @@ export default function PredCellEditable({
         cache: "no-store",
         body: JSON.stringify({
           match_id: matchId,
-          home_pred: Number(h.trim()),
-          away_pred: Number(a.trim()),
+          home_pred: ph,
+          away_pred: pa,
         }),
       });
 
@@ -73,55 +80,60 @@ export default function PredCellEditable({
   }
 
   if (!canEdit) {
-    const text =
+    const shown =
       homePred == null || awayPred == null ? "—" : `${homePred}:${awayPred}`;
-    return <div style={{ minHeight: 26, fontFamily: "monospace" }}>{text}</div>;
+    return (
+      <div title={tip} style={{ minHeight: 24, whiteSpace: "nowrap" }}>
+        <span style={{ fontFamily: "monospace" }}>{shown}</span>
+        {pointsText && <span style={{ opacity: 0.75 }}> {pointsText}</span>}
+      </div>
+    );
   }
 
   return (
-    <div style={{ minHeight: 26, display: "inline-flex", flexDirection: "column" }}>
+    <div title={tip} style={{ minHeight: 26 }}>
       <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
         <input
-          inputMode="numeric"
           value={h}
-          onChange={(e) => setH(e.target.value.replace(/[^\d]/g, ""))}
+          onChange={(e) => setH(e.target.value)}
           onBlur={save}
           disabled={saving}
-          placeholder="0"
-          style={{
-            width: 44,
-            padding: "4px 6px",
-            borderRadius: 10,
-            border: "1px solid #d6d6d6",
-            fontSize: 13,
-            textAlign: "center",
-          }}
-        />
-        <span style={{ opacity: 0.6, fontWeight: 900 }}>:</span>
-        <input
           inputMode="numeric"
-          value={a}
-          onChange={(e) => setA(e.target.value.replace(/[^\d]/g, ""))}
-          onBlur={save}
-          disabled={saving}
           placeholder="0"
           style={{
             width: 44,
-            padding: "4px 6px",
+            padding: "2px 6px",
             borderRadius: 10,
-            border: "1px solid #d6d6d6",
+            border: "1px solid rgba(0,0,0,0.22)",
             fontSize: 13,
             textAlign: "center",
           }}
         />
-        {saving ? <span style={{ marginLeft: 6, opacity: 0.6 }}>…</span> : null}
+        <span style={{ opacity: 0.7, fontWeight: 800 }}>:</span>
+        <input
+          value={a}
+          onChange={(e) => setA(e.target.value)}
+          onBlur={save}
+          disabled={saving}
+          inputMode="numeric"
+          placeholder="0"
+          style={{
+            width: 44,
+            padding: "2px 6px",
+            borderRadius: 10,
+            border: "1px solid rgba(0,0,0,0.22)",
+            fontSize: 13,
+            textAlign: "center",
+          }}
+        />
+        {saving && <span style={{ marginLeft: 4, opacity: 0.6 }}>…</span>}
       </div>
 
-      {error ? (
-        <div style={{ marginTop: 4, color: "crimson", fontSize: 12 }}>
+      {error && (
+        <div style={{ color: "crimson", fontSize: 12, marginTop: 2 }}>
           {error}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

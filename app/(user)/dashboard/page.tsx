@@ -45,6 +45,15 @@ function teamName(t: TeamMaybeArray): string {
   return t.name ?? "?";
 }
 
+function fmtDateOnly(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export default async function DashboardPage() {
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
@@ -146,20 +155,20 @@ export default async function DashboardPage() {
   return (
     <main className="userMain hasBottomBar">
       <header style={{ marginBottom: 14 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Мои прогнозы</h1>
+        <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>
+          Мои прогнозы
+        </h1>
 
         <div style={{ marginTop: 6, opacity: 0.8 }}>
           Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-          {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
+          {stage.status ? (
+            <span style={{ opacity: 0.65 }}> • {stage.status}</span>
+          ) : null}
           <span style={{ opacity: 0.65 }}> • {fpLogin}</span>
         </div>
 
-        {/* оставляем верхнее меню (и bottom bar остаётся) */}
-        <nav className="topNav" style={{ marginTop: 12 }}>
-          <Link href="/dashboard/current">Текущая таблица</Link>
-          <Link href="/golden-boot">Золотая бутса</Link>
-          <a href="/logout">Выйти</a>
-        </nav>
+        {/* ⚠️ ВАЖНО: тут НЕ ДОЛЖНО быть меню.
+            Меню остаётся только в layout (верх) и BottomBar (низ) */}
       </header>
 
       <section>
@@ -167,61 +176,42 @@ export default async function DashboardPage() {
           <p style={{ marginTop: 14 }}>Матчей нет.</p>
         ) : (
           <div className="tableWrap">
-            <table
-              className="table"
-              style={{
-                width: "100%",
-                tableLayout: "fixed",
-              }}
-            >
+            <table className="table userPredTable">
               <thead>
                 <tr>
-                  <th style={{ width: 140 }}>Дата</th>
-                  <th>Матч</th>
-                  <th style={{ width: 140 }}>Дедлайн</th>
-                  <th style={{ width: 140 }}>Прогноз</th>
+                  <th className="colDate">Дата</th>
+                  <th className="colMatch">Матч</th>
+                  <th className="colDeadline">Дедлайн</th>
+                  <th className="colPred">Прогноз</th>
                 </tr>
               </thead>
 
               <tbody>
                 {matches.map((m) => {
-                  const kickoff = m.kickoff_at
-                    ? new Date(m.kickoff_at).toLocaleDateString("ru-RU", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })
-                    : "—";
-
-                  const deadline = m.deadline_at
-                    ? new Date(m.deadline_at).toLocaleDateString("ru-RU", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })
-                    : "—";
-
+                  const kickoff = fmtDateOnly(m.kickoff_at);
+                  const deadline = fmtDateOnly(m.deadline_at);
                   const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
                   return (
                     <tr key={m.id}>
-                      <td style={{ whiteSpace: "nowrap" }}>{kickoff}</td>
+                      <td className="colDate" style={{ whiteSpace: "nowrap" }}>
+                        {kickoff}
+                      </td>
 
-                      <td style={{ overflow: "hidden" }}>
-                        <div
-                          style={{
-                            fontWeight: 900,
-                            whiteSpace: "normal",
-                            wordBreak: "break-word",
-                          }}
-                        >
+                      <td className="colMatch">
+                        <div style={{ fontWeight: 900 }}>
                           {teamName(m.home_team)} — {teamName(m.away_team)}
                         </div>
                       </td>
 
-                      <td style={{ whiteSpace: "nowrap" }}>{deadline}</td>
+                      <td
+                        className="colDeadline"
+                        style={{ whiteSpace: "nowrap" }}
+                      >
+                        {deadline}
+                      </td>
 
-                      <td style={{ whiteSpace: "nowrap" }}>
+                      <td className="colPred">
                         <PredCellEditable
                           matchId={Number(m.id)}
                           homePred={pr.h}
