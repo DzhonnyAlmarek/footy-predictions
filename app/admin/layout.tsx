@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import AdminNav from "./AdminNav";
 
@@ -18,22 +19,18 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const cs = await cookies();
-  const raw = cs.get("fp_login")?.value ?? "";
-  const loginLabel = (decodeMaybe(raw) || "ADMIN").toString();
+  const rawLogin = cs.get("fp_login")?.value ?? "";
+  const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
+
+  if (fpLogin !== "ADMIN") redirect("/");
 
   return (
-    <div className="adminLayout">
-      <aside className="adminSidebar">
-        <AdminNav loginLabel={loginLabel} />
+    <div className="adminShell">
+      <aside className="adminSide">
+        <AdminNav loginLabel={fpLogin} />
       </aside>
 
-      <div className="adminMain">
-        <div className="adminTopbar">
-          <div className="adminTitle">Админ-панель</div>
-        </div>
-
-        <main className="adminContent">{children}</main>
-      </div>
+      <div className="adminMain">{children}</div>
     </div>
   );
 }

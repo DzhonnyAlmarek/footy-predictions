@@ -1,98 +1,70 @@
 import Link from "next/link";
 
-export default async function AdminPage() {
-  // AdminLayout уже проверяет: залогинен, сменил пароль, role=admin
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function Tile({
+  href,
+  title,
+  desc,
+}: {
+  href: string;
+  title: string;
+  desc: string;
+}) {
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ fontSize: 28, fontWeight: 900 }}>Админ-панель</h1>
-      <p style={{ marginTop: 8, opacity: 0.8 }}>Выберите раздел</p>
+    <Link
+      href={href}
+      style={{
+        border: "1px solid rgba(0,0,0,0.10)",
+        borderRadius: 14,
+        padding: 16,
+        display: "block",
+        textDecoration: "none",
+        background: "#fff",
+      }}
+    >
+      <div style={{ fontWeight: 900, fontSize: 18 }}>{title}</div>
+      <div style={{ marginTop: 6, opacity: 0.75 }}>{desc}</div>
+    </Link>
+  );
+}
 
-      <section style={{ marginTop: 18, display: "grid", gap: 12 }}>
-        <Link
+export default async function AdminHomePage() {
+  return (
+    <div style={{ maxWidth: 920, margin: "0 auto" }}>
+      <h1 style={{ fontSize: 34, fontWeight: 900, margin: "8px 0 0" }}>
+        Админ-панель
+      </h1>
+      <div style={{ marginTop: 8, opacity: 0.75 }}>Выберите раздел</div>
+
+      <div style={{ marginTop: 16, display: "grid", gap: 14 }}>
+        <Tile
           href="/admin/current-table"
-          style={{
-            border: "1px solid #e5e5e5",
-            borderRadius: 12,
-            padding: 14,
-            textDecoration: "none",
-            color: "inherit",
-            display: "block",
-          }}
-        >
-          <div style={{ fontWeight: 900, fontSize: 18 }}>Текущая таблица</div>
-          <div style={{ marginTop: 6, opacity: 0.8 }}>
-            Этап → туры → матчи + прогнозы участников
-          </div>
-        </Link>
-
-        <Link
+          title="Текущая таблица"
+          desc="Этап → туры → матчи + прогнозы участников"
+        />
+        <Tile
           href="/admin/stages"
-          style={{
-            border: "1px solid #e5e5e5",
-            borderRadius: 12,
-            padding: 14,
-            textDecoration: "none",
-            color: "inherit",
-            display: "block",
-          }}
-        >
-          <div style={{ fontWeight: 900, fontSize: 18 }}>Этапы / Туры / Матчи</div>
-          <div style={{ marginTop: 6, opacity: 0.8 }}>
-            Создание, редактирование, удаление. Закрытие этапа только при 56 матчах.
-          </div>
-        </Link>
-
-        <Link
+          title="Этапы / Туры / Матчи"
+          desc="Создание, редактирование, удаление"
+        />
+        <Tile
           href="/admin/results"
-          style={{
-            border: "1px solid #e5e5e5",
-            borderRadius: 12,
-            padding: 14,
-            textDecoration: "none",
-            color: "inherit",
-            display: "block",
-          }}
-        >
-          <div style={{ fontWeight: 900, fontSize: 18 }}>Результаты</div>
-          <div style={{ marginTop: 6, opacity: 0.8 }}>
-            Ввод результатов и автоматическое начисление очков
-          </div>
-        </Link>
-
-        <Link
+          title="Результаты"
+          desc="Ввод результатов и начисление очков"
+        />
+        <Tile
           href="/admin/teams"
-          style={{
-            border: "1px solid #e5e5e5",
-            borderRadius: 12,
-            padding: 14,
-            textDecoration: "none",
-            color: "inherit",
-            display: "block",
-          }}
-        >
-          <div style={{ fontWeight: 900, fontSize: 18 }}>Команды</div>
-          <div style={{ marginTop: 6, opacity: 0.8 }}>
-            Создать / редактировать / удалить команды
-          </div>
-        </Link>
-
-        <Link
+          title="Команды"
+          desc="Создать / редактировать / удалить команды"
+        />
+        <Tile
           href="/admin/users"
-          style={{
-            border: "1px solid #e5e5e5",
-            borderRadius: 12,
-            padding: 14,
-            textDecoration: "none",
-            color: "inherit",
-            display: "block",
-          }}
-        >
-          <div style={{ fontWeight: 900, fontSize: 18 }}>Пользователи</div>
-          <div style={{ marginTop: 6, opacity: 0.8 }}>
-            Создать / редактировать / удалить пользователей, сброс пароля
-          </div>
-        </Link>
-      </section>
-    </main>
+          title="Пользователи"
+          desc="Создать / редактировать / удалить пользователей, сброс пароля"
+        />
+      </div>
+    </div>
   );
 }
