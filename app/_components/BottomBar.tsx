@@ -3,18 +3,40 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const items = [
-  { href: "/dashboard", label: "Таблица", icon: "📊" },
+type Item = {
+  href: string;
+  label: string;
+  icon: string;
+  isLogout?: boolean;
+};
+
+const items: Item[] = [
+  { href: "/dashboard", label: "Мои прогнозы", icon: "📊" },
+  { href: "/dashboard/current", label: "Текущая таблица", icon: "📋" },
   { href: "/golden-boot", label: "Бутса", icon: "🥇" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
 
 export default function BottomBar() {
-  const pathnameMaybe = usePathname();
-  const pathname = pathnameMaybe ?? ""; // ✅ TS fix: string, never null
+  const pathname = usePathname() ?? "";
 
   return (
-    <nav className="mobileBottomBar" aria-label="Навигация">
+    <nav
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 64,
+        display: "flex",
+        justifyContent: "space-around",
+        alignItems: "center",
+        borderTop: "1px solid rgba(0,0,0,0.1)",
+        background: "#fff",
+        zIndex: 50,
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
       {items.map((i) => {
         const active =
           !i.isLogout &&
@@ -22,9 +44,23 @@ export default function BottomBar() {
 
         if (i.isLogout) {
           return (
-            <a key={i.href} href={i.href} className="mbItem">
-              <span className="mbIcon">{i.icon}</span>
-              <span className="mbText">{i.label}</span>
+            <a
+              key={i.href}
+              href={i.href}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#111",
+                textDecoration: "none",
+                opacity: 0.8,
+              }}
+            >
+              <span style={{ fontSize: 20 }}>{i.icon}</span>
+              {i.label}
             </a>
           );
         }
@@ -33,11 +69,26 @@ export default function BottomBar() {
           <Link
             key={i.href}
             href={i.href}
-            className={`mbItem ${active ? "active" : ""}`}
-            aria-current={active ? "page" : undefined}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 12,
+              fontWeight: 800,
+              color: active ? "#000" : "#666",
+              textDecoration: "none",
+            }}
           >
-            <span className="mbIcon">{i.icon}</span>
-            <span className="mbText">{i.label}</span>
+            <span
+              style={{
+                fontSize: 20,
+                transform: active ? "scale(1.1)" : "scale(1)",
+              }}
+            >
+              {i.icon}
+            </span>
+            {i.label}
           </Link>
         );
       })}
