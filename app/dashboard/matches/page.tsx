@@ -165,10 +165,7 @@ export default async function DashboardMatchesPage() {
                         <div style={{ fontWeight: 900 }}>
                           {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
                         </div>
-                        <div style={{ marginTop: 4, opacity: 0.7, fontSize: 12 }}>
-                          {m.status ?? ""}
-                        </div>
-                      </td>
+                                          </td>
 
                       <td style={{ whiteSpace: "nowrap" }}>
                         {deadline ? (() => {
