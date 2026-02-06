@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
@@ -89,13 +88,8 @@ export default async function DashboardPage() {
   if (!stage) {
     return (
       <main className="userMain hasBottomBar">
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
+        <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Мои прогнозы</h1>
         <p style={{ marginTop: 8, opacity: 0.8 }}>Текущий этап не выбран.</p>
-        <div style={{ marginTop: 14 }}>
-          <Link href="/" style={{ textDecoration: "underline" }}>
-            На главную
-          </Link>
-        </div>
       </main>
     );
   }
@@ -108,7 +102,6 @@ export default async function DashboardPage() {
       id,
       kickoff_at,
       deadline_at,
-      status,
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `
@@ -160,13 +153,6 @@ export default async function DashboardPage() {
           {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
           <span style={{ opacity: 0.65 }}> • {fpLogin}</span>
         </div>
-
-        {/* верхнее меню — только нужное */}
-        <nav className="topNav" style={{ marginTop: 12 }}>
-          <Link href="/dashboard">Текущая таблица</Link>
-          <Link href="/golden-boot">Золотая бутса</Link>
-          <a href="/logout">Выйти</a>
-        </nav>
       </header>
 
       <section>
