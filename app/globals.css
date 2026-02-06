@@ -1,31 +1,40 @@
-/* ===== Reset / base ===== */
-* { box-sizing: border-box; }
+:root {
+  color-scheme: light;
+}
 
-html, body {
-  margin: 0;
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
   padding: 0;
-  max-width: 100%;
-  overflow-x: hidden;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
-  background: #fafafa;
+  margin: 0;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji",
+    "Segoe UI Emoji";
+  background: #fff;
   color: #111;
 }
 
-a { color: inherit; text-decoration: none; }
-
-/* ===== User main wrapper ===== */
-.userMain {
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 16px;
+/* ===== Header centered ===== */
+.siteHeader {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-/* ===== Site header (Клуб им. А.Н. Мурашева) ===== */
-.siteTitleWrap {
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-  background: #fff;
+.siteHeaderInner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: center;
 }
 
 .clubTitleLink {
@@ -33,222 +42,148 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   gap: 10px;
   text-decoration: none;
+  color: inherit;
 }
 
 .clubIcon {
+  width: 28px;
+  height: 28px;
   display: inline-flex;
-  width: 34px;
-  height: 34px;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: rgba(0,0,0,0.03);
-  font-size: 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .clubTitleText {
-  display: inline-flex;
-  flex-direction: column;
-  line-height: 1.05;
   font-weight: 900;
-  font-size: 14px;
+  line-height: 1.05;
 }
 
 .clubTitleText span {
   font-weight: 800;
-  opacity: 0.75;
-  font-size: 12px;
+  opacity: 0.7;
+  margin-left: 6px;
 }
 
-/* ===== Top navigation ===== */
-.topNav {
-  display: flex;
-  gap: 10px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  -webkit-overflow-scrolling: touch;
+/* ===== Main container ===== */
+.userMain {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 18px 16px;
 }
 
-.topNav a {
-  white-space: nowrap;
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: #fff;
-  font-weight: 800;
-  font-size: 14px;
+.hasBottomBar {
+  padding-bottom: 86px; /* место под bottom bar на мобиле */
 }
 
-/* ===== Tables ===== */
+.strong {
+  font-weight: 900;
+}
+
+/* ===== Table responsive ===== */
 .tableWrap {
-  width: 100%;
-  overflow: auto;
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid rgba(0,0,0,0.08);
   border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   background: #fff;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 760px;
+  min-width: 720px;
+}
+
+.table th,
+.table td {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  vertical-align: middle;
 }
 
 .table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-  padding: 10px 10px;
-  font-weight: 900;
+  border-top: none;
   font-size: 13px;
+  opacity: 0.85;
   text-align: left;
+  background: rgba(0, 0, 0, 0.02);
 }
 
-.table tbody td {
-  padding: 10px 10px;
-  border-top: 1px solid rgba(0,0,0,0.06);
-  vertical-align: top;
+/* ===== Fixed columns for "Мои прогнозы" ===== */
+.tableFixed {
+  table-layout: fixed;
+  width: 100%;
 }
 
-/* ===== Prediction input ===== */
-.predInput {
-  width: 56px;
-  padding: 6px 8px;
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.20);
-  font-size: 14px;
-  text-align: center;
-  background: #fff;
-  color: inherit;
+.colDate {
+  width: 120px;
 }
 
-/* ===== Mobile Bottom Bar ===== */
-.mobileBottomBar { display: none; }
-
-@media (max-width: 640px) {
-  .mobileBottomBar {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-    background: rgba(255,255,255,0.92);
-    backdrop-filter: blur(12px);
-
-    border-top: 1px solid rgba(0,0,0,0.10);
-    z-index: 9999;
-  }
-
-  .mbItem {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-
-    padding: 10px 10px;
-    border-radius: 14px;
-
-    border: 1px solid rgba(0,0,0,0.12);
-    background: #fff;
-
-    font-weight: 900;
-    font-size: 13px;
-    white-space: nowrap;
-  }
-
-  .mbItem.active {
-    border-color: rgba(0,0,0,0.22);
-    box-shadow: 0 8px 22px rgba(0,0,0,0.10);
-  }
-
-  .mbIcon { font-size: 16px; }
-  .mbText { font-size: 12px; }
-
-  /* чтобы контент не прятался за bottom bar */
-  .hasBottomBar {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom));
-  }
-
-  .predInput { width: 48px; font-size: 15px; }
-  .table { min-width: 680px; }
+.colDeadline {
+  width: 120px;
 }
 
-/* ================= ADMIN GRID ================= */
-.adminShell {
-  min-height: 100vh;
+.colPred {
+  width: 140px;
+}
+
+@media (min-width: 480px) {
+  .colDate {
+    width: 160px;
+  }
+  .colDeadline {
+    width: 160px;
+  }
+  .colPred {
+    width: 160px;
+  }
+}
+
+/* ===== BottomBar ===== */
+.bottomBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
 }
 
-.adminSide {
-  background: #fff;
-  border-right: 1px solid rgba(0,0,0,0.08);
-  padding: 16px;
-  position: sticky;
-  top: 0;
-  align-self: start;
-  height: 100vh;
-  overflow: auto;
-}
-
-.adminMain {
-  padding: 20px;
-  min-width: 0;
-}
-
-@media (max-width: 900px) {
-  .adminShell { grid-template-columns: 1fr; }
-  .adminSide {
-    position: relative;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid rgba(0,0,0,0.08);
-  }
-  .adminMain { padding: 12px; }
-}
-
-/* ===== AdminNav ===== */
-.adminNav { display: grid; gap: 14px; }
-
-.adminNavLabel {
-  font-weight: 800;
-  font-size: 13px;
-  opacity: 0.75;
-}
-
-.adminNavUser {
-  margin-top: 6px;
-  font-weight: 900;
-  font-size: 16px;
-  opacity: 1;
-}
-
-.adminNavLinks { display: grid; gap: 10px; }
-
-.adminNavLink {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-
-  padding: 10px 12px;
+.bbItem {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 10px 6px;
   border-radius: 12px;
-
-  border: 1px solid rgba(0,0,0,0.15);
-  background: #fff;
-
-  font-weight: 900;
   text-decoration: none;
+  color: inherit;
+  border: 1px solid transparent;
 }
+
+.bbActive {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.bbIcon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.bbLabel {
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0.9;
+}
+
+/* ✅ ВАЖНО: на ПК bottom bar можно скрывать, но ты его проверяешь на ПК.
+   Поэтому НЕ скрываем. Если захочешь скрывать — верни media-rule. */

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
@@ -45,7 +46,7 @@ function teamName(t: TeamMaybeArray): string {
 }
 
 export default async function DashboardPage() {
-  // ✅ авторизация через fp_login (cookie)
+  // auth via fp_login (cookie)
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
@@ -53,7 +54,7 @@ export default async function DashboardPage() {
 
   const sb = service();
 
-  // user_id по login
+  // user_id by login
   const { data: acc, error: accErr } = await sb
     .from("login_accounts")
     .select("user_id")
@@ -67,10 +68,9 @@ export default async function DashboardPage() {
       </main>
     );
   }
-
   if (!acc?.user_id) redirect("/");
 
-  // текущий этап
+  // current stage
   const { data: stage, error: stageErr } = await sb
     .from("stages")
     .select("id,name,status")
@@ -88,13 +88,18 @@ export default async function DashboardPage() {
   if (!stage) {
     return (
       <main className="userMain hasBottomBar">
-        <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Мои прогнозы</h1>
+        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
         <p style={{ marginTop: 8, opacity: 0.8 }}>Текущий этап не выбран.</p>
+        <div style={{ marginTop: 14 }}>
+          <Link href="/" style={{ textDecoration: "underline" }}>
+            На главную
+          </Link>
+        </div>
       </main>
     );
   }
 
-  // матчи текущего этапа
+  // matches of current stage
   const { data: matchesRaw, error: matchesErr } = await sb
     .from("matches")
     .select(
@@ -120,7 +125,7 @@ export default async function DashboardPage() {
   const matches = (matchesRaw ?? []) as unknown as MatchRow[];
   const matchIds = matches.map((m) => m.id);
 
-  // прогнозы пользователя по этим матчам
+  // predictions of user for those matches
   const { data: preds, error: predsErr } = await sb
     .from("predictions")
     .select("match_id,home_pred,away_pred")
@@ -153,6 +158,8 @@ export default async function DashboardPage() {
           {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
           <span style={{ opacity: 0.65 }}> • {fpLogin}</span>
         </div>
+
+        {/* 👇 Здесь меню НЕ делаем — оно должно быть только в layout + bottom bar */}
       </header>
 
       <section>
@@ -160,13 +167,21 @@ export default async function DashboardPage() {
           <p style={{ marginTop: 14 }}>Матчей нет.</p>
         ) : (
           <div className="tableWrap">
-            <table className="table">
+            {/* ✅ фиксируем ширины колонок */}
+            <table className="table tableFixed">
+              <colgroup>
+                <col className="colDate" />
+                <col />
+                <col className="colDeadline" />
+                <col className="colPred" />
+              </colgroup>
+
               <thead>
                 <tr>
-                  <th style={{ width: 160 }}>Дата</th>
+                  <th>Дата</th>
                   <th>Матч</th>
-                  <th style={{ width: 160 }}>Дедлайн</th>
-                  <th style={{ width: 160 }}>Прогноз</th>
+                  <th>Дедлайн</th>
+                  <th>Прогноз</th>
                 </tr>
               </thead>
 
@@ -195,7 +210,7 @@ export default async function DashboardPage() {
                       <td style={{ whiteSpace: "nowrap" }}>{kickoff}</td>
 
                       <td>
-                        <div style={{ fontWeight: 900 }}>
+                        <div className="strong">
                           {teamName(m.home_team)} — {teamName(m.away_team)}
                         </div>
                       </td>
