@@ -1,8 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { useState } from "react";
 
 type ScoreRow = { user_id: string; match_id: number; points: number; reason: string };
 
@@ -12,15 +10,13 @@ export default function AdminSetResultForm(props: {
   defaultAway: number | "";
   defaultStatus: string;
 }) {
-  const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
-
   const [home, setHome] = useState<string>(String(props.defaultHome ?? ""));
   const [away, setAway] = useState<string>(String(props.defaultAway ?? ""));
   const [status, setStatus] = useState<string>(props.defaultStatus ?? "scheduled");
 
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
   const [savedOk, setSavedOk] = useState(false);
 
   const [scoreMsg, setScoreMsg] = useState<string | null>(null);
@@ -33,21 +29,33 @@ export default function AdminSetResultForm(props: {
     const homeN = home === "" ? null : Number(home);
     const awayN = away === "" ? null : Number(away);
 
-    if (homeN !== null && (!Number.isInteger(homeN) || homeN < 0)) return setMsg("home_score должен быть целым 0+ или пусто");
-    if (awayN !== null && (!Number.isInteger(awayN) || awayN < 0)) return setMsg("away_score должен быть целым 0+ или пусто");
+    if (homeN !== null && (!Number.isInteger(homeN) || homeN < 0)) {
+      return setMsg("home_score должен быть целым 0+ или пусто");
+    }
+    if (awayN !== null && (!Number.isInteger(awayN) || awayN < 0)) {
+      return setMsg("away_score должен быть целым 0+ или пусто");
+    }
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from("matches")
-        .update({ home_score: homeN, away_score: awayN, status })
-        .eq("id", props.matchId);
+      const res = await fetch("/api/admin/matches", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: props.matchId,
+          home_score: homeN,
+          away_score: awayN,
+          status,
+        }),
+        cache: "no-store",
+      });
 
-      if (error) throw error;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Ошибка сохранения");
 
-      setMsg("Сохранено ✅");
       setSavedOk(true);
-      router.refresh();
+      setMsg("Сохранено ✅");
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка");
     } finally {
@@ -59,10 +67,19 @@ export default function AdminSetResultForm(props: {
     setScoreMsg(null);
     setScoring(true);
     try {
-      const { data, error } = await supabase.rpc("score_match", { p_match_id: props.matchId });
-      if (error) throw error;
+      // как было у тебя
+      const res = await fetch("/api/admin/score-match", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ match_id: props.matchId }),
+        cache: "no-store",
+      });
 
-      const rows = (data ?? []) as ScoreRow[];
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Ошибка начисления");
+
+      const rows = (json.data ?? []) as ScoreRow[];
       const total = rows.reduce((s, r) => s + (r.points ?? 0), 0);
 
       setScoreMsg(
@@ -70,8 +87,6 @@ export default function AdminSetResultForm(props: {
           ? "Начислено: прогнозов нет"
           : `Начислено ✅ пользователям: ${rows.length}, сумма очков: ${total}`
       );
-
-      router.refresh();
     } catch (e: any) {
       setScoreMsg(e?.message ?? "Ошибка начисления");
     } finally {
@@ -97,7 +112,6 @@ export default function AdminSetResultForm(props: {
           placeholder="away"
           style={{ width: 90, padding: 10, border: "1px solid #ddd", borderRadius: 10 }}
         />
-
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -117,11 +131,12 @@ export default function AdminSetResultForm(props: {
           style={{
             padding: "10px 14px",
             borderRadius: 10,
-            border: "1px solid " + (savedOk ? "rgba(34,197,94,0.9)" : "#111"),
-            background: savedOk ? "rgba(34,197,94,0.12)" : "#111",
-            color: savedOk ? "rgba(21,128,61,1)" : "#fff",
+            border: "1px solid",
+            borderColor: savedOk ? "rgba(16,185,129,0.7)" : "#111",
+            background: savedOk ? "rgba(16,185,129,0.15)" : "#111",
+            color: savedOk ? "#065f46" : "#fff",
             cursor: "pointer",
-            width: 220,
+            width: 190,
             fontWeight: 900,
           }}
         >
@@ -138,17 +153,17 @@ export default function AdminSetResultForm(props: {
             background: "#fff",
             color: "#111",
             cursor: "pointer",
-            width: 200,
+            width: 180,
             fontWeight: 900,
           }}
-          title="Пересчитает очки по матчу"
+          title="Пересчитает очки по матчу: удалит старые проводки и вставит новые"
         >
           {scoring ? "..." : "Начислить очки"}
         </button>
       </div>
 
-      {msg ? <p>{msg}</p> : null}
-      {scoreMsg ? <p>{scoreMsg}</p> : null}
+      {msg && <p>{msg}</p>}
+      {scoreMsg && <p>{scoreMsg}</p>}
     </div>
   );
 }

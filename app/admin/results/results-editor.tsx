@@ -1,8 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 type TeamObj = { name: string } | { name: string }[] | null;
 
@@ -19,22 +17,9 @@ type MatchRow = {
 
 function teamName(t?: TeamObj) {
   if (!t) return "?";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const anyT: any = t as any;
   if (Array.isArray(anyT)) return String(anyT?.[0]?.name ?? "?");
   return String(anyT?.name ?? "?");
-}
-
-function sortMatches(a: MatchRow, b: MatchRow) {
-  const an = a.stage_match_no ?? 1e9;
-  const bn = b.stage_match_no ?? 1e9;
-  if (an !== bn) return an - bn;
-
-  const ak = a.kickoff_at ? new Date(a.kickoff_at).getTime() : 0;
-  const bk = b.kickoff_at ? new Date(b.kickoff_at).getTime() : 0;
-  if (ak !== bk) return ak - bk;
-
-  return a.id - b.id;
 }
 
 export default function ResultsEditor(props: {
@@ -42,26 +27,30 @@ export default function ResultsEditor(props: {
   initialMatches?: MatchRow[];
   matches?: MatchRow[];
 }) {
-  const router = useRouter();
-
-  const matchesInput: MatchRow[] = Array.isArray(props.matches)
+  const matches: MatchRow[] = Array.isArray(props.matches)
     ? props.matches
     : Array.isArray(props.initialMatches)
     ? props.initialMatches
     : [];
 
-  const matches = [...matchesInput].sort(sortMatches);
+  // ✅ на всякий случай отсортируем и на клиенте
+  const sorted = useMemo(() => {
+    return [...matches].sort((a, b) => {
+      const an = a.stage_match_no ?? 1e9;
+      const bn = b.stage_match_no ?? 1e9;
+      if (an !== bn) return an - bn;
+      const ad = a.kickoff_at ? new Date(a.kickoff_at).getTime() : 0;
+      const bd = b.kickoff_at ? new Date(b.kickoff_at).getTime() : 0;
+      return ad - bd;
+    });
+  }, [matches]);
 
-  const supabase = useMemo(() => createClient(), []);
-
-  const [savingId, setSavingId] = useState<number | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const [savedOk, setSavedOk] = useState<Record<number, boolean>>({});
+  const [saving, setSaving] = useState<number | null>(null);
+  const [globalMsg, setGlobalMsg] = useState<string | null>(null);
 
   const [vals, setVals] = useState<Record<number, { h: string; a: string }>>(() => {
     const init: Record<number, { h: string; a: string }> = {};
-    for (const m of matches) {
+    for (const m of sorted) {
       init[m.id] = {
         h: m.home_score == null ? "" : String(m.home_score),
         a: m.away_score == null ? "" : String(m.away_score),
@@ -70,9 +59,12 @@ export default function ResultsEditor(props: {
     return init;
   });
 
+  // ✅ статус кнопки “Сохранено успешно” по матчам
+  const [okSaved, setOkSaved] = useState<Record<number, boolean>>({});
+
   async function save(matchId: number) {
-    setMsg(null);
-    setSavedOk((p) => ({ ...p, [matchId]: false }));
+    setGlobalMsg(null);
+    setOkSaved((p) => ({ ...p, [matchId]: false }));
 
     const v = vals[matchId] ?? { h: "", a: "" };
     const h = v.h.trim();
@@ -81,49 +73,56 @@ export default function ResultsEditor(props: {
     const home = h === "" ? null : Number(h);
     const away = a === "" ? null : Number(a);
 
-    if (home !== null && (!Number.isFinite(home) || home < 0)) return setMsg("Некорректный счёт хозяев");
-    if (away !== null && (!Number.isFinite(away) || away < 0)) return setMsg("Некорректный счёт гостей");
+    if (home !== null && (!Number.isFinite(home) || home < 0)) return setGlobalMsg("Некорректный счёт хозяев");
+    if (away !== null && (!Number.isFinite(away) || away < 0)) return setGlobalMsg("Некорректный счёт гостей");
 
-    setSavingId(matchId);
-
+    setSaving(matchId);
     try {
-      const { error } = await supabase
-        .from("matches")
-        .update({ home_score: home, away_score: away })
-        .eq("id", matchId);
+      const res = await fetch("/api/admin/matches", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: matchId,
+          home_score: home,
+          away_score: away,
+          status: "finished", // можно убрать/изменить если не хочешь трогать status
+        }),
+        cache: "no-store",
+      });
 
-      if (error) throw error;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? "Ошибка сохранения");
+      }
 
-      setSavedOk((p) => ({ ...p, [matchId]: true }));
-      setMsg("Сохранено ✅");
-
-      // важно: чтобы на серверных страницах/таблицах точно обновилось
-      router.refresh();
+      setOkSaved((p) => ({ ...p, [matchId]: true }));
+      setGlobalMsg("Сохранено ✅");
     } catch (e: any) {
-      setMsg(e?.message ?? "Ошибка сохранения");
+      setGlobalMsg(e?.message ?? "Ошибка сохранения");
     } finally {
-      setSavingId(null);
+      setSaving(null);
     }
   }
 
   return (
     <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, overflow: "hidden" }}>
       <div style={{ padding: 12, background: "#fafafa", fontWeight: 900 }}>
-        Матчи этапа: {matches.length}
+        Матчи: {sorted.length}
       </div>
 
-      {msg ? (
-        <div style={{ padding: 12, color: msg.includes("✅") ? "inherit" : "crimson", fontWeight: 800 }}>
-          {msg}
+      {globalMsg ? (
+        <div style={{ padding: 12, color: globalMsg.includes("✅") ? "inherit" : "crimson", fontWeight: 800 }}>
+          {globalMsg}
         </div>
       ) : null}
 
       <div style={{ display: "grid", gap: 10, padding: 12 }}>
-        {matches.map((m) => {
+        {sorted.map((m) => {
           const home = teamName(m.home_team);
           const away = teamName(m.away_team);
           const v = vals[m.id] ?? { h: "", a: "" };
-          const ok = !!savedOk[m.id];
+          const saved = !!okSaved[m.id];
 
           return (
             <div key={m.id} style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
@@ -160,19 +159,19 @@ export default function ResultsEditor(props: {
                 <button
                   type="button"
                   onClick={() => save(m.id)}
-                  disabled={savingId === m.id}
+                  disabled={saving === m.id}
                   style={{
                     padding: "10px 12px",
                     borderRadius: 10,
-                    border: "1px solid " + (ok ? "rgba(34,197,94,0.9)" : "#111"),
-                    background: ok ? "rgba(34,197,94,0.12)" : "#111",
-                    color: ok ? "rgba(21,128,61,1)" : "#fff",
+                    border: "1px solid",
+                    borderColor: saved ? "rgba(16,185,129,0.7)" : "#111",
+                    background: saved ? "rgba(16,185,129,0.15)" : "#111",
+                    color: saved ? "#065f46" : "#fff",
                     fontWeight: 900,
                     cursor: "pointer",
-                    minWidth: 190,
                   }}
                 >
-                  {savingId === m.id ? "..." : ok ? "Сохранено успешно" : "Сохранить"}
+                  {saving === m.id ? "..." : saved ? "Сохранено успешно" : "Сохранить"}
                 </button>
               </div>
             </div>

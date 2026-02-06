@@ -1,193 +1,143 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
-function mustEnv(name: string) {
+function mustEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
 }
 
-function getServiceSupabase() {
-  return createAdminClient(
+function decodeMaybe(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+function service() {
+  return createClient(
     mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
     mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false, autoRefreshToken: false } }
+    { auth: { persistSession: false } }
   );
 }
 
-// ✅ Next 15: cookies() может быть Promise-типом → используем await
-async function getAuthedSupabase() {
-  const cookieStore = await cookies();
+async function requireAdmin(): Promise<{ ok: true } | { ok: false; res: NextResponse }> {
+  const cs = await cookies();
+  const raw = cs.get("fp_login")?.value ?? "";
+  const fpLogin = decodeMaybe(raw).trim().toUpperCase();
 
-  return createServerClient(
-    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll() {},
-      },
-    }
-  );
+  if (fpLogin !== "ADMIN") {
+    return {
+      ok: false,
+      res: NextResponse.json({ ok: false, error: "not_auth" }, { status: 401 }),
+    };
+  }
+  return { ok: true };
 }
 
-async function requireAdmin() {
-  const authed = await getAuthedSupabase();
-  const { data: u } = await authed.auth.getUser();
+/** GET /api/admin/matches?stage_id=123 */
+export async function GET(req: Request) {
+  const adm = await requireAdmin();
+  if (!adm.ok) return adm.res;
 
-  if (!u?.user) {
-    return { ok: false as const, res: NextResponse.json({ error: "not_auth" }, { status: 401 }) };
+  const url = new URL(req.url);
+  const stageIdRaw = url.searchParams.get("stage_id");
+
+  const sb = service();
+
+  let q = sb
+    .from("matches")
+    .select(
+      `
+      id,
+      stage_id,
+      stage_match_no,
+      kickoff_at,
+      deadline_at,
+      status,
+      home_score,
+      away_score,
+      home_team:teams!matches_home_team_id_fkey ( name ),
+      away_team:teams!matches_away_team_id_fkey ( name )
+    `
+    );
+
+  if (stageIdRaw) q = q.eq("stage_id", Number(stageIdRaw));
+
+  // ✅ сортировка: сначала порядковый номер матча этапа, потом дата
+  const { data, error } = await q
+    .order("stage_match_no", { ascending: true, nullsFirst: false })
+    .order("kickoff_at", { ascending: true });
+
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  const svc = getServiceSupabase();
-  const { data: profile, error } = await svc
-    .from("profiles")
-    .select("role")
-    .eq("id", u.user.id)
+  return NextResponse.json({ ok: true, matches: data ?? [] });
+}
+
+type PatchBody = {
+  id: number;
+  home_score: number | null;
+  away_score: number | null;
+  status?: string | null;
+};
+
+/** PATCH /api/admin/matches  body: {id, home_score, away_score, status?} */
+export async function PATCH(req: Request) {
+  const adm = await requireAdmin();
+  if (!adm.ok) return adm.res;
+
+  const body = (await req.json().catch(() => null)) as PatchBody | null;
+  if (!body?.id) {
+    return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
+  }
+
+  const sb = service();
+
+  const upd: any = {
+    home_score: body.home_score,
+    away_score: body.away_score,
+  };
+  if (body.status != null) upd.status = body.status;
+
+  // ✅ важно: делаем select, чтобы увидеть что реально обновилось (иначе можно получить “успех” при 0 строк)
+  const { data, error } = await sb
+    .from("matches")
+    .update(upd)
+    .eq("id", body.id)
+    .select("id,home_score,away_score,status")
     .maybeSingle();
 
   if (error) {
-    return { ok: false as const, res: NextResponse.json({ error: error.message }, { status: 400 }) };
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+  if (!data?.id) {
+    return NextResponse.json({ ok: false, error: "not_updated" }, { status: 400 });
   }
 
-  if (profile?.role !== "admin") {
-    return { ok: false as const, res: NextResponse.json({ error: "admin_only" }, { status: 403 }) };
-  }
-
-  return { ok: true as const };
+  return NextResponse.json({ ok: true, match: data });
 }
 
-function dateToKickoffIso(dateStr: string) {
-  return new Date(`${dateStr}T12:00:00.000Z`).toISOString();
-}
-
-/* ================== POST ================== */
+/** (опционально) POST /api/admin/matches — если у тебя используется создание матчей */
 export async function POST(req: Request) {
-  const gate = await requireAdmin();
-  if (!gate.ok) return gate.res;
+  const adm = await requireAdmin();
+  if (!adm.ok) return adm.res;
 
-  const body = await req.json().catch(() => ({}));
-
-  const stageId = Number(body.stage_id);
-  const tourId = Number(body.tour_id);
-  const homeTeamId = Number(body.home_team_id);
-  const awayTeamId = Number(body.away_team_id);
-  const date = body.date ? String(body.date).trim() : "";
-
-  if (!Number.isFinite(stageId)) return NextResponse.json({ error: "stage_id_required" }, { status: 400 });
-  if (!Number.isFinite(tourId)) return NextResponse.json({ error: "tour_id_required" }, { status: 400 });
-  if (!Number.isFinite(homeTeamId)) return NextResponse.json({ error: "home_team_id_required" }, { status: 400 });
-  if (!Number.isFinite(awayTeamId)) return NextResponse.json({ error: "away_team_id_required" }, { status: 400 });
-  if (homeTeamId === awayTeamId) return NextResponse.json({ error: "same_teams" }, { status: 400 });
-
-  const svc = getServiceSupabase();
-
-  const { data: last, error: lastErr } = await svc
-    .from("matches")
-    .select("stage_match_no")
-    .eq("stage_id", stageId)
-    .order("stage_match_no", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (lastErr) return NextResponse.json({ error: lastErr.message }, { status: 400 });
-
-  const stageMatchNo = Number(last?.stage_match_no ?? 0) + 1;
-
-  const placeholder = "2099-01-01T12:00:00.000Z";
-  const kickoff = date ? dateToKickoffIso(date) : placeholder;
-  const deadline = date ? new Date(`${date}T00:00:00.000Z`).toISOString() : placeholder;
-
-  const { data, error } = await svc
-    .from("matches")
-    .insert({
-      stage_id: stageId,
-      tour_id: tourId,
-      stage_match_no: stageMatchNo,
-      home_team_id: homeTeamId,
-      away_team_id: awayTeamId,
-      kickoff_at: kickoff,
-      deadline_at: deadline,
-      status: "scheduled",
-      home_score: null,
-      away_score: null,
-    })
-    .select("id")
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-  return NextResponse.json({ ok: true, id: data.id, stage_match_no: stageMatchNo });
-}
-
-/* ================== PATCH ================== */
-export async function PATCH(req: Request) {
-  const gate = await requireAdmin();
-  if (!gate.ok) return gate.res;
-
-  const body = await req.json().catch(() => ({}));
-  const matchId = Number(body.match_id);
-  if (!Number.isFinite(matchId)) {
-    return NextResponse.json({ error: "match_id_required" }, { status: 400 });
+  const payload = await req.json().catch(() => null);
+  if (!payload) {
+    return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
   }
 
-  const patch: any = {};
+  const sb = service();
 
-  if (body.date !== undefined) {
-    const date = String(body.date ?? "").trim();
-    if (date) {
-      patch.kickoff_at = dateToKickoffIso(date);
-      patch.deadline_at = new Date(`${date}T00:00:00.000Z`).toISOString();
-    } else {
-      const placeholder = "2099-01-01T12:00:00.000Z";
-      patch.kickoff_at = placeholder;
-      patch.deadline_at = placeholder;
-    }
+  const { data, error } = await sb.from("matches").insert(payload).select("*");
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  if (body.home_score !== undefined) patch.home_score = body.home_score === "" ? null : Number(body.home_score);
-  if (body.away_score !== undefined) patch.away_score = body.away_score === "" ? null : Number(body.away_score);
-
-  if (body.home_team_id !== undefined) patch.home_team_id = Number(body.home_team_id);
-  if (body.away_team_id !== undefined) patch.away_team_id = Number(body.away_team_id);
-
-  if (
-    patch.home_team_id !== undefined &&
-    patch.away_team_id !== undefined &&
-    Number.isFinite(patch.home_team_id) &&
-    Number.isFinite(patch.away_team_id) &&
-    patch.home_team_id === patch.away_team_id
-  ) {
-    return NextResponse.json({ error: "same_teams" }, { status: 400 });
-  }
-
-  if (Object.keys(patch).length === 0) return NextResponse.json({ ok: true });
-
-  const svc = getServiceSupabase();
-  const { error } = await svc.from("matches").update(patch).eq("id", matchId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-  return NextResponse.json({ ok: true });
-}
-
-/* ================== DELETE ================== */
-export async function DELETE(req: Request) {
-  const gate = await requireAdmin();
-  if (!gate.ok) return gate.res;
-
-  const body = await req.json().catch(() => ({}));
-  const matchId = Number(body.match_id);
-  if (!Number.isFinite(matchId)) {
-    return NextResponse.json({ error: "match_id_required" }, { status: 400 });
-  }
-
-  const svc = getServiceSupabase();
-  const { error } = await svc.from("matches").delete().eq("id", matchId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, data });
 }
