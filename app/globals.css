@@ -1,470 +1,133 @@
-@import "tailwindcss";
-
-/* =========================
-   SPACING SCALE (8px grid)
-========================= */
-
+/* ===== Theme vars ===== */
 :root {
-  --s-1: 4px;
-  --s-2: 8px;
-  --s-3: 16px;
-  --s-4: 24px;
-  --s-5: 32px;
-
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #fafafa;
+  --fg: #111;
+  --card: #ffffff;
+  --muted: rgba(0, 0, 0, 0.65);
+  --border: rgba(0, 0, 0, 0.10);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --soft: rgba(0, 0, 0, 0.04);
+  --danger: crimson;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0b0b0c;
+    --fg: #f2f2f2;
+    --card: #111214;
+    --muted: rgba(255, 255, 255, 0.65);
+    --border: rgba(255, 255, 255, 0.12);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --soft: rgba(255, 255, 255, 0.06);
+    --danger: #ff5a7a;
   }
 }
 
-/* =========================
-   GLOBAL BODY
-========================= */
+/* ===== Reset / base ===== */
+* {
+  box-sizing: border-box;
+}
 
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Ubuntu, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
 }
 
-/* =========================
-   SITE TITLE (CENTERED)
-========================= */
-
-.siteTitleWrap {
-  position: relative;
-  height: 48px;
-  margin-top: var(--s-4);
-  margin-bottom: var(--s-3);
-}
-
-.siteTitleWrap > a {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.clubTitleLink {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-
-  text-decoration: none;
+a {
   color: inherit;
-
-  padding: var(--s-2) var(--s-3);
-  border-radius: 10px;
-
-  font-size: 18px;
-  font-weight: 650;
-  letter-spacing: 0.3px;
-  line-height: 1.2;
-
-  transition: opacity 0.15s ease;
+  text-decoration: none;
 }
 
-.clubTitleLink:hover {
-  opacity: 0.8;
+main {
+  width: 100%;
 }
 
-.clubIcon {
-  font-size: 18px;
-  line-height: 1;
+/* ===== Top navigation (mobile friendly) ===== */
+.topNav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
 }
 
-.clubTitleText span {
-  opacity: 0.65;
-  font-weight: 500;
+.topNav a {
+  white-space: nowrap;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-weight: 800;
+  font-size: 14px;
 }
 
-/* =========================
-   CARD SYSTEM (8px grid)
-========================= */
-
+/* ===== Generic card ===== */
 .card {
-  background: color-mix(in srgb, var(--background) 96%, #ffffff);
-  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-  border-radius: 16px;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.06);
-
-  padding: var(--s-4);
-}
-
-.card + .card {
-  margin-top: var(--s-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
 }
 
 .cardHeader {
-  margin-bottom: var(--s-3);
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
 }
 
 .cardTitle {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 900;
-  letter-spacing: 0.2px;
-  line-height: 1.15;
 }
 
 .cardSub {
-  margin-top: var(--s-2);
-  opacity: 0.75;
-  font-size: 14px;
-  line-height: 1.35;
+  margin-top: 4px;
+  font-size: 13px;
+  opacity: 0.8;
+  color: var(--muted);
 }
 
 .cardBody {
-  margin-top: var(--s-3);
+  padding: 16px;
 }
 
 .cardSoft {
-  background: color-mix(in srgb, var(--foreground) 4%, transparent);
-  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-  border-radius: 14px;
-  padding: var(--s-3);
-}
-
-/* =========================
-   POINTS POPOVER (CLICK)
-========================= */
-
-.pointsInfoBtn {
-  margin-left: var(--s-1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  width: 18px;
-  height: 18px;
-
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
-  background: transparent;
-  color: inherit;
-
-  opacity: 0.75;
-  font-size: 12px;
-  line-height: 1;
-
-  cursor: pointer;
-}
-
-.pointsInfoBtn:hover {
-  opacity: 1;
-}
-
-.pointsModalOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  padding: var(--s-4);
-  background: rgba(0, 0, 0, 0.35);
-}
-
-.pointsModalCard {
-  width: 720px;
-  max-width: 92vw;
-  max-height: 82vh;
-  overflow: hidden;
-
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--background) 96%, #ffffff);
-  border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
-
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
-}
-
-.pointsModalHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  padding: var(--s-3);
-  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-}
-
-.pointsModalTitle {
-  font-weight: 900;
-  font-size: 14px;
-  opacity: 0.9;
-}
-
-.pointsModalClose {
-  border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
-  background: transparent;
-  color: inherit;
-
+  background: var(--soft);
   border-radius: 10px;
-  padding: var(--s-2) var(--s-3);
-
-  cursor: pointer;
-  opacity: 0.85;
+  padding: 10px;
 }
 
-.pointsModalClose:hover {
-  opacity: 1;
+/* ===== Desktop/Mobile toggles ===== */
+.desktopOnly {
+  display: block;
+}
+.mobileOnly {
+  display: none;
 }
 
-.pointsModalBody {
-  margin: 0;
-  padding: var(--s-3);
-
-  white-space: pre-wrap;
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-  font-size: 13px;
-  line-height: 1.45;
-
-  max-height: calc(82vh - 56px);
-  overflow: auto;
-
-  scrollbar-width: thin;
-}
-/* ===== Admin UI helpers ===== */
-.admin-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+@media (max-width: 640px) {
+  .desktopOnly {
+    display: none;
+  }
+  .mobileOnly {
+    display: block;
+  }
 }
 
-.admin-actions > * {
-  flex: 0 0 auto;
-}
-
-.admin-card {
-  border: 1px solid rgba(0,0,0,0.10);
-  border-radius: 16px;
-  padding: 12px;
-}
-
-.admin-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-/* ===== Admin layout (stable) ===== */
-
-.adminLayout {
-  min-height: 100vh;
-  display: flex;
-  width: 100%;
-  background: #fafafa;
-}
-
-.adminSidebar {
-  width: 260px;
-  min-width: 260px;
-  border-right: 1px solid rgba(0,0,0,0.08);
-  background: #fff;
-  padding: 18px;
-  box-sizing: border-box;
-}
-
-.adminMain {
-  flex: 1;
-  min-width: 0; /* важно, чтобы таблицы не ломали layout */
-  display: flex;
-  flex-direction: column;
-}
-
-.adminTopbar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: rgba(250,250,250,0.92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(0,0,0,0.06);
-  padding: 14px 18px;
-}
-
-.adminTitle {
-  font-size: 18px;
-  font-weight: 900;
-}
-
-.adminContent {
-  padding: 18px;
-  max-width: 1200px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.adminNav {
-  display: grid;
-  gap: 14px;
-}
-
-.adminNavUser {
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(0,0,0,0.08);
-  background: #fafafa;
-}
-
-.adminNavUserLabel {
-  font-size: 12px;
-  opacity: 0.65;
-}
-
-.adminNavUserValue {
-  margin-top: 2px;
-  font-weight: 900;
-  font-size: 14px;
-}
-
-.adminNavButtons {
-  display: grid;
-  gap: 10px;
-}
-
-/* ===== Unified buttons ===== */
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-
-  padding: 10px 12px;
-  border-radius: 12px;
-  text-decoration: none;
-  font-weight: 800;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: #fff;
-  color: inherit;
-  cursor: pointer;
-  user-select: none;
-}
-
-.btnPrimary {
-  border-color: rgba(0,0,0,0.8);
-  background: #111;
-  color: #fff;
-}
-
-.btnGhost {
-  background: #fff;
-}
-
-.btn:active {
-  transform: translateY(1px);
-}
-
-/* ===== Prevent random "float" look on admin pages ===== */
-/* Если где-то есть inline стили с position/float — лучше убрать,
-   но это снижает эффект "разъезда" даже без правок страниц */
-.adminContent table {
-  width: 100%;
-  max-width: 100%;
-}
-
-.adminContent a {
-  text-decoration: none;
-}
-/* ===== Admin layout (stable) ===== */
-
-.adminLayout {
-  min-height: 100vh;
-  display: flex;
-  width: 100%;
-  background: #fafafa;
-}
-
-.adminSidebar {
-  width: 260px;
-  min-width: 260px;
-  border-right: 1px solid rgba(0,0,0,0.08);
-  background: #fff;
-  padding: 18px;
-  box-sizing: border-box;
-}
-
-.adminMain {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.adminTopbar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: rgba(250,250,250,0.92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(0,0,0,0.06);
-  padding: 14px 18px;
-}
-
-.adminTitle {
-  font-size: 18px;
-  font-weight: 900;
-}
-
-.adminContent {
-  padding: 18px;
-  max-width: 1200px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.adminNav { display: grid; gap: 14px; }
-.adminNavUser {
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(0,0,0,0.08);
-  background: #fafafa;
-}
-.adminNavUserLabel { font-size: 12px; opacity: 0.65; }
-.adminNavUserValue { margin-top: 2px; font-weight: 900; font-size: 14px; }
-.adminNavButtons { display: grid; gap: 10px; }
-
-/* ===== Unified buttons ===== */
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  text-decoration: none;
-  font-weight: 800;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: #fff;
-  color: inherit;
-  cursor: pointer;
-  user-select: none;
-}
-
-.btnPrimary { border-color: rgba(0,0,0,0.8); background: #111; color: #fff; }
-.btnGhost { background: #fff; }
-.btn:active { transform: translateY(1px); }
-
-/* ===== Tables: sticky header + nicer rows ===== */
-
+/* ===== Tables (sticky header) ===== */
 .tableWrap {
+  width: 100%;
   overflow: auto;
-  border: 1px solid rgba(0,0,0,0.08);
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
   border-radius: 14px;
-  background: #fff;
+  background: var(--card);
 }
 
 .table {
@@ -476,69 +139,100 @@ body {
 .table thead th {
   position: sticky;
   top: 0;
-  z-index: 2;
-  background: rgba(250, 250, 250, 0.92);
+  z-index: 3;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-  text-align: left;
+  border-bottom: 1px solid var(--border);
   padding: 10px 10px;
   font-weight: 900;
   font-size: 13px;
+  text-align: left;
 }
 
 .table tbody td {
   padding: 10px 10px;
-  border-top: 1px solid rgba(0,0,0,0.06);
+  border-top: 1px solid var(--border);
   vertical-align: top;
 }
 
-.table tbody tr:hover { background: rgba(0,0,0,0.02); }
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--soft) 70%, transparent);
+}
 
-/* ===== Badges ===== */
+@media (max-width: 640px) {
+  .table {
+    min-width: 680px;
+  }
+}
 
+/* ===== Match cards (mobile) ===== */
+.matchCards {
+  display: grid;
+  gap: 10px;
+}
+
+.matchCard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.matchRowTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.matchTeams {
+  font-weight: 900;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.matchMeta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  display: grid;
+  gap: 2px;
+}
+
+.matchPred {
+  margin-top: 10px;
+}
+
+/* ===== Prediction input ===== */
+.predInput {
+  width: 56px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  font-size: 14px;
+  text-align: center;
+  background: transparent;
+  color: inherit;
+}
+
+@media (max-width: 640px) {
+  .predInput {
+    width: 48px;
+    font-size: 15px;
+  }
+}
+
+/* ===== Small badge ===== */
 .badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 4px 8px;
   border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
   font-size: 12px;
-  font-weight: 800;
-  border: 1px solid rgba(0,0,0,0.10);
+  font-weight: 900;
+  color: var(--muted);
   white-space: nowrap;
 }
-
-.badgeNeutral { background: #fff; }
-.badgeWarn { background: rgba(255, 195, 0, 0.18); border-color: rgba(255, 195, 0, 0.45); }
-.badgeDanger { background: rgba(220, 20, 60, 0.12); border-color: rgba(220, 20, 60, 0.30); }
-
-/* ===== Prediction inputs ===== */
-
-.predInputWrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.18);
-  background: #fff;
-}
-
-.predOk { border-color: rgba(0,0,0,0.45); }
-.predError { border-color: rgba(220, 20, 60, 0.55); }
-
-.predInput {
-  width: 30px;
-  padding: 2px 4px;
-  border: none;
-  outline: none;
-  text-align: center;
-  font-weight: 900;
-  font-size: 13px;
-  background: transparent;
-}
-
-.predColon { opacity: 0.7; font-weight: 900; }
-.predSaving { margin-left: 4px; opacity: 0.6; }
-.predErrText { color: crimson; font-size: 12px; margin-top: 4px; }
-
