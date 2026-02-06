@@ -436,9 +436,3 @@ export default async function DashboardCurrentTablePage() {
   );
 }
 
-function tourName(m: MatchRow): string {
-  const t = m.tour;
-  if (!t) return "";
-  if (Array.isArray(t)) return t[0]?.name ?? "";
-  return t.name ?? "";
-}
