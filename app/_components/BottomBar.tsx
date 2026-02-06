@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+type Variant = "user" | "admin";
+
 type Item = {
   href: string;
   label: string;
@@ -10,57 +12,41 @@ type Item = {
   isLogout?: boolean;
 };
 
-const items: Item[] = [
-  { href: "/dashboard", label: "Мои прогнозы", icon: "📊" },
-  { href: "/dashboard/current", label: "Текущая таблица", icon: "📋" },
+const userItems: Item[] = [
+  { href: "/dashboard", label: "Мои", icon: "✍️" },
+  { href: "/dashboard/current", label: "Таблица", icon: "📊" },
   { href: "/golden-boot", label: "Бутса", icon: "🥇" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
 
-export default function BottomBar() {
-  const pathname = usePathname() ?? "";
+const adminItems: Item[] = [
+  { href: "/admin", label: "Админ", icon: "🛠️" },
+  { href: "/admin/current-table", label: "Таблица", icon: "📊" },
+  { href: "/admin/users", label: "Юзеры", icon: "👥" },
+  { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
+];
+
+export default function BottomBar({ variant = "user" }: { variant?: Variant }) {
+  const pathnameRaw = usePathname();
+  const pathname = pathnameRaw ?? ""; // ✅ фикс: null → ""
+
+  const items = variant === "admin" ? adminItems : userItems;
 
   return (
-    <nav
-      style={{
-        position: "fixed",
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: 64,
-        display: "flex",
-        justifyContent: "space-around",
-        alignItems: "center",
-        borderTop: "1px solid rgba(0,0,0,0.1)",
-        background: "#fff",
-        zIndex: 50,
-        paddingBottom: "env(safe-area-inset-bottom)",
-      }}
-    >
+    <nav className="bottomBar" aria-label="Bottom navigation">
       {items.map((i) => {
         const active =
           !i.isLogout &&
           (pathname === i.href || pathname.startsWith(i.href + "/"));
 
+        // logout лучше через обычный <a>, чтобы точно отработал route.ts /logout
         if (i.isLogout) {
           return (
-            <a
-              key={i.href}
-              href={i.href}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 4,
-                fontSize: 12,
-                fontWeight: 700,
-                color: "#111",
-                textDecoration: "none",
-                opacity: 0.8,
-              }}
-            >
-              <span style={{ fontSize: 20 }}>{i.icon}</span>
-              {i.label}
+            <a key={i.href} href={i.href} className="bbItem">
+              <span className="bbIcon" aria-hidden="true">
+                {i.icon}
+              </span>
+              <span className="bbLabel">{i.label}</span>
             </a>
           );
         }
@@ -69,26 +55,12 @@ export default function BottomBar() {
           <Link
             key={i.href}
             href={i.href}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 4,
-              fontSize: 12,
-              fontWeight: 800,
-              color: active ? "#000" : "#666",
-              textDecoration: "none",
-            }}
+            className={`bbItem ${active ? "bbActive" : ""}`}
           >
-            <span
-              style={{
-                fontSize: 20,
-                transform: active ? "scale(1.1)" : "scale(1)",
-              }}
-            >
+            <span className="bbIcon" aria-hidden="true">
               {i.icon}
             </span>
-            {i.label}
+            <span className="bbLabel">{i.label}</span>
           </Link>
         );
       })}
