@@ -29,6 +29,17 @@ function service() {
   );
 }
 
+function deadlineFlag(d: Date) {
+  const now = new Date();
+  const ms = d.getTime() - now.getTime();
+  const oneDay = 24 * 60 * 60 * 1000;
+
+  return {
+    isPast: ms < 0,
+    isSoon: ms >= 0 && ms <= 2 * oneDay,
+  };
+}
+
 type MatchRow = {
   id: string;
   kickoff_at: string | null;
@@ -39,6 +50,7 @@ type MatchRow = {
 };
 
 export default async function DashboardPage() {
+  // ✅ авторизация через fp_login
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
@@ -46,6 +58,7 @@ export default async function DashboardPage() {
 
   const sb = service();
 
+  // user_id по login
   const { data: acc, error: accErr } = await sb
     .from("login_accounts")
     .select("user_id")
@@ -61,6 +74,7 @@ export default async function DashboardPage() {
   }
   if (!acc?.user_id) redirect("/");
 
+  // текущий этап
   const { data: stage, error: stageErr } = await sb
     .from("stages")
     .select("id,name,status")
@@ -78,7 +92,7 @@ export default async function DashboardPage() {
   if (!stage) {
     return (
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
+        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
         <p style={{ marginTop: 8, opacity: 0.8 }}>Текущий этап не выбран.</p>
         <div style={{ marginTop: 14 }}>
           <Link href="/" style={{ textDecoration: "underline" }}>
@@ -89,6 +103,7 @@ export default async function DashboardPage() {
     );
   }
 
+  // матчи текущего этапа
   const { data: matches, error: matchesErr } = await sb
     .from("matches")
     .select(
@@ -114,6 +129,7 @@ export default async function DashboardPage() {
 
   const matchIds = (matches ?? []).map((m: any) => m.id);
 
+  // прогнозы пользователя по этим матчам
   const { data: preds, error: predsErr } = await sb
     .from("predictions")
     .select("match_id,home_pred,away_pred")
@@ -148,16 +164,18 @@ export default async function DashboardPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 900 }}>Текущая таблица</h1>
+          <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
           <div style={{ marginTop: 6, opacity: 0.8 }}>
             Этап: <b>{stage.name ?? `#${stage.id}`}</b>
             {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
+            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>
+              {fpLogin}
+            </span>
           </div>
         </div>
 
-        {/* ✅ только нужные разделы */}
         <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <Link href="/dashboard">Текущая таблица</Link>
+          <Link href="/dashboard/matches">Матчи</Link>
           <Link href="/golden-boot">Золотая бутса</Link>
           <a href="/logout">Выйти</a>
         </nav>
@@ -167,14 +185,14 @@ export default async function DashboardPage() {
         {!matches || matches.length === 0 ? (
           <p style={{ marginTop: 14 }}>Матчей нет.</p>
         ) : (
-          <div style={{ marginTop: 14, overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+          <div className="tableWrap" style={{ marginTop: 14 }}>
+            <table className="table">
               <thead>
-                <tr style={{ textAlign: "left" }}>
-                  <th style={{ padding: "10px 10px", width: 160 }}>Дата</th>
-                  <th style={{ padding: "10px 10px" }}>Матч</th>
-                  <th style={{ padding: "10px 10px", width: 180 }}>Дедлайн</th>
-                  <th style={{ padding: "10px 10px", width: 160 }}>Прогноз</th>
+                <tr>
+                  <th style={{ width: 160 }}>Дата</th>
+                  <th>Матч</th>
+                  <th style={{ width: 180 }}>Дедлайн</th>
+                  <th style={{ width: 170 }}>Прогноз</th>
                 </tr>
               </thead>
 
@@ -182,17 +200,18 @@ export default async function DashboardPage() {
                 {(matches as any[]).map((m: MatchRow) => {
                   const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
                   const deadline = m.deadline_at ? new Date(m.deadline_at) : null;
+
                   const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
                   return (
-                    <tr key={m.id} style={{ borderTop: "1px solid rgba(0,0,0,0.08)" }}>
-                      <td style={{ padding: "10px 10px", whiteSpace: "nowrap" }}>
+                    <tr key={m.id}>
+                      <td style={{ whiteSpace: "nowrap" }}>
                         {kickoff
                           ? kickoff.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })
                           : "—"}
                       </td>
 
-                      <td style={{ padding: "10px 10px" }}>
+                      <td>
                         <div style={{ fontWeight: 900 }}>
                           {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
                         </div>
@@ -201,13 +220,19 @@ export default async function DashboardPage() {
                         </div>
                       </td>
 
-                      <td style={{ padding: "10px 10px", whiteSpace: "nowrap" }}>
-                        {deadline
-                          ? deadline.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })
-                          : "—"}
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        {deadline ? (() => {
+                          const f = deadlineFlag(deadline);
+                          const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
+                          return (
+                            <span className={`badge ${cls}`}>
+                              {deadline.toLocaleDateString("ru-RU", { dateStyle: "medium" })}
+                            </span>
+                          );
+                        })() : "—"}
                       </td>
 
-                      <td style={{ padding: "10px 10px" }}>
+                      <td>
                         <PredCellEditable
                           matchId={Number(m.id)}
                           homePred={pr.h}

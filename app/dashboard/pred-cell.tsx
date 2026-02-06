@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   matchId: number;
-
-  // ✅ два значения прогноза
-  homePred?: number | null;
-  awayPred?: number | null;
-
+  homePred: number | null;
+  awayPred: number | null;
   canEdit: boolean;
   pointsText?: string;
   tip?: string;
 };
+
+function toNum(v: string): number | null {
+  const s = v.trim();
+  if (s === "") return null;
+  if (!/^\d+$/.test(s)) return null;
+  return Number(s);
+}
 
 export default function PredCellEditable({
   matchId,
@@ -22,42 +26,35 @@ export default function PredCellEditable({
   pointsText,
   tip,
 }: Props) {
-  const [home, setHome] = useState<string>(homePred == null ? "" : String(homePred));
-  const [away, setAway] = useState<string>(awayPred == null ? "" : String(awayPred));
+  const [h, setH] = useState(homePred == null ? "" : String(homePred));
+  const [a, setA] = useState(awayPred == null ? "" : String(awayPred));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const hRef = useRef<HTMLInputElement | null>(null);
+  const aRef = useRef<HTMLInputElement | null>(null);
+
   useEffect(() => {
-    setHome(homePred == null ? "" : String(homePred));
+    setH(homePred == null ? "" : String(homePred));
   }, [homePred]);
 
   useEffect(() => {
-    setAway(awayPred == null ? "" : String(awayPred));
+    setA(awayPred == null ? "" : String(awayPred));
   }, [awayPred]);
 
-  function parseIntStrict(v: string): number | null | "bad" {
-    const s = (v ?? "").trim();
-    if (s === "") return null;
-    if (!/^\d+$/.test(s)) return "bad";
-    return Number(s);
-  }
-
-  async function save() {
+  async function save(nextH?: string, nextA?: string) {
     if (!canEdit) return;
+
+    const hh = toNum(nextH ?? h);
+    const aa = toNum(nextA ?? a);
+
+    // пустое допускаем, но не сохраняем
+    if (hh == null || aa == null) {
+      setError(null);
+      return;
+    }
+
     setError(null);
-
-    const h = parseIntStrict(home);
-    const a = parseIntStrict(away);
-
-    if (h === null || a === null) {
-      setError("Введите оба числа");
-      return;
-    }
-    if (h === "bad" || a === "bad") {
-      setError("Только цифры");
-      return;
-    }
-
     setSaving(true);
     try {
       const res = await fetch("/api/predictions", {
@@ -66,15 +63,13 @@ export default function PredCellEditable({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           match_id: matchId,
-          home_pred: h,
-          away_pred: a,
+          home_pred: hh,
+          away_pred: aa,
         }),
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(json?.error || "Ошибка сохранения");
-      }
+      if (!res.ok) throw new Error(json?.error || "Ошибка сохранения");
     } catch (e: any) {
       setError(e?.message || "Ошибка");
     } finally {
@@ -82,64 +77,66 @@ export default function PredCellEditable({
     }
   }
 
-  // 🟢 Просмотр
+  // просмотр
   if (!canEdit) {
     const text =
-      homePred == null || awayPred == null ? "—" : `${homePred}:${awayPred}`;
+      homePred == null || awayPred == null ? "" : `${homePred}:${awayPred}`;
 
     return (
       <div title={tip} style={{ minHeight: 24 }}>
-        <span style={{ opacity: text === "—" ? 0.4 : 1 }}>{text}</span>
+        {text || <span style={{ opacity: 0.4 }}>—</span>}
         {pointsText && <span style={{ opacity: 0.75 }}> {pointsText}</span>}
       </div>
     );
   }
 
-  // ✏️ Ввод — две ячейки
+  const hasBoth = toNum(h) != null && toNum(a) != null;
+
   return (
-    <div style={{ minHeight: 28 }} title={tip}>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+    <div title={tip} style={{ minHeight: 26 }}>
+      <div
+        className={
+          "predInputWrap " + (error ? "predError" : hasBoth ? "predOk" : "")
+        }
+      >
         <input
-          value={home}
-          onChange={(e) => setHome(e.target.value)}
-          onBlur={save}
+          ref={hRef}
+          value={h}
+          inputMode="numeric"
+          onChange={(e) => setH(e.target.value.replace(/[^\d]/g, ""))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              aRef.current?.focus();
+            }
+          }}
+          onBlur={() => save()}
           disabled={saving}
           placeholder="0"
-          inputMode="numeric"
-          style={{
-            width: 34,
-            padding: "2px 4px",
-            borderRadius: 6,
-            border: "1px solid #ccc",
-            fontSize: 13,
-            textAlign: "center",
-          }}
+          className="predInput"
         />
-        <span style={{ opacity: 0.6 }}>:</span>
+        <span className="predColon">:</span>
         <input
-          value={away}
-          onChange={(e) => setAway(e.target.value)}
-          onBlur={save}
+          ref={aRef}
+          value={a}
+          inputMode="numeric"
+          onChange={(e) => setA(e.target.value.replace(/[^\d]/g, ""))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              save();
+              aRef.current?.blur();
+            }
+          }}
+          onBlur={() => save()}
           disabled={saving}
           placeholder="0"
-          inputMode="numeric"
-          style={{
-            width: 34,
-            padding: "2px 4px",
-            borderRadius: 6,
-            border: "1px solid #ccc",
-            fontSize: 13,
-            textAlign: "center",
-          }}
+          className="predInput"
         />
-        {saving && <span style={{ marginLeft: 4, opacity: 0.6 }}>…</span>}
+        {saving && <span className="predSaving">…</span>}
       </div>
 
-      {error && (
-        <div style={{ color: "crimson", fontSize: 12, marginTop: 2 }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="predErrText">{error}</div>}
     </div>
   );
 }
