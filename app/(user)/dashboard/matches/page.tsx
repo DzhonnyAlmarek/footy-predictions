@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
-import PredCellEditable from "../pred-cell";
+import PredCellEditable from "./pred-cell";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
