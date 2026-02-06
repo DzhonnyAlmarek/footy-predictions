@@ -6,6 +6,8 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+/* ================= utils ================= */
+
 function mustEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
@@ -28,32 +30,34 @@ function service() {
   );
 }
 
+/* ================= types ================= */
+
 type TeamMaybeArray = { name: string } | { name: string }[] | null;
 
 type MatchRow = {
   id: string;
-  stage_match_no: number | null;
   kickoff_at: string | null;
   home_score: number | null;
   away_score: number | null;
-  tour: { name: string } | { name: string }[] | null;
+  // tour оставляем в типе (может быть в select), но в UI не показываем
+  tour?: { name: string } | { name: string }[] | null;
   home_team: TeamMaybeArray;
   away_team: TeamMaybeArray;
 };
 
-type UserRow = { login: string; user_id: string };
+type UserRow = {
+  login: string;
+  user_id: string;
+};
+
 type Pred = { h: number | null; a: number | null };
+
+/* ================= helpers ================= */
 
 function teamName(t: TeamMaybeArray): string {
   if (!t) return "?";
   if (Array.isArray(t)) return t[0]?.name ?? "?";
   return t.name ?? "?";
-}
-
-function getTourName(t: MatchRow["tour"]): string {
-  if (!t) return "";
-  if (Array.isArray(t)) return t[0]?.name ?? "";
-  return t.name ?? "";
 }
 
 function signOutcome(h: number, a: number): -1 | 0 | 1 {
@@ -74,35 +78,74 @@ function round2(n: number): number {
 
 function formatPts(n: number | null): string {
   if (n == null) return "";
-  return String(Math.round(n * 100) / 100);
+  const x = Math.round(n * 100) / 100;
+  // чтобы было красиво: 12 вместо 12.0
+  return Number.isInteger(x) ? String(x) : String(x);
 }
 
-function calcPtsForUser(params: {
+function buildBreakdown(params: {
   pred: Pred;
   resH: number | null;
   resA: number | null;
   outcomeMult: number;
   diffMult: number;
-}): number | null {
+}): { pts: number | null; breakdown: string } {
   const { pred, resH, resA, outcomeMult, diffMult } = params;
-  if (pred.h == null || pred.a == null) return null;
-  if (resH == null || resA == null) return null;
 
+  if (pred.h == null || pred.a == null) return { pts: null, breakdown: "Нет прогноза" };
+  if (resH == null || resA == null) return { pts: null, breakdown: "Матч не сыгран" };
+
+  const lines: string[] = [];
   let pts = 0;
 
-  if (pred.h === resH) pts += 0.5;
-  if (pred.a === resA) pts += 0.5;
+  // голы команд
+  const hOk = pred.h === resH;
+  const aOk = pred.a === resA;
+  if (hOk) {
+    pts += 0.5;
+    lines.push("0.5 — голы хозяев угаданы");
+  }
+  if (aOk) {
+    pts += 0.5;
+    lines.push("0.5 — голы гостей угаданы");
+  }
 
-  if (signOutcome(pred.h, pred.a) === signOutcome(resH, resA)) pts += 2 * outcomeMult;
-  if (pred.h - pred.a === resH - resA) pts += 1 * diffMult;
+  // исход
+  const outOk = signOutcome(pred.h, pred.a) === signOutcome(resH, resA);
+  if (outOk) {
+    const add = 2 * outcomeMult;
+    pts += add;
+    lines.push(`${formatPts(add)} — исход (${formatPts(2)} × ${formatPts(outcomeMult)})`);
+  }
 
+  // разница
+  const diffOk = pred.h - pred.a === resH - resA;
+  if (diffOk) {
+    const add = 1 * diffMult;
+    pts += add;
+    lines.push(`${formatPts(add)} — разница (${formatPts(1)} × ${formatPts(diffMult)})`);
+  }
+
+  // промах на 1 мяч (в сумме)
   const dist = Math.abs(pred.h - resH) + Math.abs(pred.a - resA);
-  if (dist === 1) pts += 0.5;
+  if (dist === 1) {
+    pts += 0.5;
+    lines.push("0.5 — промах на 1 мяч (в сумме)");
+  }
 
-  return round2(pts);
+  pts = round2(pts);
+
+  if (lines.length === 0) {
+    return { pts, breakdown: "0 — нет совпадений" };
+  }
+
+  return { pts, breakdown: lines.join("\n") };
 }
 
+/* ================= page ================= */
+
 export default async function DashboardCurrentTablePage() {
+  // auth via fp_login
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
@@ -110,6 +153,7 @@ export default async function DashboardCurrentTablePage() {
 
   const sb = service();
 
+  // current stage
   const { data: stage } = await sb
     .from("stages")
     .select("id,name,status")
@@ -119,12 +163,13 @@ export default async function DashboardCurrentTablePage() {
   if (!stage) {
     return (
       <main className="userMain hasBottomBar">
-        <h1>Текущая таблица</h1>
-        <p>Текущий этап не выбран</p>
+        <h1 style={{ fontWeight: 900, margin: 0 }}>Текущая таблица</h1>
+        <p style={{ marginTop: 10, opacity: 0.8 }}>Текущий этап не выбран</p>
       </main>
     );
   }
 
+  // users (все участники, кроме ADMIN)
   const { data: usersRaw } = await sb
     .from("login_accounts")
     .select("login,user_id")
@@ -134,11 +179,11 @@ export default async function DashboardCurrentTablePage() {
   const users = (usersRaw ?? []) as UserRow[];
   const userIds = users.map((u) => u.user_id);
 
+  // matches
   const { data: matchesRaw } = await sb
     .from("matches")
     .select(`
       id,
-      stage_match_no,
       kickoff_at,
       home_score,
       away_score,
@@ -147,18 +192,19 @@ export default async function DashboardCurrentTablePage() {
       away_team:teams!matches_away_team_id_fkey ( name )
     `)
     .eq("stage_id", stage.id)
-    .order("stage_match_no", { ascending: true, nullsFirst: false })
-    .order("kickoff_at", { ascending: true });
+    .order("kickoff_at");
 
   const matches = (matchesRaw ?? []) as MatchRow[];
   const matchIds = matches.map((m) => m.id);
 
+  // predictions
   const { data: predsRaw } = await sb
     .from("predictions")
     .select("match_id,user_id,home_pred,away_pred")
     .in("match_id", matchIds)
     .in("user_id", userIds);
 
+  // map preds
   const predByMatchUser = new Map<string, Map<string, Pred>>();
   for (const p of predsRaw ?? []) {
     if (!predByMatchUser.has(p.match_id)) predByMatchUser.set(p.match_id, new Map());
@@ -168,12 +214,14 @@ export default async function DashboardCurrentTablePage() {
     });
   }
 
+  // counts per match (для мультипликаторов)
   const outcomeCount = new Map<string, number>();
   const diffCount = new Map<string, number>();
 
   for (const m of matches) {
     let o = 0;
     let d = 0;
+
     if (m.home_score != null && m.away_score != null) {
       for (const u of users) {
         const pr = predByMatchUser.get(m.id)?.get(u.user_id);
@@ -182,55 +230,94 @@ export default async function DashboardCurrentTablePage() {
         if (pr.h - pr.a === m.home_score - m.away_score) d++;
       }
     }
+
     outcomeCount.set(m.id, o);
     diffCount.set(m.id, d);
   }
 
+  // totals by user
+  const totalByUser = new Map<string, number>();
+  for (const u of users) totalByUser.set(u.user_id, 0);
+
+  for (const m of matches) {
+    const om = multByCount(outcomeCount.get(m.id) ?? 0);
+    const dm = multByCount(diffCount.get(m.id) ?? 0);
+
+    for (const u of users) {
+      const pr = predByMatchUser.get(m.id)?.get(u.user_id) ?? { h: null, a: null };
+      const { pts } = buildBreakdown({
+        pred: pr,
+        resH: m.home_score,
+        resA: m.away_score,
+        outcomeMult: om,
+        diffMult: dm,
+      });
+
+      if (pts != null) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + pts));
+    }
+  }
+
   return (
     <main className="userMain hasBottomBar">
-      <h1 style={{ fontWeight: 900 }}>Текущая таблица</h1>
+      <h1 style={{ fontWeight: 900, margin: 0 }}>Текущая таблица</h1>
+      <div style={{ marginTop: 6, opacity: 0.8 }}>
+        Этап: <b>{stage.name ?? `#${stage.id}`}</b>
+      </div>
 
-      <div className="tableWrap">
-        <table className="table" style={{ minWidth: 980 }}>
+      <div className="tableWrap" style={{ marginTop: 14 }}>
+        <table className="table" style={{ minWidth: 900 }}>
           <thead>
             <tr>
-              <th style={{ width: 54 }}>#</th>
               <th className="ctSticky ctColDate">Дата</th>
               <th className="ctSticky ctColMatch">Матч</th>
               <th className="ctSticky ctColRes">Рез.</th>
               {users.map((u) => (
-                <th key={u.user_id} className="ctUserHead">{u.login}</th>
+                <th key={u.user_id} className="ctUserHead">
+                  {u.login}
+                  <span style={{ opacity: 0.7, fontWeight: 800 }}>
+                    {" "}
+                    ({formatPts(totalByUser.get(u.user_id) ?? 0)})
+                  </span>
+                </th>
               ))}
             </tr>
           </thead>
 
           <tbody>
             {matches.map((m) => {
-              const date = m.kickoff_at ? new Date(m.kickoff_at).toLocaleDateString("ru-RU") : "—";
-              const res = m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
+              const date = m.kickoff_at
+                ? new Date(m.kickoff_at).toLocaleDateString("ru-RU")
+                : "—";
+
+              const res =
+                m.home_score == null || m.away_score == null
+                  ? "—"
+                  : `${m.home_score}:${m.away_score}`;
 
               const om = multByCount(outcomeCount.get(m.id) ?? 0);
               const dm = multByCount(diffCount.get(m.id) ?? 0);
 
               return (
                 <tr key={m.id}>
-                  <td style={{ opacity: 0.8, fontWeight: 900 }}>{m.stage_match_no ?? "—"}</td>
+                  <td className="ctSticky ctColDate" style={{ whiteSpace: "nowrap" }}>
+                    {date}
+                  </td>
 
-                  <td className="ctSticky ctColDate">{date}</td>
                   <td className="ctSticky ctColMatch">
-                    <div style={{ fontWeight: 800 }}>
+                    <div style={{ fontWeight: 900 }}>
                       {teamName(m.home_team)} — {teamName(m.away_team)}
                     </div>
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>
-                      {getTourName(m.tour)}
-                    </div>
+                    {/* ✅ убрали тур полностью */}
                   </td>
-                  <td className="ctSticky ctColRes">{res}</td>
+
+                  <td className="ctSticky ctColRes" style={{ fontWeight: 900, whiteSpace: "nowrap" }}>
+                    {res}
+                  </td>
 
                   {users.map((u) => {
                     const pr = predByMatchUser.get(m.id)?.get(u.user_id) ?? { h: null, a: null };
 
-                    const pts = calcPtsForUser({
+                    const { pts, breakdown } = buildBreakdown({
                       pred: pr,
                       resH: m.home_score,
                       resA: m.away_score,
@@ -238,15 +325,44 @@ export default async function DashboardCurrentTablePage() {
                       diffMult: dm,
                     });
 
+                    const predText =
+                      pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
+
                     return (
                       <td key={u.user_id} className="ctCell">
-                        <span style={{ fontFamily: "monospace" }}>
-                          {pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`}
+                        <span style={{ fontWeight: 900, whiteSpace: "nowrap" }}>
+                          {predText}
                         </span>
+
                         {pts != null ? (
-                          <span style={{ marginLeft: 6, opacity: 0.7 }}>
-                            ({formatPts(pts)})
-                          </span>
+                          <details style={{ display: "inline-block", marginLeft: 8 }}>
+                            <summary
+                              style={{
+                                display: "inline",
+                                cursor: "pointer",
+                                opacity: 0.8,
+                                fontWeight: 900,
+                                whiteSpace: "nowrap",
+                              }}
+                              title="Нажми, чтобы увидеть расшифровку"
+                            >
+                              {formatPts(pts)}
+                            </summary>
+                            <div
+                              style={{
+                                marginTop: 8,
+                                padding: 10,
+                                borderRadius: 10,
+                                border: "1px solid rgba(0,0,0,0.10)",
+                                background: "rgba(0,0,0,0.03)",
+                                whiteSpace: "pre-line",
+                                fontSize: 12,
+                                maxWidth: 260,
+                              }}
+                            >
+                              {breakdown}
+                            </div>
+                          </details>
                         ) : null}
                       </td>
                     );
