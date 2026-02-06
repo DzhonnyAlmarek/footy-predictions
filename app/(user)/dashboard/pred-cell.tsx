@@ -1,60 +1,40 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   matchId: number;
   homePred: number | null;
   awayPred: number | null;
   canEdit: boolean;
-  pointsText?: string;
-  tip?: string;
 };
-
-function toNum(v: string): number | null {
-  const s = v.trim();
-  if (s === "") return null;
-  if (!/^\d+$/.test(s)) return null;
-  return Number(s);
-}
 
 export default function PredCellEditable({
   matchId,
   homePred,
   awayPred,
   canEdit,
-  pointsText,
-  tip,
 }: Props) {
-  const [h, setH] = useState(homePred == null ? "" : String(homePred));
-  const [a, setA] = useState(awayPred == null ? "" : String(awayPred));
+  const [value, setValue] = useState(
+    homePred != null && awayPred != null ? `${homePred}:${awayPred}` : ""
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const hRef = useRef<HTMLInputElement | null>(null);
-  const aRef = useRef<HTMLInputElement | null>(null);
-
   useEffect(() => {
-    setH(homePred == null ? "" : String(homePred));
-  }, [homePred]);
+    setValue(homePred != null && awayPred != null ? `${homePred}:${awayPred}` : "");
+  }, [homePred, awayPred]);
 
-  useEffect(() => {
-    setA(awayPred == null ? "" : String(awayPred));
-  }, [awayPred]);
-
-  async function save(nextH?: string, nextA?: string) {
+  async function save() {
     if (!canEdit) return;
+    setError(null);
 
-    const hh = toNum(nextH ?? h);
-    const aa = toNum(nextA ?? a);
-
-    // пустое допускаем, но не сохраняем
-    if (hh == null || aa == null) {
-      setError(null);
+    const m = value.trim().match(/^(\d+):(\d+)$/);
+    if (!m) {
+      setError("Формат: 1:0");
       return;
     }
 
-    setError(null);
     setSaving(true);
     try {
       const res = await fetch("/api/predictions", {
@@ -63,8 +43,8 @@ export default function PredCellEditable({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           match_id: matchId,
-          home_pred: hh,
-          away_pred: aa,
+          home_pred: Number(m[1]),
+          away_pred: Number(m[2]),
         }),
       });
 
@@ -77,66 +57,24 @@ export default function PredCellEditable({
     }
   }
 
-  // просмотр
   if (!canEdit) {
-    const text =
-      homePred == null || awayPred == null ? "" : `${homePred}:${awayPred}`;
-
-    return (
-      <div title={tip} style={{ minHeight: 24 }}>
-        {text || <span style={{ opacity: 0.4 }}>—</span>}
-        {pointsText && <span style={{ opacity: 0.75 }}> {pointsText}</span>}
-      </div>
-    );
+    return <span>{value || <span style={{ opacity: 0.4 }}>—</span>}</span>;
   }
 
-  const hasBoth = toNum(h) != null && toNum(a) != null;
-
   return (
-    <div title={tip} style={{ minHeight: 26 }}>
-      <div
-        className={
-          "predInputWrap " + (error ? "predError" : hasBoth ? "predOk" : "")
-        }
-      >
-        <input
-          ref={hRef}
-          value={h}
-          inputMode="numeric"
-          onChange={(e) => setH(e.target.value.replace(/[^\d]/g, ""))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              aRef.current?.focus();
-            }
-          }}
-          onBlur={() => save()}
-          disabled={saving}
-          placeholder="0"
-          className="predInput"
-        />
-        <span className="predColon">:</span>
-        <input
-          ref={aRef}
-          value={a}
-          inputMode="numeric"
-          onChange={(e) => setA(e.target.value.replace(/[^\d]/g, ""))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              save();
-              aRef.current?.blur();
-            }
-          }}
-          onBlur={() => save()}
-          disabled={saving}
-          placeholder="0"
-          className="predInput"
-        />
-        {saving && <span className="predSaving">…</span>}
-      </div>
-
-      {error && <div className="predErrText">{error}</div>}
+    <div style={{ minHeight: 28 }}>
+      <input
+        className="predInput"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        disabled={saving}
+        placeholder="1:0"
+      />
+      {saving && <span style={{ marginLeft: 6, opacity: 0.6 }}>…</span>}
+      {error && (
+        <div style={{ color: "crimson", fontSize: 12, marginTop: 4 }}>{error}</div>
+      )}
     </div>
   );
 }

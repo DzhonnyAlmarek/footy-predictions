@@ -29,6 +29,17 @@ function service() {
   );
 }
 
+function deadlineFlag(d: Date) {
+  const now = new Date();
+  const ms = d.getTime() - now.getTime();
+  const oneDay = 24 * 60 * 60 * 1000;
+
+  return {
+    isPast: ms < 0,
+    isSoon: ms >= 0 && ms <= 2 * oneDay,
+  };
+}
+
 type MatchRow = {
   id: string;
   kickoff_at: string | null;
@@ -36,14 +47,6 @@ type MatchRow = {
   home_team: { name: string; slug: string } | null;
   away_team: { name: string; slug: string } | null;
 };
-
-function fmtKickoff(dt: Date) {
-  return dt.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
-}
-
-function fmtDeadlineDateOnly(dt: Date) {
-  return dt.toLocaleDateString("ru-RU", { dateStyle: "medium" });
-}
 
 export default async function DashboardMatchesPage() {
   const cs = await cookies();
@@ -85,7 +88,7 @@ export default async function DashboardMatchesPage() {
 
   if (matchesErr) {
     return (
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 16, color: "crimson" }}>
+      <main className="hasBottomBar" style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
         Ошибка matches: {matchesErr.message}
       </main>
     );
@@ -107,41 +110,35 @@ export default async function DashboardMatchesPage() {
     });
   }
 
-  const now = new Date();
-
   return (
-    <main style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
-      <header style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <main className="hasBottomBar" style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+      <header style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Матчи</h1>
-          <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 13 }}>
-            Этап: <b style={{ color: "inherit" }}>{stage.name ?? `#${stage.id}`}</b>{" "}
-            <span className="badge" style={{ marginLeft: 10 }}>{fpLogin}</span>
+          <div style={{ marginTop: 6, opacity: 0.85 }}>
+            Этап: <b>{stage.name ?? `#${stage.id}`}</b>
+            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>{fpLogin}</span>
           </div>
         </div>
 
         <nav className="topNav">
           <Link href="/dashboard">Текущая таблица</Link>
-          <Link href="/dashboard/matches">Матчи</Link>
           <Link href="/golden-boot">Золотая бутса</Link>
           <a href="/logout">Выйти</a>
         </nav>
       </header>
 
-      {/* DESKTOP TABLE */}
-      <section className="desktopOnly" style={{ marginTop: 16 }}>
+      <section style={{ marginTop: 18 }}>
         {!matches || matches.length === 0 ? (
-          <div className="card">
-            <div className="cardBody">Матчей нет.</div>
-          </div>
+          <p style={{ marginTop: 14 }}>Матчей нет.</p>
         ) : (
-          <div className="tableWrap" style={{ marginTop: 12 }}>
+          <div className="tableWrap" style={{ marginTop: 14 }}>
             <table className="table">
               <thead>
                 <tr>
-                  <th style={{ width: 170 }}>Дата</th>
+                  <th style={{ width: 160 }}>Дата</th>
                   <th>Матч</th>
-                  <th style={{ width: 170 }}>Дедлайн</th>
+                  <th style={{ width: 180 }}>Дедлайн</th>
                   <th style={{ width: 170 }}>Прогноз</th>
                 </tr>
               </thead>
@@ -150,14 +147,12 @@ export default async function DashboardMatchesPage() {
                 {(matches as any[]).map((m: MatchRow) => {
                   const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
                   const deadline = m.deadline_at ? new Date(m.deadline_at) : null;
-
                   const pr = predByMatch.get(m.id) ?? { h: null, a: null };
-                  const canEdit = deadline ? now.getTime() < deadline.getTime() : true;
 
                   return (
                     <tr key={m.id}>
                       <td style={{ whiteSpace: "nowrap" }}>
-                        {kickoff ? fmtKickoff(kickoff) : "—"}
+                        {kickoff ? kickoff.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" }) : "—"}
                       </td>
 
                       <td>
@@ -167,7 +162,15 @@ export default async function DashboardMatchesPage() {
                       </td>
 
                       <td style={{ whiteSpace: "nowrap" }}>
-                        {deadline ? fmtDeadlineDateOnly(deadline) : "—"}
+                        {deadline ? (() => {
+                          const f = deadlineFlag(deadline);
+                          const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
+                          return (
+                            <span className={`badge ${cls}`}>
+                              {deadline.toLocaleDateString("ru-RU", { dateStyle: "medium" })}
+                            </span>
+                          );
+                        })() : "—"}
                       </td>
 
                       <td>
@@ -175,7 +178,7 @@ export default async function DashboardMatchesPage() {
                           matchId={Number(m.id)}
                           homePred={pr.h}
                           awayPred={pr.a}
-                          canEdit={canEdit}
+                          canEdit={true}
                         />
                       </td>
                     </tr>
@@ -187,50 +190,12 @@ export default async function DashboardMatchesPage() {
         )}
       </section>
 
-      {/* MOBILE CARDS */}
-      <section className="mobileOnly" style={{ marginTop: 16 }}>
-        {!matches || matches.length === 0 ? (
-          <div className="card">
-            <div className="cardBody">Матчей нет.</div>
-          </div>
-        ) : (
-          <div className="matchCards">
-            {(matches as any[]).map((m: MatchRow) => {
-              const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
-              const deadline = m.deadline_at ? new Date(m.deadline_at) : null;
-
-              const pr = predByMatch.get(m.id) ?? { h: null, a: null };
-              const canEdit = deadline ? now.getTime() < deadline.getTime() : true;
-
-              return (
-                <div key={m.id} className="matchCard">
-                  <div className="matchTeams">
-                    {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
-                  </div>
-
-                  <div className="matchMeta">
-                    <div>
-                      <b>Kickoff:</b> {kickoff ? fmtKickoff(kickoff) : "—"}
-                    </div>
-                    <div>
-                      <b>Дедлайн:</b> {deadline ? fmtDeadlineDateOnly(deadline) : "—"}
-                    </div>
-                  </div>
-
-                  <div className="matchPred">
-                    <PredCellEditable
-                      matchId={Number(m.id)}
-                      homePred={pr.h}
-                      awayPred={pr.a}
-                      canEdit={canEdit}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      {/* ✅ Bottom bar (mobile only) */}
+      <div className="mobileBottomBar" role="navigation" aria-label="Навигация">
+        <Link href="/dashboard">🏠 Таблица</Link>
+        <Link href="/golden-boot">🥇 Бутса</Link>
+        <a href="/logout">🚪 Выйти</a>
+      </div>
     </main>
   );
 }

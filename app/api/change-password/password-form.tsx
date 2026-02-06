@@ -30,8 +30,10 @@ export default function PasswordForm() {
     try {
       const res = await fetch("/api/change-password", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newPassword: p1 }),
+        body: JSON.stringify({ new_password: p1 }),
+        cache: "no-store",
       });
 
       const json = await res.json().catch(() => ({}));
@@ -41,7 +43,8 @@ export default function PasswordForm() {
         return;
       }
 
-      window.location.href = json.redirect ?? "/dashboard";
+      // ✅ после смены — на логин этого же пользователя + сообщение
+      window.location.href = json.redirect ?? "/";
     } catch {
       setMsg("Ошибка");
     } finally {
