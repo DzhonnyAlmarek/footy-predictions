@@ -25,12 +25,21 @@ function normalizeLogin(v: string) {
 function readCookie(name: string): string | null {
   const p = document.cookie.split("; ").find((x) => x.startsWith(name + "="));
   if (!p) return null;
-  const v = p.slice((name + "=").length);
-  return v ?? null;
+  return p.slice((name + "=").length) ?? null;
 }
 
 function deleteCookie(name: string) {
   document.cookie = `${name}=; Max-Age=0; path=/`;
+}
+
+// base64url -> utf8
+function b64urlDecodeUtf8(v: string): string {
+  const b64 = v.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((v.length + 3) % 4);
+  // atob -> binary string -> utf8
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
 }
 
 export default function LoginWidget() {
@@ -56,7 +65,7 @@ export default function LoginWidget() {
     let mounted = true;
 
     async function load() {
-      // ✅ 1) флеш-сообщение
+      // сообщение
       const flash = readCookie("fp_flash");
       if (flash === "pwd_changed") {
         setMsg("Пароль успешно изменён ✅ Войдите с новым паролем.");
@@ -65,18 +74,20 @@ export default function LoginWidget() {
         setMsg(null);
       }
 
-      // ✅ 2) самый приоритетный логин: fp_flash_login (тот, кто только что менял пароль)
-      const flashLoginRaw = readCookie("fp_flash_login");
+      // ✅ приоритетный логин: fp_flash_login_b64
       let preferredLogin = "";
-      if (flashLoginRaw) {
+      const b64 = readCookie("fp_flash_login_b64");
+      if (b64) {
         try {
-          preferredLogin = normalizeLogin(decodeURIComponent(flashLoginRaw));
+          preferredLogin = normalizeLogin(b64urlDecodeUtf8(b64));
         } catch {
-          preferredLogin = normalizeLogin(flashLoginRaw);
+          preferredLogin = "";
         }
-        deleteCookie("fp_flash_login");
-      } else {
-        // запасной вариант: query ?login=
+        deleteCookie("fp_flash_login_b64");
+      }
+
+      // запасной вариант: query ?login=
+      if (!preferredLogin) {
         const sp = new URLSearchParams(window.location.search);
         preferredLogin = normalizeLogin(sp.get("login") ?? "");
       }
@@ -113,18 +124,15 @@ export default function LoginWidget() {
           return;
         }
 
-        // ✅ выбираем именно preferredLogin, если он есть в списке
-        const found =
-          preferredLogin
-            ? items.find((x) => normalizeLogin(x.login) === preferredLogin)
-            : null;
+        // ✅ выбираем именно preferredLogin
+        const found = preferredLogin
+          ? items.find((x) => normalizeLogin(x.login) === preferredLogin)
+          : null;
 
         const chosen = found?.login ?? items[0].login;
         setLogin(chosen);
 
-        // ✅ чтобы при обновлении не сбрасывалось
         window.history.replaceState({}, "", "/?login=" + encodeURIComponent(chosen));
-
         requestAnimationFrame(() => passRef.current?.focus());
       } catch (e: any) {
         if (!mounted) return;
@@ -281,8 +289,8 @@ export default function LoginWidget() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => setCapsOn(!!e.getModifierState?.("CapsLock"))}
-          onKeyUp={(e) => setCapsOn(!!e.getModifierState?.("CapsLock"))}
+          onKeyDown={onPasswordKey}
+          onKeyUp={onPasswordKey}
           placeholder="Введите пароль"
           disabled={loading}
           autoComplete="current-password"

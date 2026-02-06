@@ -24,6 +24,12 @@ function service() {
   );
 }
 
+function b64urlEncodeUtf8(s: string): string {
+  // utf8 -> base64 -> base64url
+  const b64 = Buffer.from(s, "utf8").toString("base64");
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 type Body = {
   new_password?: string;
   newPassword?: string;
@@ -63,7 +69,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "not_auth" }, { status: 401 });
     }
 
-    // ✅ меняем пароль
     const { error: updErr } = await sb.auth.admin.updateUserById(acc.user_id, {
       password: newPass,
     });
@@ -72,36 +77,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: updErr.message }, { status: 500 });
     }
 
-    // ✅ сбрасываем "временный пароль"
     const { error: flagErr } = await sb
       .from("login_accounts")
       .update({ must_change_password: false, temp_password: null })
       .eq("login", fpLogin);
 
-    // ✅ редирект на логин-страницу (логин выберем по cookie fp_flash_login)
     const redirect = "/";
 
     const res = NextResponse.json(
-      flagErr
-        ? { ok: true, warn: "flags_not_updated", redirect }
-        : { ok: true, redirect },
+      flagErr ? { ok: true, warn: "flags_not_updated", redirect } : { ok: true, redirect },
       { status: 200 }
     );
 
-    // ✅ flash: сообщение
+    // flash: сообщение
     res.cookies.set("fp_flash", "pwd_changed", {
       path: "/",
       maxAge: 30,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
+      httpOnly: false,
     });
 
-    // ✅ flash: КАКОЙ ЛОГИН НУЖНО ВЫБРАТЬ (самое важное)
-    res.cookies.set("fp_flash_login", encodeURIComponent(fpLogin), {
+    // ✅ flash: выбранный логин в ASCII (base64url)
+    res.cookies.set("fp_flash_login_b64", b64urlEncodeUtf8(fpLogin), {
       path: "/",
       maxAge: 30,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
+      httpOnly: false,
     });
 
     return res;
