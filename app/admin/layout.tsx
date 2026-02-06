@@ -1,24 +1,38 @@
+import { cookies } from "next/headers";
 import AdminNav from "./AdminNav";
 
-export default function AdminLayout({
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function decodeMaybe(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div className="min-h-screen bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_1fr]">
-          <aside className="md:sticky md:top-4 self-start">
-            <div className="rounded-2xl border p-3 shadow-sm">
-              <AdminNav loginLabel="ADMIN" />
-            </div>
-          </aside>
+  const cs = await cookies();
+  const raw = cs.get("fp_login")?.value ?? "";
+  const loginLabel = (decodeMaybe(raw) || "ADMIN").toString();
 
-          <main className="rounded-2xl border p-4 shadow-sm">
-            {children}
-          </main>
+  return (
+    <div className="adminLayout">
+      <aside className="adminSidebar">
+        <AdminNav loginLabel={loginLabel} />
+      </aside>
+
+      <div className="adminMain">
+        <div className="adminTopbar">
+          <div className="adminTitle">Админ-панель</div>
         </div>
+
+        <main className="adminContent">{children}</main>
       </div>
     </div>
   );
