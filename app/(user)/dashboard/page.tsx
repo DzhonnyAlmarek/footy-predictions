@@ -33,6 +33,7 @@ type TeamMaybeArray = { name: string } | { name: string }[] | null;
 
 type MatchRow = {
   id: string;
+  stage_match_no: number | null;
   kickoff_at: string | null;
   home_team: TeamMaybeArray;
   away_team: TeamMaybeArray;
@@ -44,34 +45,23 @@ function teamName(t: TeamMaybeArray): string {
   return t.name ?? "?";
 }
 
-function daysLeft(kickoffAt: string | null): number | null {
-  if (!kickoffAt) return null;
-  const kickoff = new Date(kickoffAt).getTime();
-  const now = Date.now();
-  return (kickoff - now) / 86400000;
+function daysTo(kickoffIso: string | null): number | null {
+  if (!kickoffIso) return null;
+  const d = new Date(kickoffIso);
+  const now = new Date();
+  const ms = d.getTime() - now.getTime();
+  return ms / (1000 * 60 * 60 * 24);
 }
 
-function urgencyClass(dLeft: number | null) {
-  // > 5 дней: без подсветки
-  // (2;5]: желтый
-  // (1;2]: красный
-  // <=1: красный (самый срочный)
-  if (dLeft == null) return "";
-  if (dLeft > 5) return "";
-  if (dLeft > 2) return "rowWarn";
-  return "rowDanger";
-}
-
-function urgencyText(dLeft: number | null) {
-  if (dLeft == null) return "";
-  if (dLeft > 5) return "";
-  if (dLeft > 2) return "Скоро матч — сделай прогноз";
-  if (dLeft > 1) return "Матч скоро — сделай прогноз срочно";
-  return "Матч уже очень скоро — сделай прогноз срочно";
+function warnKind(days: number | null): "none" | "soon" | "urgent" {
+  if (days == null) return "none";
+  if (days > 5) return "none";
+  if (days > 2) return "soon";   // 2..5
+  if (days > 1) return "urgent"; // 1..2
+  return "urgent";
 }
 
 export default async function DashboardPage() {
-  // ✅ авторизация через fp_login (cookie)
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
@@ -79,64 +69,45 @@ export default async function DashboardPage() {
 
   const sb = service();
 
-  // user_id по login
-  const { data: acc, error: accErr } = await sb
+  const { data: acc } = await sb
     .from("login_accounts")
     .select("user_id")
     .eq("login", fpLogin)
     .maybeSingle();
 
-  if (accErr) {
-    return (
-      <main className="userMain hasBottomBar" style={{ color: "crimson" }}>
-        Ошибка login_accounts: {accErr.message}
-      </main>
-    );
-  }
   if (!acc?.user_id) redirect("/");
 
-  // текущий этап
-  const { data: stage, error: stageErr } = await sb
+  const { data: stage } = await sb
     .from("stages")
     .select("id,name,status")
     .eq("is_current", true)
     .maybeSingle();
 
-  if (stageErr) {
-    return (
-      <main className="userMain hasBottomBar" style={{ color: "crimson" }}>
-        Ошибка stages: {stageErr.message}
-      </main>
-    );
-  }
-
   if (!stage) {
     return (
       <main className="userMain hasBottomBar">
-        <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Мои прогнозы</h1>
+        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
         <p style={{ marginTop: 8, opacity: 0.8 }}>Текущий этап не выбран.</p>
         <div style={{ marginTop: 14 }}>
-          <Link href="/" style={{ textDecoration: "underline" }}>
-            На главную
-          </Link>
+          <Link href="/" style={{ textDecoration: "underline" }}>На главную</Link>
         </div>
       </main>
     );
   }
 
-  // матчи текущего этапа
   const { data: matchesRaw, error: matchesErr } = await sb
     .from("matches")
     .select(
       `
       id,
+      stage_match_no,
       kickoff_at,
-      status,
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `
     )
     .eq("stage_id", stage.id)
+    .order("stage_match_no", { ascending: true, nullsFirst: false })
     .order("kickoff_at", { ascending: true });
 
   if (matchesErr) {
@@ -150,7 +121,6 @@ export default async function DashboardPage() {
   const matches = (matchesRaw ?? []) as unknown as MatchRow[];
   const matchIds = matches.map((m) => m.id);
 
-  // прогнозы пользователя по этим матчам
   const { data: preds, error: predsErr } = await sb
     .from("predictions")
     .select("match_id,home_pred,away_pred")
@@ -175,15 +145,13 @@ export default async function DashboardPage() {
 
   return (
     <main className="userMain hasBottomBar">
-      <header style={{ marginBottom: 12 }}>
+      <header style={{ marginBottom: 14 }}>
         <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Мои прогнозы</h1>
-
         <div style={{ marginTop: 6, opacity: 0.8 }}>
           Этап: <b>{stage.name ?? `#${stage.id}`}</b>
           {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
           <span style={{ opacity: 0.65 }}> • {fpLogin}</span>
         </div>
-        {/* ❌ тут НЕ рисуем меню — оно уже есть сверху (layout) и снизу (BottomBar) */}
       </header>
 
       <section>
@@ -191,9 +159,10 @@ export default async function DashboardPage() {
           <p style={{ marginTop: 14 }}>Матчей нет.</p>
         ) : (
           <div className="tableWrap">
-            <table className="table userPredTable">
+            <table className="table tableFixed userPredTable">
               <thead>
                 <tr>
+                  <th style={{ width: 54 }}>#</th>
                   <th className="colDate">Дата</th>
                   <th className="colMatch">Матч</th>
                   <th className="colPred">Прогноз</th>
@@ -202,7 +171,7 @@ export default async function DashboardPage() {
 
               <tbody>
                 {matches.map((m) => {
-                  const kickoff = m.kickoff_at
+                  const kickoffStr = m.kickoff_at
                     ? new Date(m.kickoff_at).toLocaleDateString("ru-RU", {
                         day: "2-digit",
                         month: "short",
@@ -210,27 +179,35 @@ export default async function DashboardPage() {
                       })
                     : "—";
 
-                  const pr = predByMatch.get(m.id) ?? { h: null, a: null };
-                  const emptyPred = pr.h == null || pr.a == null;
+                  const d = daysTo(m.kickoff_at);
+                  const kind = warnKind(d);
 
-                  const dLeft = daysLeft(m.kickoff_at);
-                  const rowCls = emptyPred ? urgencyClass(dLeft) : "";
-                  const warn = emptyPred ? urgencyText(dLeft) : "";
+                  const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
                   return (
-                    <tr key={m.id} className={rowCls}>
-                      <td className="colDate" style={{ whiteSpace: "nowrap" }}>
-                        {kickoff}
+                    <tr
+                      key={m.id}
+                      className={kind === "urgent" ? "rowUrgent" : kind === "soon" ? "rowSoon" : ""}
+                    >
+                      <td style={{ opacity: 0.8, fontWeight: 900 }}>
+                        {m.stage_match_no ?? "—"}
                       </td>
 
-                      <td className="colMatch">
+                      <td style={{ whiteSpace: "nowrap" }}>{kickoffStr}</td>
+
+                      <td>
                         <div style={{ fontWeight: 900 }}>
                           {teamName(m.home_team)} — {teamName(m.away_team)}
                         </div>
-                        {warn ? <div className="rowWarnText">{warn}</div> : null}
+
+                        {kind !== "none" ? (
+                          <div className="rowWarn">
+                            ⚠️ Скоро матч — сделай прогноз
+                          </div>
+                        ) : null}
                       </td>
 
-                      <td className="colPred">
+                      <td>
                         <PredCellEditable
                           matchId={Number(m.id)}
                           homePred={pr.h}

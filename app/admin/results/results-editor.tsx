@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type TeamObj = { name: string } | { name: string }[] | null;
@@ -9,23 +10,31 @@ type MatchRow = {
   id: number;
   stage_match_no?: number | null;
   kickoff_at?: string | null;
-  deadline_at?: string | null;
   status?: string | null;
   home_score?: number | null;
   away_score?: number | null;
-
-  // join aliases
-  home_team?: TeamObj; // ✅ может быть undefined
-  away_team?: TeamObj; // ✅ может быть undefined
+  home_team?: TeamObj;
+  away_team?: TeamObj;
 };
 
 function teamName(t?: TeamObj) {
   if (!t) return "?";
-  // иногда supabase типизирует как массив
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const anyT: any = t as any;
   if (Array.isArray(anyT)) return String(anyT?.[0]?.name ?? "?");
   return String(anyT?.name ?? "?");
+}
+
+function sortMatches(a: MatchRow, b: MatchRow) {
+  const an = a.stage_match_no ?? 1e9;
+  const bn = b.stage_match_no ?? 1e9;
+  if (an !== bn) return an - bn;
+
+  const ak = a.kickoff_at ? new Date(a.kickoff_at).getTime() : 0;
+  const bk = b.kickoff_at ? new Date(b.kickoff_at).getTime() : 0;
+  if (ak !== bk) return ak - bk;
+
+  return a.id - b.id;
 }
 
 export default function ResultsEditor(props: {
@@ -33,16 +42,22 @@ export default function ResultsEditor(props: {
   initialMatches?: MatchRow[];
   matches?: MatchRow[];
 }) {
-  const matches: MatchRow[] = Array.isArray(props.matches)
+  const router = useRouter();
+
+  const matchesInput: MatchRow[] = Array.isArray(props.matches)
     ? props.matches
     : Array.isArray(props.initialMatches)
     ? props.initialMatches
     : [];
 
+  const matches = [...matchesInput].sort(sortMatches);
+
   const supabase = useMemo(() => createClient(), []);
 
-  const [saving, setSaving] = useState<number | null>(null);
+  const [savingId, setSavingId] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
+  const [savedOk, setSavedOk] = useState<Record<number, boolean>>({});
 
   const [vals, setVals] = useState<Record<number, { h: string; a: string }>>(() => {
     const init: Record<number, { h: string; a: string }> = {};
@@ -57,6 +72,7 @@ export default function ResultsEditor(props: {
 
   async function save(matchId: number) {
     setMsg(null);
+    setSavedOk((p) => ({ ...p, [matchId]: false }));
 
     const v = vals[matchId] ?? { h: "", a: "" };
     const h = v.h.trim();
@@ -68,31 +84,38 @@ export default function ResultsEditor(props: {
     if (home !== null && (!Number.isFinite(home) || home < 0)) return setMsg("Некорректный счёт хозяев");
     if (away !== null && (!Number.isFinite(away) || away < 0)) return setMsg("Некорректный счёт гостей");
 
-    setSaving(matchId);
+    setSavingId(matchId);
+
     try {
       const { error } = await supabase
         .from("matches")
-        .update({
-          home_score: home,
-          away_score: away,
-        })
+        .update({ home_score: home, away_score: away })
         .eq("id", matchId);
 
       if (error) throw error;
+
+      setSavedOk((p) => ({ ...p, [matchId]: true }));
       setMsg("Сохранено ✅");
+
+      // важно: чтобы на серверных страницах/таблицах точно обновилось
+      router.refresh();
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка сохранения");
     } finally {
-      setSaving(null);
+      setSavingId(null);
     }
   }
 
   return (
     <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, overflow: "hidden" }}>
-      <div style={{ padding: 12, background: "#fafafa", fontWeight: 900 }}>Матчи: {matches.length}</div>
+      <div style={{ padding: 12, background: "#fafafa", fontWeight: 900 }}>
+        Матчи этапа: {matches.length}
+      </div>
 
       {msg ? (
-        <div style={{ padding: 12, color: msg.includes("✅") ? "inherit" : "crimson", fontWeight: 800 }}>{msg}</div>
+        <div style={{ padding: 12, color: msg.includes("✅") ? "inherit" : "crimson", fontWeight: 800 }}>
+          {msg}
+        </div>
       ) : null}
 
       <div style={{ display: "grid", gap: 10, padding: 12 }}>
@@ -100,6 +123,7 @@ export default function ResultsEditor(props: {
           const home = teamName(m.home_team);
           const away = teamName(m.away_team);
           const v = vals[m.id] ?? { h: "", a: "" };
+          const ok = !!savedOk[m.id];
 
           return (
             <div key={m.id} style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
@@ -136,18 +160,19 @@ export default function ResultsEditor(props: {
                 <button
                   type="button"
                   onClick={() => save(m.id)}
-                  disabled={saving === m.id}
+                  disabled={savingId === m.id}
                   style={{
                     padding: "10px 12px",
                     borderRadius: 10,
-                    border: "1px solid #111",
-                    background: "#111",
-                    color: "#fff",
+                    border: "1px solid " + (ok ? "rgba(34,197,94,0.9)" : "#111"),
+                    background: ok ? "rgba(34,197,94,0.12)" : "#111",
+                    color: ok ? "rgba(21,128,61,1)" : "#fff",
                     fontWeight: 900,
                     cursor: "pointer",
+                    minWidth: 190,
                   }}
                 >
-                  {saving === m.id ? "..." : "Сохранить"}
+                  {savingId === m.id ? "..." : ok ? "Сохранено успешно" : "Сохранить"}
                 </button>
               </div>
             </div>

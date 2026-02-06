@@ -6,8 +6,6 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-/* ================= utils ================= */
-
 function mustEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
@@ -30,12 +28,11 @@ function service() {
   );
 }
 
-/* ================= types ================= */
-
 type TeamMaybeArray = { name: string } | { name: string }[] | null;
 
 type MatchRow = {
   id: string;
+  stage_match_no: number | null;
   kickoff_at: string | null;
   home_score: number | null;
   away_score: number | null;
@@ -44,14 +41,8 @@ type MatchRow = {
   away_team: TeamMaybeArray;
 };
 
-type UserRow = {
-  login: string;
-  user_id: string;
-};
-
+type UserRow = { login: string; user_id: string };
 type Pred = { h: number | null; a: number | null };
-
-/* ================= helpers ================= */
 
 function teamName(t: TeamMaybeArray): string {
   if (!t) return "?";
@@ -99,31 +90,19 @@ function calcPtsForUser(params: {
 
   let pts = 0;
 
-  // голы команд
   if (pred.h === resH) pts += 0.5;
   if (pred.a === resA) pts += 0.5;
 
-  // исход
-  if (signOutcome(pred.h, pred.a) === signOutcome(resH, resA)) {
-    pts += 2 * outcomeMult;
-  }
+  if (signOutcome(pred.h, pred.a) === signOutcome(resH, resA)) pts += 2 * outcomeMult;
+  if (pred.h - pred.a === resH - resA) pts += 1 * diffMult;
 
-  // разница
-  if (pred.h - pred.a === resH - resA) {
-    pts += 1 * diffMult;
-  }
-
-  // промах на 1 мяч (в сумме)
   const dist = Math.abs(pred.h - resH) + Math.abs(pred.a - resA);
   if (dist === 1) pts += 0.5;
 
   return round2(pts);
 }
 
-/* ================= page ================= */
-
 export default async function DashboardCurrentTablePage() {
-  // auth via fp_login
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
@@ -131,7 +110,6 @@ export default async function DashboardCurrentTablePage() {
 
   const sb = service();
 
-  // current stage
   const { data: stage } = await sb
     .from("stages")
     .select("id,name,status")
@@ -147,7 +125,6 @@ export default async function DashboardCurrentTablePage() {
     );
   }
 
-  // users
   const { data: usersRaw } = await sb
     .from("login_accounts")
     .select("login,user_id")
@@ -157,11 +134,11 @@ export default async function DashboardCurrentTablePage() {
   const users = (usersRaw ?? []) as UserRow[];
   const userIds = users.map((u) => u.user_id);
 
-  // matches
   const { data: matchesRaw } = await sb
     .from("matches")
     .select(`
       id,
+      stage_match_no,
       kickoff_at,
       home_score,
       away_score,
@@ -170,31 +147,27 @@ export default async function DashboardCurrentTablePage() {
       away_team:teams!matches_away_team_id_fkey ( name )
     `)
     .eq("stage_id", stage.id)
-    .order("kickoff_at");
+    .order("stage_match_no", { ascending: true, nullsFirst: false })
+    .order("kickoff_at", { ascending: true });
 
   const matches = (matchesRaw ?? []) as MatchRow[];
   const matchIds = matches.map((m) => m.id);
 
-  // predictions
   const { data: predsRaw } = await sb
     .from("predictions")
     .select("match_id,user_id,home_pred,away_pred")
     .in("match_id", matchIds)
     .in("user_id", userIds);
 
-  // map preds
   const predByMatchUser = new Map<string, Map<string, Pred>>();
   for (const p of predsRaw ?? []) {
-    if (!predByMatchUser.has(p.match_id)) {
-      predByMatchUser.set(p.match_id, new Map());
-    }
+    if (!predByMatchUser.has(p.match_id)) predByMatchUser.set(p.match_id, new Map());
     predByMatchUser.get(p.match_id)!.set(p.user_id, {
       h: p.home_pred == null ? null : Number(p.home_pred),
       a: p.away_pred == null ? null : Number(p.away_pred),
     });
   }
 
-  // counts
   const outcomeCount = new Map<string, number>();
   const diffCount = new Map<string, number>();
 
@@ -218,36 +191,31 @@ export default async function DashboardCurrentTablePage() {
       <h1 style={{ fontWeight: 900 }}>Текущая таблица</h1>
 
       <div className="tableWrap">
-        <table className="table" style={{ minWidth: 900 }}>
+        <table className="table" style={{ minWidth: 980 }}>
           <thead>
             <tr>
+              <th style={{ width: 54 }}>#</th>
               <th className="ctSticky ctColDate">Дата</th>
               <th className="ctSticky ctColMatch">Матч</th>
               <th className="ctSticky ctColRes">Рез.</th>
               {users.map((u) => (
-                <th key={u.user_id} className="ctUserHead">
-                  {u.login}
-                </th>
+                <th key={u.user_id} className="ctUserHead">{u.login}</th>
               ))}
             </tr>
           </thead>
 
           <tbody>
             {matches.map((m) => {
-              const date = m.kickoff_at
-                ? new Date(m.kickoff_at).toLocaleDateString("ru-RU")
-                : "—";
-
-              const res =
-                m.home_score == null || m.away_score == null
-                  ? "—"
-                  : `${m.home_score}:${m.away_score}`;
+              const date = m.kickoff_at ? new Date(m.kickoff_at).toLocaleDateString("ru-RU") : "—";
+              const res = m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
 
               const om = multByCount(outcomeCount.get(m.id) ?? 0);
               const dm = multByCount(diffCount.get(m.id) ?? 0);
 
               return (
                 <tr key={m.id}>
+                  <td style={{ opacity: 0.8, fontWeight: 900 }}>{m.stage_match_no ?? "—"}</td>
+
                   <td className="ctSticky ctColDate">{date}</td>
                   <td className="ctSticky ctColMatch">
                     <div style={{ fontWeight: 800 }}>
@@ -260,11 +228,7 @@ export default async function DashboardCurrentTablePage() {
                   <td className="ctSticky ctColRes">{res}</td>
 
                   {users.map((u) => {
-                    const pr =
-                      predByMatchUser.get(m.id)?.get(u.user_id) ?? {
-                        h: null,
-                        a: null,
-                      };
+                    const pr = predByMatchUser.get(m.id)?.get(u.user_id) ?? { h: null, a: null };
 
                     const pts = calcPtsForUser({
                       pred: pr,
@@ -279,11 +243,11 @@ export default async function DashboardCurrentTablePage() {
                         <span style={{ fontFamily: "monospace" }}>
                           {pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`}
                         </span>
-                        {pts != null && (
+                        {pts != null ? (
                           <span style={{ marginLeft: 6, opacity: 0.7 }}>
                             ({formatPts(pts)})
                           </span>
-                        )}
+                        ) : null}
                       </td>
                     );
                   })}

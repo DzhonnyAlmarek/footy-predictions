@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type ScoreRow = { user_id: string; match_id: number; points: number; reason: string };
@@ -11,44 +12,42 @@ export default function AdminSetResultForm(props: {
   defaultAway: number | "";
   defaultStatus: string;
 }) {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+
   const [home, setHome] = useState<string>(String(props.defaultHome ?? ""));
   const [away, setAway] = useState<string>(String(props.defaultAway ?? ""));
   const [status, setStatus] = useState<string>(props.defaultStatus ?? "scheduled");
 
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
 
   const [scoreMsg, setScoreMsg] = useState<string | null>(null);
   const [scoring, setScoring] = useState(false);
 
   async function save() {
     setMsg(null);
+    setSavedOk(false);
 
     const homeN = home === "" ? null : Number(home);
     const awayN = away === "" ? null : Number(away);
 
-    if (homeN !== null && (!Number.isInteger(homeN) || homeN < 0)) {
-      return setMsg("home_score должен быть целым 0+ или пусто");
-    }
-    if (awayN !== null && (!Number.isInteger(awayN) || awayN < 0)) {
-      return setMsg("away_score должен быть целым 0+ или пусто");
-    }
+    if (homeN !== null && (!Number.isInteger(homeN) || homeN < 0)) return setMsg("home_score должен быть целым 0+ или пусто");
+    if (awayN !== null && (!Number.isInteger(awayN) || awayN < 0)) return setMsg("away_score должен быть целым 0+ или пусто");
 
     setLoading(true);
     try {
       const { error } = await supabase
         .from("matches")
-        .update({
-          home_score: homeN,
-          away_score: awayN,
-          status,
-        })
+        .update({ home_score: homeN, away_score: awayN, status })
         .eq("id", props.matchId);
 
       if (error) throw error;
 
       setMsg("Сохранено ✅");
+      setSavedOk(true);
+      router.refresh();
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка");
     } finally {
@@ -61,7 +60,6 @@ export default function AdminSetResultForm(props: {
     setScoring(true);
     try {
       const { data, error } = await supabase.rpc("score_match", { p_match_id: props.matchId });
-
       if (error) throw error;
 
       const rows = (data ?? []) as ScoreRow[];
@@ -72,6 +70,8 @@ export default function AdminSetResultForm(props: {
           ? "Начислено: прогнозов нет"
           : `Начислено ✅ пользователям: ${rows.length}, сумма очков: ${total}`
       );
+
+      router.refresh();
     } catch (e: any) {
       setScoreMsg(e?.message ?? "Ошибка начисления");
     } finally {
@@ -97,6 +97,7 @@ export default function AdminSetResultForm(props: {
           placeholder="away"
           style={{ width: 90, padding: 10, border: "1px solid #ddd", borderRadius: 10 }}
         />
+
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -116,14 +117,15 @@ export default function AdminSetResultForm(props: {
           style={{
             padding: "10px 14px",
             borderRadius: 10,
-            border: "1px solid #111",
-            background: "#111",
-            color: "#fff",
+            border: "1px solid " + (savedOk ? "rgba(34,197,94,0.9)" : "#111"),
+            background: savedOk ? "rgba(34,197,94,0.12)" : "#111",
+            color: savedOk ? "rgba(21,128,61,1)" : "#fff",
             cursor: "pointer",
-            width: 160,
+            width: 220,
+            fontWeight: 900,
           }}
         >
-          {loading ? "..." : "Сохранить"}
+          {loading ? "..." : savedOk ? "Сохранено успешно" : "Сохранить"}
         </button>
 
         <button
@@ -136,16 +138,17 @@ export default function AdminSetResultForm(props: {
             background: "#fff",
             color: "#111",
             cursor: "pointer",
-            width: 180,
+            width: 200,
+            fontWeight: 900,
           }}
-          title="Пересчитает очки по матчу: удалит старые проводки и вставит новые"
+          title="Пересчитает очки по матчу"
         >
           {scoring ? "..." : "Начислить очки"}
         </button>
       </div>
 
-      {msg && <p>{msg}</p>}
-      {scoreMsg && <p>{scoreMsg}</p>}
+      {msg ? <p>{msg}</p> : null}
+      {scoreMsg ? <p>{scoreMsg}</p> : null}
     </div>
   );
 }

@@ -2,24 +2,18 @@
   color-scheme: light;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-html,
-body {
-  padding: 0;
-  margin: 0;
-}
+html, body { padding: 0; margin: 0; }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji",
-    "Segoe UI Emoji";
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans",
+    "Apple Color Emoji", "Segoe UI Emoji";
   background: #fff;
   color: #111;
 }
 
-/* ссылки не синие */
+/* ссылки по умолчанию не синие */
 a { color: inherit; }
 
 /* ===== Header centered ===== */
@@ -59,10 +53,7 @@ a { color: inherit; }
   background: rgba(0, 0, 0, 0.03);
 }
 
-.clubTitleText {
-  font-weight: 900;
-  line-height: 1.05;
-}
+.clubTitleText { font-weight: 900; line-height: 1.05; }
 
 .clubTitleText span {
   font-weight: 800;
@@ -77,104 +68,16 @@ a { color: inherit; }
   padding: 18px 16px;
 }
 
-.hasBottomBar {
-  padding-bottom: 86px;
-}
+.hasBottomBar { padding-bottom: 86px; }
 
-/* ===== Dashboard top (user layout) ===== */
-.dashTop {
-  border-bottom: 1px solid #eee;
-  padding: 12px 16px;
-}
-
-.dashTopInner {
-  max-width: 1100px;
-  margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.dashTopLeft {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.dashTopLine1 {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.dashTopLine2 {
-  font-size: 13px;
-  opacity: 0.8;
-}
-
-.dashStageWrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.dashStageText {
-  font-size: 13px;
-  opacity: 0.8;
-}
-
-.dashTopNav {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  font-weight: 800;
-}
-
-.dashTopNav a {
-  text-decoration: underline;
-}
-
-.dashLock {
-  max-width: 1100px;
-  margin: 12px auto 0;
-  padding: 12px 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(220,38,38,0.35);
-  background: rgba(220,38,38,0.08);
-  color: crimson;
-  font-weight: 900;
-}
-
-/* badges */
-.badge {
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: rgba(0,0,0,0.04);
-  font-size: 12px;
-  font-weight: 900;
-  opacity: 0.85;
-}
-
-.badgeDanger {
-  border-color: rgba(220,38,38,0.35);
-  background: rgba(220,38,38,0.10);
-  color: crimson;
-  opacity: 1;
-}
-
-/* ===== Tables ===== */
+/* ===== Table responsive ===== */
 .tableWrap {
+  width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: 14px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   background: #fff;
-  width: 100%;
 }
 
 .table {
@@ -183,8 +86,7 @@ a { color: inherit; }
   min-width: 720px;
 }
 
-.table th,
-.table td {
+.table th, .table td {
   padding: 10px 12px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   vertical-align: middle;
@@ -198,75 +100,30 @@ a { color: inherit; }
   background: rgba(0, 0, 0, 0.02);
 }
 
-/* “Мои прогнозы” — фиксируем ширины аккуратно */
-.userPredTable {
-  width: 100%;
-  table-layout: fixed;
-  min-width: 0; /* чтобы на десктопе не создавал лишний скролл */
-}
+.tableFixed { table-layout: fixed; width: 100%; }
 
+/* таблица "Мои прогнозы": ровные колонки */
 .userPredTable .colDate { width: 140px; }
 .userPredTable .colPred { width: 170px; }
 .userPredTable .colMatch { width: auto; }
 
-@media (max-width: 420px) {
-  .userPredTable .colDate { width: 120px; }
-  .userPredTable .colPred { width: 150px; }
+@media (min-width: 480px) {
+  .userPredTable .colDate { width: 170px; }
+  .userPredTable .colPred { width: 190px; }
 }
 
-/* ===== Row urgency (если прогноз пустой) ===== */
+/* подсветка по "скоро матч" */
+.rowSoon td {
+  background: rgba(234, 179, 8, 0.10);
+}
+.rowUrgent td {
+  background: rgba(220, 38, 38, 0.08);
+}
 .rowWarn {
-  background: rgba(234,179,8,0.12);
-}
-
-.rowDanger {
-  background: rgba(220,38,38,0.10);
-}
-
-.rowWarnText {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 12px;
   font-weight: 800;
-  opacity: 0.85;
-}
-
-/* ===== Pred cell 2 inputs ===== */
-.pred2Wrap { min-height: 26px; }
-.pred2Inputs {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-.pred2Input {
-  width: 44px;
-  padding: 6px 8px;
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.18);
-  font-size: 14px;
-  font-weight: 800;
-  text-align: center;
-  outline: none;
-  background: #fff;
-}
-
-.pred2Sep {
-  font-weight: 900;
-  opacity: 0.7;
-}
-
-.pred2Saving {
-  margin-left: 4px;
-  opacity: 0.6;
-  font-weight: 900;
-}
-
-.pred2Err {
-  margin-top: 4px;
-  color: crimson;
-  font-size: 12px;
-  font-weight: 800;
+  opacity: 0.9;
 }
 
 /* ===== BottomBar ===== */
@@ -301,13 +158,5 @@ a { color: inherit; }
   background: rgba(0, 0, 0, 0.04);
 }
 
-.bbIcon {
-  font-size: 18px;
-  line-height: 1;
-}
-
-.bbLabel {
-  font-size: 11px;
-  font-weight: 800;
-  opacity: 0.9;
-}
+.bbIcon { font-size: 18px; line-height: 1; }
+.bbLabel { font-size: 11px; font-weight: 800; opacity: 0.9; }
