@@ -46,7 +46,6 @@ function teamName(t: TeamMaybeArray): string {
 }
 
 export default async function DashboardPage() {
-  // auth via fp_login (cookie)
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
@@ -54,7 +53,6 @@ export default async function DashboardPage() {
 
   const sb = service();
 
-  // user_id by login
   const { data: acc, error: accErr } = await sb
     .from("login_accounts")
     .select("user_id")
@@ -70,7 +68,6 @@ export default async function DashboardPage() {
   }
   if (!acc?.user_id) redirect("/");
 
-  // current stage
   const { data: stage, error: stageErr } = await sb
     .from("stages")
     .select("id,name,status")
@@ -99,7 +96,6 @@ export default async function DashboardPage() {
     );
   }
 
-  // matches of current stage
   const { data: matchesRaw, error: matchesErr } = await sb
     .from("matches")
     .select(
@@ -125,7 +121,6 @@ export default async function DashboardPage() {
   const matches = (matchesRaw ?? []) as unknown as MatchRow[];
   const matchIds = matches.map((m) => m.id);
 
-  // predictions of user for those matches
   const { data: preds, error: predsErr } = await sb
     .from("predictions")
     .select("match_id,home_pred,away_pred")
@@ -159,7 +154,12 @@ export default async function DashboardPage() {
           <span style={{ opacity: 0.65 }}> • {fpLogin}</span>
         </div>
 
-        {/* 👇 Здесь меню НЕ делаем — оно должно быть только в layout + bottom bar */}
+        {/* оставляем верхнее меню (и bottom bar остаётся) */}
+        <nav className="topNav" style={{ marginTop: 12 }}>
+          <Link href="/dashboard/current">Текущая таблица</Link>
+          <Link href="/golden-boot">Золотая бутса</Link>
+          <a href="/logout">Выйти</a>
+        </nav>
       </header>
 
       <section>
@@ -167,21 +167,19 @@ export default async function DashboardPage() {
           <p style={{ marginTop: 14 }}>Матчей нет.</p>
         ) : (
           <div className="tableWrap">
-            {/* ✅ фиксируем ширины колонок */}
-            <table className="table tableFixed">
-              <colgroup>
-                <col className="colDate" />
-                <col />
-                <col className="colDeadline" />
-                <col className="colPred" />
-              </colgroup>
-
+            <table
+              className="table"
+              style={{
+                width: "100%",
+                tableLayout: "fixed",
+              }}
+            >
               <thead>
                 <tr>
-                  <th>Дата</th>
+                  <th style={{ width: 140 }}>Дата</th>
                   <th>Матч</th>
-                  <th>Дедлайн</th>
-                  <th>Прогноз</th>
+                  <th style={{ width: 140 }}>Дедлайн</th>
+                  <th style={{ width: 140 }}>Прогноз</th>
                 </tr>
               </thead>
 
@@ -209,15 +207,21 @@ export default async function DashboardPage() {
                     <tr key={m.id}>
                       <td style={{ whiteSpace: "nowrap" }}>{kickoff}</td>
 
-                      <td>
-                        <div className="strong">
+                      <td style={{ overflow: "hidden" }}>
+                        <div
+                          style={{
+                            fontWeight: 900,
+                            whiteSpace: "normal",
+                            wordBreak: "break-word",
+                          }}
+                        >
                           {teamName(m.home_team)} — {teamName(m.away_team)}
                         </div>
                       </td>
 
                       <td style={{ whiteSpace: "nowrap" }}>{deadline}</td>
 
-                      <td>
+                      <td style={{ whiteSpace: "nowrap" }}>
                         <PredCellEditable
                           matchId={Number(m.id)}
                           homePred={pr.h}
