@@ -1,369 +1,93 @@
-/* ===============================
-   Points Popover
-   =============================== */
-
-.ppWrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
+/* =========================================================
+   Base
+========================================================= */
+:root{
+  --bg: #f6f7fb;
+  --card: #ffffff;
+  --text: #111827;
+  --muted: #6b7280;
+  --line: rgba(17,24,39,.12);
+  --shadow: 0 10px 30px rgba(17,24,39,.08);
+  --r: 16px;
 }
 
-.ppBtn {
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 8px;
-  font-weight: 900;
-  opacity: 0.75;
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial,
+    "Apple Color Emoji","Segoe UI Emoji";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.ppBtn:hover {
-  background: rgba(0,0,0,0.05);
-  opacity: 1;
+a{
+  color: #2563eb;
+  text-decoration: none;
+}
+a:hover{ text-decoration: underline; }
+
+h1, h2, h3{ letter-spacing: -0.02em; }
+h1{ font-size: 32px; line-height: 1.15; margin: 0; }
+p{ margin: 0; color: var(--muted); }
+
+/* =========================================================
+   Layout helpers
+========================================================= */
+.page{
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px 16px 28px;
 }
 
-.ppPop {
-  position: absolute;
-  right: 0;
-  top: 120%;
-  min-width: 280px;
-  max-width: 360px;
-  background: #fff;
-  border: 1px solid rgba(0,0,0,0.14);
-  border-radius: 14px;
-  box-shadow: 0 12px 28px rgba(0,0,0,0.12);
-  padding: 12px;
-  z-index: 200;
-}
-
-.ppTitle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-weight: 900;
-  margin-bottom: 8px;
-}
-
-.ppClose {
-  border: 0;
-  background: rgba(0,0,0,0.04);
-  border-radius: 10px;
-  padding: 6px 8px;
-  cursor: pointer;
-  font-weight: 900;
-}
-
-.ppClose:hover {
-  background: rgba(0,0,0,0.08);
-}
-
-.ppLine {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 4px 0;
-}
-
-.ppKey {
-  opacity: 0.75;
-  font-size: 12px;
-}
-
-.ppVal {
-  font-weight: 900;
-  font-size: 13px;
-  text-align: right;
-}
-
-.ppHint {
-  font-weight: 800;
-  opacity: 0.7;
-  font-size: 11px;
-  margin-left: 6px;
-}
-
-.ppHr {
-  height: 1px;
-  background: rgba(0,0,0,0.08);
-  margin: 8px 0;
-}
-
-.ppTotal {
-  font-size: 13px;
-}
-
-.ppMini {
-  margin-top: 6px;
-  font-size: 11px;
-  opacity: 0.75;
-}
-
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco,
-    Consolas, "Liberation Mono", monospace;
-}
-
-/* ===============================
-   ФИКС ДЛЯ ТАБЛИЦ (ВАЖНО)
-   =============================== */
-
-/* чтобы popover не обрезался */
-.tableWrap {
-  overflow-x: auto;
-  overflow-y: visible;
-}
-
-.tableWrap table {
-  overflow: visible;
-}
-
-/* каждая ячейка может быть якорем для popover */
-.ctCell {
-  position: relative;
-  overflow: visible;
-}
-
-/* ===============================
-   Mobile
-   =============================== */
-
-@media (max-width: 520px) {
-  .ppPop {
-    right: auto;
-    left: 0;
-    width: min(92vw, 360px);
-  }
-}
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import ResultsEditor from "./results-editor";
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-// ✅ самое важное: убираем кэш fetch на уровне страницы
-export const fetchCache = "force-no-store";
-
-type TeamObj = { name: string } | { name: string }[] | null;
-
-type MatchRow = {
-  id: number;
-  stage_match_no?: number | null;
-  kickoff_at?: string | null;
-  status?: string | null;
-  home_score?: number | null;
-  away_score?: number | null;
-  home_team?: TeamObj;
-  away_team?: TeamObj;
-};
-
-export default async function AdminResultsPage() {
-  const supabase = await createClient();
-
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) redirect("/");
-
-  const { data: stage } = await supabase
-    .from("stages")
-    .select("id,name,status")
-    .eq("is_current", true)
-    .maybeSingle();
-
-  if (!stage?.id) {
-    return (
-      <main className="userMain hasBottomBar">
-        <h1 style={{ fontWeight: 900, margin: 0 }}>Результаты</h1>
-        <p style={{ marginTop: 10, opacity: 0.8 }}>Текущий этап не выбран.</p>
-      </main>
-    );
-  }
-
-  // ✅ сортировка: сначала stage_match_no, затем kickoff
-  const { data: matchesRaw, error } = await supabase
-    .from("matches")
-    .select(
-      `
-      id,
-      stage_match_no,
-      kickoff_at,
-      status,
-      home_score,
-      away_score,
-      home_team:teams!matches_home_team_id_fkey ( name ),
-      away_team:teams!matches_away_team_id_fkey ( name )
-    `
-    )
-    .eq("stage_id", stage.id)
-    .order("stage_match_no", { ascending: true, nullsFirst: false })
-    .order("kickoff_at", { ascending: true });
-
-  if (error) {
-    return (
-      <main className="userMain hasBottomBar" style={{ color: "crimson" }}>
-        Ошибка загрузки матчей: {error.message}
-      </main>
-    );
-  }
-
-  const matches = (matchesRaw ?? []) as unknown as MatchRow[];
-
-  return (
-    <main className="userMain hasBottomBar">
-      <h1 style={{ fontWeight: 900, margin: 0 }}>Результаты</h1>
-      <div style={{ marginTop: 6, opacity: 0.8 }}>
-        Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-        {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
-      </div>
-
-      <div style={{ marginTop: 14 }}>
-        <ResultsEditor stageId={Number(stage.id)} matches={matches} />
-      </div>
-    </main>
-  );
-}
-
-/* ===== Forms / Controls ===== */
-.formCard{
+.card{
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--r);
   box-shadow: var(--shadow);
-  overflow: hidden;
 }
 
-.formCardHead{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  background: rgba(17,24,39,.02);
-  border-bottom: 1px solid rgba(17,24,39,.08);
-  font-weight: 900;
-}
-
-.alert{
-  margin: 12px 14px 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(17,24,39,.12);
-  background: rgba(17,24,39,.03);
-  font-weight: 800;
-}
-.alertErr{
-  border-color: rgba(239,68,68,.25);
-  background: rgba(239,68,68,.08);
-  color: #991b1b;
-}
-
-.cardsGrid{
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-}
-
-.matchCard{
-  border: 1px solid rgba(17,24,39,.10);
-  border-radius: 14px;
-  padding: 12px;
-  background: #fff;
-}
-
-.matchTitle{
-  font-weight: 900;
-}
-
-.matchMeta{
-  margin-top: 6px;
-  color: rgba(17,24,39,.65);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.scoreRow{
-  margin-top: 10px;
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.scoreInput{
-  width: 72px;
-  padding: 10px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(17,24,39,.16);
-  font-weight: 900;
-  text-align: center;
-  outline: none;
-  background: #fff;
-}
-.scoreInput:focus{
-  border-color: rgba(37,99,235,.55);
-  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
-}
-
-.scoreSep{
-  font-weight: 900;
-  opacity: .7;
-}
-
-.saveBtn{
+/* =========================================================
+   Buttons / Inputs
+========================================================= */
+.btn{
+  appearance: none;
   border: 1px solid rgba(17,24,39,.14);
-  background: #111827;
-  color: #fff;
+  background: #fff;
+  color: var(--text);
   border-radius: 12px;
-  padding: 10px 12px;
-  font-weight: 900;
+  padding: 8px 12px;
+  font-weight: 800;
   cursor: pointer;
 }
-.saveBtn:hover{ background: #0b1220; }
-.saveBtn:disabled{ opacity: .6; cursor: default; }
+.btn:hover{ background: rgba(17,24,39,.04); }
 
-.saveBtnOk{
-  border-color: rgba(16,185,129,.35);
-  background: rgba(16,185,129,.14);
-  color: #065f46;
+.btnPrimary{
+  border-color: rgba(37,99,235,.25);
+  background: rgba(37,99,235,.10);
 }
-.saveBtnOk:hover{ background: rgba(16,185,129,.20); }
+.btnPrimary:hover{ background: rgba(37,99,235,.16); }
 
-.smallHint{
-  font-size: 12px;
-  font-weight: 800;
-  color: rgba(17,24,39,.65);
-}
-
-.inlineErr{
-  color: #b91c1c;
-  font-weight: 800;
-  font-size: 12px;
-}
-
-/* ===== Pred cell ===== */
-.predCell{
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.predInput{
-  width: 52px;
-  padding: 8px 8px;
-  border-radius: 12px;
+.input{
   border: 1px solid rgba(17,24,39,.16);
-  font-weight: 900;
-  text-align: center;
+  border-radius: 12px;
+  padding: 8px 10px;
   outline: none;
+  font-weight: 800;
   background: #fff;
 }
-.predInput:focus{
+.input:focus{
   border-color: rgba(37,99,235,.55);
   box-shadow: 0 0 0 4px rgba(37,99,235,.12);
 }
-.predSep{ font-weight: 900; opacity: .7; }
-.predSaving{ opacity: .65; font-weight: 900; }
-/* ===== App Header ===== */
+
+/* =========================================================
+   Header (AppHeader)
+========================================================= */
 .appHeader{
   position: sticky;
   top: 0;
@@ -392,7 +116,7 @@ export default async function AdminResultsPage() {
   text-decoration: none;
   font-size: 18px;
 }
-.brandLink:hover{ text-decoration: none; opacity: .9; }
+.brandLink:hover{ opacity: .9; }
 
 .brandMeta{
   display: flex;
@@ -419,7 +143,6 @@ export default async function AdminResultsPage() {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .navLink{
@@ -432,12 +155,9 @@ export default async function AdminResultsPage() {
   border: 1px solid rgba(17,24,39,.12);
   font-weight: 900;
   color: rgba(17,24,39,.85);
-  text-decoration: none;
 }
-.navLink:hover{
-  background: #fff;
-  text-decoration: none;
-}
+.navLink:hover{ background: #fff; text-decoration: none; }
+
 .navActive{
   border-color: rgba(37,99,235,.28);
   background: rgba(37,99,235,.12);
@@ -446,5 +166,146 @@ export default async function AdminResultsPage() {
 
 @media (max-width: 760px){
   .appHeaderInner{ flex-direction: column; align-items: flex-start; }
-  .appNav{ justify-content: flex-start; }
+}
+
+/* =========================================================
+   Tables
+========================================================= */
+.tableWrap{
+  margin-top: 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+
+.table{
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 900px;
+}
+
+.table thead th{
+  position: sticky;
+  top: 0;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: rgba(17,24,39,.7);
+  padding: 12px 10px;
+  white-space: nowrap;
+}
+
+.table tbody td{
+  border-bottom: 1px solid rgba(17,24,39,.08);
+  padding: 10px 10px;
+  vertical-align: top;
+}
+
+.table tbody tr:nth-child(odd) td{
+  background: rgba(17,24,39,.015);
+}
+.table tbody tr:hover td{
+  background: rgba(37,99,235,.06);
+}
+
+.ctCell{ position: relative; overflow: visible; }
+.ctUserHead{ font-weight: 900; }
+
+/* =========================================================
+   Pred cells / badges
+========================================================= */
+.predText{
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.badge{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(17,24,39,.12);
+  background: rgba(255,255,255,.9);
+  font-weight: 900;
+  color: rgba(17,24,39,.82);
+}
+
+/* =========================================================
+   Points Popover
+========================================================= */
+.ppWrap { position: relative; display: inline-flex; align-items: center; }
+
+.ppBtn{
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 8px;
+  font-weight: 900;
+  opacity: 0.75;
+}
+.ppBtn:hover { background: rgba(0,0,0,0.05); opacity: 1; }
+
+.ppPop{
+  position: absolute;
+  right: 0;
+  top: 120%;
+  min-width: 280px;
+  max-width: 360px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.14);
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+  padding: 12px;
+  z-index: 200;
+}
+
+.ppTitle{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.ppClose{
+  border: 0;
+  background: rgba(0,0,0,0.04);
+  border-radius: 10px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.ppLine{
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.ppKey{ opacity: 0.75; font-size: 12px; }
+.ppVal{ font-weight: 900; font-size: 13px; text-align: right; }
+.ppHint{ font-weight: 800; opacity: 0.7; font-size: 11px; margin-left: 6px; }
+
+.ppHr{ height: 1px; background: rgba(0,0,0,0.08); margin: 8px 0; }
+
+.ppTotal{ font-size: 13px; }
+.ppMini{ margin-top: 6px; font-size: 11px; opacity: 0.75; }
+
+.mono{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+}
+
+@media (max-width: 520px){
+  .ppPop{ right: auto; left: 0; width: min(92vw, 360px); }
 }
