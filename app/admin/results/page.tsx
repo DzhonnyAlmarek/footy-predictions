@@ -1,10 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ResultsEditor from "./results-editor";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-// ✅ самое важное: убираем кэш fetch на уровне страницы
 export const fetchCache = "force-no-store";
 
 type TeamObj = { name: string } | { name: string }[] | null;
@@ -34,14 +34,13 @@ export default async function AdminResultsPage() {
 
   if (!stage?.id) {
     return (
-      <main className="userMain hasBottomBar">
-        <h1 style={{ fontWeight: 900, margin: 0 }}>Результаты</h1>
-        <p style={{ marginTop: 10, opacity: 0.8 }}>Текущий этап не выбран.</p>
+      <main className="page">
+        <h1>Результаты</h1>
+        <p className="pageMeta">Текущий этап не выбран.</p>
       </main>
     );
   }
 
-  // ✅ сортировка: сначала stage_match_no, затем kickoff
   const { data: matchesRaw, error } = await supabase
     .from("matches")
     .select(
@@ -62,8 +61,11 @@ export default async function AdminResultsPage() {
 
   if (error) {
     return (
-      <main className="userMain hasBottomBar" style={{ color: "crimson" }}>
-        Ошибка загрузки матчей: {error.message}
+      <main className="page">
+        <h1>Результаты</h1>
+        <p style={{ color: "crimson", marginTop: 10, fontWeight: 800 }}>
+          Ошибка загрузки матчей: {error.message}
+        </p>
       </main>
     );
   }
@@ -71,15 +73,21 @@ export default async function AdminResultsPage() {
   const matches = (matchesRaw ?? []) as unknown as MatchRow[];
 
   return (
-    <main className="userMain hasBottomBar">
-      <h1 style={{ fontWeight: 900, margin: 0 }}>Результаты</h1>
-      <div style={{ marginTop: 6, opacity: 0.8 }}>
+    <main className="page">
+      <h1>Результаты</h1>
+      <div className="pageMeta">
         Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-        {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
+        {stage.status ? <span> • {stage.status}</span> : null}
       </div>
 
       <div style={{ marginTop: 14 }}>
         <ResultsEditor stageId={Number(stage.id)} matches={matches} />
+      </div>
+
+      <div className="navRow">
+        <Link href="/admin/current-table">Текущая таблица</Link>
+        <Link href="/admin/users">Юзеры</Link>
+        <Link href="/logout">Выйти</Link>
       </div>
     </main>
   );

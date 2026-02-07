@@ -1,15 +1,12 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
-import PointsPopover, {
-  type PointsBreakdown as PtsBD,
-} from "@/app/_components/points-popover";
+import PointsPopover, { type PointsBreakdown as PtsBD } from "@/app/_components/points-popover";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-/* ================= utils ================= */
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -33,8 +30,6 @@ function service() {
   );
 }
 
-/* ================= types ================= */
-
 type TeamMaybeArray = { name: string } | { name: string }[] | null;
 
 type MatchRow = {
@@ -48,7 +43,6 @@ type MatchRow = {
 };
 
 type UserRow = { login: string; user_id: string };
-
 type Pred = { h: number | null; a: number | null };
 
 type ScoreRow = {
@@ -71,8 +65,6 @@ type ScoreRow = {
   pred_text: string;
   res_text: string;
 };
-
-/* ================= helpers ================= */
 
 function teamName(t: TeamMaybeArray): string {
   if (!t) return "?";
@@ -108,8 +100,6 @@ function toPtsBD(s: ScoreRow): PtsBD {
   };
 }
 
-/* ================= page ================= */
-
 export default async function AdminCurrentTablePage() {
   const cs = await cookies();
   const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
@@ -126,9 +116,9 @@ export default async function AdminCurrentTablePage() {
 
   if (!stage) {
     return (
-      <main className="userMain hasBottomBar">
-        <h1 style={{ fontWeight: 900, margin: 0 }}>Текущая таблица (админ)</h1>
-        <p style={{ marginTop: 10, opacity: 0.8 }}>Текущий этап не выбран</p>
+      <main className="page">
+        <h1>Текущая таблица (админ)</h1>
+        <p className="pageMeta">Текущий этап не выбран</p>
       </main>
     );
   }
@@ -203,25 +193,24 @@ export default async function AdminCurrentTablePage() {
   }
 
   return (
-    <main className="userMain hasBottomBar">
-      <h1 style={{ fontWeight: 900, margin: 0 }}>Текущая таблица (админ)</h1>
-      <div style={{ marginTop: 6, opacity: 0.8 }}>
+    <main className="page">
+      <h1>Текущая таблица (админ)</h1>
+      <div className="pageMeta">
         Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-        {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
+        {stage.status ? <span> • {stage.status}</span> : null}
       </div>
 
-      <div className="tableWrap" style={{ marginTop: 14 }}>
+      <div className="tableWrap">
         <table className="table" style={{ minWidth: 900 }}>
           <thead>
             <tr>
-              <th className="ctSticky ctColDate">№</th>
-              <th className="ctSticky ctColMatch">Матч</th>
-              <th className="ctSticky ctColRes">Рез.</th>
+              <th style={{ width: 54 }}>№</th>
+              <th>Матч</th>
+              <th style={{ width: 70 }}>Рез.</th>
               {users.map((u) => (
                 <th key={u.user_id} className="ctUserHead">
-                  {u.login}
-                  <span style={{ opacity: 0.7, fontWeight: 800 }}>
-                    {" "}
+                  {u.login}{" "}
+                  <span style={{ opacity: 0.7, fontWeight: 900 }}>
                     ({formatPts(totalByUser.get(u.user_id) ?? 0)})
                   </span>
                 </th>
@@ -233,40 +222,30 @@ export default async function AdminCurrentTablePage() {
             {matches.map((m, idx) => {
               const no = m.stage_match_no ?? idx + 1;
               const res =
-                m.home_score == null || m.away_score == null
-                  ? "—"
-                  : `${m.home_score}:${m.away_score}`;
-
+                m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
               const mid = Number(m.id);
 
               return (
                 <tr key={m.id}>
-                  <td className="ctSticky ctColDate" style={{ fontWeight: 900, whiteSpace: "nowrap" }}>
-                    {no}
-                  </td>
+                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{no}</td>
 
-                  <td className="ctSticky ctColMatch">
+                  <td>
                     <div style={{ fontWeight: 900 }}>
                       {teamName(m.home_team)} — {teamName(m.away_team)}
                     </div>
                   </td>
 
-                  <td className="ctSticky ctColRes" style={{ fontWeight: 900, whiteSpace: "nowrap" }}>
-                    {res}
-                  </td>
+                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{res}</td>
 
                   {users.map((u) => {
                     const pr = predByMatchUser.get(mid)?.get(u.user_id) ?? { h: null, a: null };
                     const predText = pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
-
                     const s = scoreByMatchUser.get(mid)?.get(u.user_id);
 
                     return (
                       <td key={u.user_id} className="ctCell">
-                        <span style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{predText}</span>
-                        {s ? (
-                          <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} />
-                        ) : null}
+                        <span className="predText">{predText}</span>
+                        {s ? <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} /> : null}
                       </td>
                     );
                   })}
@@ -275,6 +254,12 @@ export default async function AdminCurrentTablePage() {
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="navRow">
+        <Link href="/admin/results">Рез-ты</Link>
+        <Link href="/admin/users">Юзеры</Link>
+        <Link href="/logout">Выйти</Link>
       </div>
     </main>
   );

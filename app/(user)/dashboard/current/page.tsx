@@ -3,14 +3,10 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
-import PointsPopover, {
-  type PointsBreakdown as PtsBD,
-} from "@/app/_components/points-popover";
+import PointsPopover, { type PointsBreakdown as PtsBD } from "@/app/_components/points-popover";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-/* ================= utils ================= */
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -34,8 +30,6 @@ function service() {
   );
 }
 
-/* ================= types ================= */
-
 type TeamMaybeArray = { name: string } | { name: string }[] | null;
 
 type MatchRow = {
@@ -43,16 +37,11 @@ type MatchRow = {
   kickoff_at: string | null;
   home_score: number | null;
   away_score: number | null;
-  tour?: { name: string } | { name: string }[] | null;
   home_team: TeamMaybeArray;
   away_team: TeamMaybeArray;
 };
 
-type UserRow = {
-  login: string;
-  user_id: string;
-};
-
+type UserRow = { login: string; user_id: string };
 type Pred = { h: number | null; a: number | null };
 
 type ScoreRow = {
@@ -75,8 +64,6 @@ type ScoreRow = {
   pred_text: string;
   res_text: string;
 };
-
-/* ================= helpers ================= */
 
 function teamName(t: TeamMaybeArray): string {
   if (!t) return "?";
@@ -112,10 +99,7 @@ function toPtsBD(s: ScoreRow): PtsBD {
   };
 }
 
-/* ================= page ================= */
-
 export default async function DashboardCurrentTablePage() {
-  // auth via fp_login
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
@@ -123,7 +107,6 @@ export default async function DashboardCurrentTablePage() {
 
   const sb = service();
 
-  // current stage
   const { data: stage } = await sb
     .from("stages")
     .select("id,name,status")
@@ -132,14 +115,13 @@ export default async function DashboardCurrentTablePage() {
 
   if (!stage) {
     return (
-      <main className="userMain hasBottomBar">
-        <h1 style={{ fontWeight: 900, margin: 0 }}>Текущая таблица</h1>
-        <p style={{ marginTop: 10, opacity: 0.8 }}>Текущий этап не выбран</p>
+      <main className="page">
+        <h1>Текущая таблица</h1>
+        <p className="pageMeta">Текущий этап не выбран</p>
       </main>
     );
   }
 
-  // users (все участники, кроме ADMIN)
   const { data: usersRaw } = await sb
     .from("login_accounts")
     .select("login,user_id")
@@ -149,7 +131,6 @@ export default async function DashboardCurrentTablePage() {
   const users = (usersRaw ?? []) as UserRow[];
   const userIds = users.map((u) => u.user_id);
 
-  // matches
   const { data: matchesRaw } = await sb
     .from("matches")
     .select(`
@@ -157,7 +138,6 @@ export default async function DashboardCurrentTablePage() {
       kickoff_at,
       home_score,
       away_score,
-      tour:tours ( name ),
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `)
@@ -167,7 +147,6 @@ export default async function DashboardCurrentTablePage() {
   const matches = (matchesRaw ?? []) as MatchRow[];
   const matchIds = matches.map((m) => Number(m.id));
 
-  // predictions (нужны для отображения predText даже если матч не сыгран)
   const { data: predsRaw } = await sb
     .from("predictions")
     .select("id,match_id,user_id,home_pred,away_pred")
@@ -187,7 +166,6 @@ export default async function DashboardCurrentTablePage() {
     });
   }
 
-  // prediction_scores for these matches/users
   const { data: scoresRaw } = await sb
     .from("prediction_scores")
     .select(
@@ -203,7 +181,6 @@ export default async function DashboardCurrentTablePage() {
     scoreByMatchUser.get(mid)!.set(s.user_id, s as ScoreRow);
   }
 
-  // totals by user from stored scores
   const totalByUser = new Map<string, number>();
   for (const u of users) totalByUser.set(u.user_id, 0);
 
@@ -216,24 +193,24 @@ export default async function DashboardCurrentTablePage() {
   }
 
   return (
-    <main className="userMain hasBottomBar">
-      <h1 style={{ fontWeight: 900, margin: 0 }}>Текущая таблица</h1>
-      <div style={{ marginTop: 6, opacity: 0.8 }}>
+    <main className="page">
+      <h1>Текущая таблица</h1>
+      <div className="pageMeta">
         Этап: <b>{stage.name ?? `#${stage.id}`}</b>
+        {stage.status ? <span> • {stage.status}</span> : null}
       </div>
 
-      <div className="tableWrap" style={{ marginTop: 14 }}>
+      <div className="tableWrap">
         <table className="table" style={{ minWidth: 900 }}>
           <thead>
             <tr>
-              <th className="ctSticky ctColDate">Дата</th>
-              <th className="ctSticky ctColMatch">Матч</th>
-              <th className="ctSticky ctColRes">Рез.</th>
+              <th className="ctColDate">Дата</th>
+              <th className="ctColMatch">Матч</th>
+              <th className="ctColRes">Рез.</th>
               {users.map((u) => (
                 <th key={u.user_id} className="ctUserHead">
-                  {u.login}
-                  <span style={{ opacity: 0.7, fontWeight: 800 }}>
-                    {" "}
+                  {u.login}{" "}
+                  <span style={{ opacity: 0.7, fontWeight: 900 }}>
                     ({formatPts(totalByUser.get(u.user_id) ?? 0)})
                   </span>
                 </th>
@@ -243,51 +220,32 @@ export default async function DashboardCurrentTablePage() {
 
           <tbody>
             {matches.map((m) => {
-              const date = m.kickoff_at
-                ? new Date(m.kickoff_at).toLocaleDateString("ru-RU")
-                : "—";
-
+              const date = m.kickoff_at ? new Date(m.kickoff_at).toLocaleDateString("ru-RU") : "—";
               const res =
-                m.home_score == null || m.away_score == null
-                  ? "—"
-                  : `${m.home_score}:${m.away_score}`;
-
+                m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
               const mid = Number(m.id);
 
               return (
                 <tr key={m.id}>
-                  <td className="ctSticky ctColDate" style={{ whiteSpace: "nowrap" }}>
-                    {date}
-                  </td>
+                  <td style={{ whiteSpace: "nowrap" }}>{date}</td>
 
-                  <td className="ctSticky ctColMatch">
+                  <td>
                     <div style={{ fontWeight: 900 }}>
                       {teamName(m.home_team)} — {teamName(m.away_team)}
                     </div>
                   </td>
 
-                  <td className="ctSticky ctColRes" style={{ fontWeight: 900, whiteSpace: "nowrap" }}>
-                    {res}
-                  </td>
+                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{res}</td>
 
                   {users.map((u) => {
-                    const predPack = predByMatchUser.get(mid)?.get(u.user_id);
-                    const pr = predPack?.pred ?? { h: null, a: null };
-
-                    const predText =
-                      pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
-
+                    const pr = predByMatchUser.get(mid)?.get(u.user_id)?.pred ?? { h: null, a: null };
+                    const predText = pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
                     const s = scoreByMatchUser.get(mid)?.get(u.user_id);
 
                     return (
                       <td key={u.user_id} className="ctCell">
-                        <span style={{ fontWeight: 900, whiteSpace: "nowrap" }}>
-                          {predText}
-                        </span>
-
-                        {s ? (
-                          <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} />
-                        ) : null}
+                        <span className="predText">{predText}</span>
+                        {s ? <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} /> : null}
                       </td>
                     );
                   })}
@@ -298,7 +256,7 @@ export default async function DashboardCurrentTablePage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 12 }}>
+      <div className="navRow">
         <Link href="/dashboard">← Мои прогнозы</Link>
       </div>
     </main>

@@ -136,3 +136,315 @@
     width: min(92vw, 360px);
   }
 }
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import ResultsEditor from "./results-editor";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+// ✅ самое важное: убираем кэш fetch на уровне страницы
+export const fetchCache = "force-no-store";
+
+type TeamObj = { name: string } | { name: string }[] | null;
+
+type MatchRow = {
+  id: number;
+  stage_match_no?: number | null;
+  kickoff_at?: string | null;
+  status?: string | null;
+  home_score?: number | null;
+  away_score?: number | null;
+  home_team?: TeamObj;
+  away_team?: TeamObj;
+};
+
+export default async function AdminResultsPage() {
+  const supabase = await createClient();
+
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) redirect("/");
+
+  const { data: stage } = await supabase
+    .from("stages")
+    .select("id,name,status")
+    .eq("is_current", true)
+    .maybeSingle();
+
+  if (!stage?.id) {
+    return (
+      <main className="userMain hasBottomBar">
+        <h1 style={{ fontWeight: 900, margin: 0 }}>Результаты</h1>
+        <p style={{ marginTop: 10, opacity: 0.8 }}>Текущий этап не выбран.</p>
+      </main>
+    );
+  }
+
+  // ✅ сортировка: сначала stage_match_no, затем kickoff
+  const { data: matchesRaw, error } = await supabase
+    .from("matches")
+    .select(
+      `
+      id,
+      stage_match_no,
+      kickoff_at,
+      status,
+      home_score,
+      away_score,
+      home_team:teams!matches_home_team_id_fkey ( name ),
+      away_team:teams!matches_away_team_id_fkey ( name )
+    `
+    )
+    .eq("stage_id", stage.id)
+    .order("stage_match_no", { ascending: true, nullsFirst: false })
+    .order("kickoff_at", { ascending: true });
+
+  if (error) {
+    return (
+      <main className="userMain hasBottomBar" style={{ color: "crimson" }}>
+        Ошибка загрузки матчей: {error.message}
+      </main>
+    );
+  }
+
+  const matches = (matchesRaw ?? []) as unknown as MatchRow[];
+
+  return (
+    <main className="userMain hasBottomBar">
+      <h1 style={{ fontWeight: 900, margin: 0 }}>Результаты</h1>
+      <div style={{ marginTop: 6, opacity: 0.8 }}>
+        Этап: <b>{stage.name ?? `#${stage.id}`}</b>
+        {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <ResultsEditor stageId={Number(stage.id)} matches={matches} />
+      </div>
+    </main>
+  );
+}
+
+/* ===== Forms / Controls ===== */
+.formCard{
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.formCardHead{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(17,24,39,.02);
+  border-bottom: 1px solid rgba(17,24,39,.08);
+  font-weight: 900;
+}
+
+.alert{
+  margin: 12px 14px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(17,24,39,.12);
+  background: rgba(17,24,39,.03);
+  font-weight: 800;
+}
+.alertErr{
+  border-color: rgba(239,68,68,.25);
+  background: rgba(239,68,68,.08);
+  color: #991b1b;
+}
+
+.cardsGrid{
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.matchCard{
+  border: 1px solid rgba(17,24,39,.10);
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff;
+}
+
+.matchTitle{
+  font-weight: 900;
+}
+
+.matchMeta{
+  margin-top: 6px;
+  color: rgba(17,24,39,.65);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.scoreRow{
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.scoreInput{
+  width: 72px;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(17,24,39,.16);
+  font-weight: 900;
+  text-align: center;
+  outline: none;
+  background: #fff;
+}
+.scoreInput:focus{
+  border-color: rgba(37,99,235,.55);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+}
+
+.scoreSep{
+  font-weight: 900;
+  opacity: .7;
+}
+
+.saveBtn{
+  border: 1px solid rgba(17,24,39,.14);
+  background: #111827;
+  color: #fff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.saveBtn:hover{ background: #0b1220; }
+.saveBtn:disabled{ opacity: .6; cursor: default; }
+
+.saveBtnOk{
+  border-color: rgba(16,185,129,.35);
+  background: rgba(16,185,129,.14);
+  color: #065f46;
+}
+.saveBtnOk:hover{ background: rgba(16,185,129,.20); }
+
+.smallHint{
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(17,24,39,.65);
+}
+
+.inlineErr{
+  color: #b91c1c;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* ===== Pred cell ===== */
+.predCell{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.predInput{
+  width: 52px;
+  padding: 8px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(17,24,39,.16);
+  font-weight: 900;
+  text-align: center;
+  outline: none;
+  background: #fff;
+}
+.predInput:focus{
+  border-color: rgba(37,99,235,.55);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+}
+.predSep{ font-weight: 900; opacity: .7; }
+.predSaving{ opacity: .65; font-weight: 900; }
+/* ===== App Header ===== */
+.appHeader{
+  position: sticky;
+  top: 0;
+  z-index: 300;
+  background: rgba(246,247,251,.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(17,24,39,.10);
+}
+
+.appHeaderInner{
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.appBrand{ display: flex; flex-direction: column; gap: 8px; }
+
+.brandLink{
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  color: #111827;
+  text-decoration: none;
+  font-size: 18px;
+}
+.brandLink:hover{ text-decoration: none; opacity: .9; }
+
+.brandMeta{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.metaPill{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.8);
+  border: 1px solid rgba(17,24,39,.12);
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(17,24,39,.75);
+}
+.metaPill b{ color: #111827; }
+.metaDot{ opacity: .55; }
+
+.appNav{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.navLink{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.85);
+  border: 1px solid rgba(17,24,39,.12);
+  font-weight: 900;
+  color: rgba(17,24,39,.85);
+  text-decoration: none;
+}
+.navLink:hover{
+  background: #fff;
+  text-decoration: none;
+}
+.navActive{
+  border-color: rgba(37,99,235,.28);
+  background: rgba(37,99,235,.12);
+  color: #1d4ed8;
+}
+
+@media (max-width: 760px){
+  .appHeaderInner{ flex-direction: column; align-items: flex-start; }
+  .appNav{ justify-content: flex-start; }
+}

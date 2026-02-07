@@ -14,35 +14,32 @@ export default function PredCellEditable({ matchId, homePred, awayPred, canEdit 
   const [a, setA] = useState(awayPred == null ? "" : String(awayPred));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
 
-  useEffect(() => {
-    setH(homePred == null ? "" : String(homePred));
-  }, [homePred]);
-
-  useEffect(() => {
-    setA(awayPred == null ? "" : String(awayPred));
-  }, [awayPred]);
+  useEffect(() => setH(homePred == null ? "" : String(homePred)), [homePred]);
+  useEffect(() => setA(awayPred == null ? "" : String(awayPred)), [awayPred]);
 
   async function save() {
     if (!canEdit) return;
 
     setError(null);
+    setOk(false);
 
     const hh = h.trim();
     const aa = a.trim();
 
-    // разрешаем пусто-пусто (не сохраняем)
+    // пусто-пусто — считаем “не задано”
     if (hh === "" && aa === "") return;
 
     const home = hh === "" ? null : Number(hh);
     const away = aa === "" ? null : Number(aa);
 
     if (home === null || away === null) {
-      setError("Введите оба значения (например 1 и 0)");
+      setError("Введите оба числа");
       return;
     }
     if (!Number.isInteger(home) || home < 0 || !Number.isInteger(away) || away < 0) {
-      setError("Только целые числа 0+");
+      setError("Только целые 0+");
       return;
     }
 
@@ -62,6 +59,10 @@ export default function PredCellEditable({ matchId, homePred, awayPred, canEdit 
 
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Ошибка сохранения");
+
+      setOk(true);
+      // маленький авто-сброс “ок”
+      setTimeout(() => setOk(false), 900);
     } catch (e: any) {
       setError(e?.message || "Ошибка");
     } finally {
@@ -70,51 +71,34 @@ export default function PredCellEditable({ matchId, homePred, awayPred, canEdit 
   }
 
   if (!canEdit) {
-    return (
-      <span style={{ fontFamily: "monospace" }}>
-        {homePred == null || awayPred == null ? "—" : `${homePred}:${awayPred}`}
-      </span>
-    );
+    return <span className="predText">{homePred == null || awayPred == null ? "—" : `${homePred}:${awayPred}`}</span>;
   }
 
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+    <div className="predCell">
       <input
+        className="predInput"
         value={h}
         onChange={(e) => setH(e.target.value)}
         onBlur={save}
         inputMode="numeric"
         placeholder="0"
         disabled={saving}
-        style={{
-          width: 44,
-          padding: "6px 8px",
-          borderRadius: 10,
-          border: "1px solid #ddd",
-          fontSize: 13,
-          textAlign: "center",
-        }}
       />
-      <span style={{ fontWeight: 900, opacity: 0.7 }}>:</span>
+      <span className="predSep">:</span>
       <input
+        className="predInput"
         value={a}
         onChange={(e) => setA(e.target.value)}
         onBlur={save}
         inputMode="numeric"
         placeholder="0"
         disabled={saving}
-        style={{
-          width: 44,
-          padding: "6px 8px",
-          borderRadius: 10,
-          border: "1px solid #ddd",
-          fontSize: 13,
-          textAlign: "center",
-        }}
       />
 
-      {saving ? <span style={{ opacity: 0.6 }}>…</span> : null}
-      {error ? <span style={{ marginLeft: 6, color: "crimson", fontSize: 12 }}>{error}</span> : null}
+      {saving ? <span className="predSaving">…</span> : null}
+      {ok ? <span className="smallHint">✓</span> : null}
+      {error ? <span className="inlineErr">{error}</span> : null}
     </div>
   );
 }

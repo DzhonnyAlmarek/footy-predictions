@@ -56,7 +56,7 @@ function daysTo(kickoffIso: string | null): number | null {
 function warnKind(days: number | null): "none" | "soon" | "urgent" {
   if (days == null) return "none";
   if (days > 5) return "none";
-  if (days > 2) return "soon";   // 2..5
+  if (days > 2) return "soon"; // 2..5
   if (days > 1) return "urgent"; // 1..2
   return "urgent";
 }
@@ -85,11 +85,11 @@ export default async function DashboardPage() {
 
   if (!stage) {
     return (
-      <main className="userMain hasBottomBar">
-        <h1 style={{ fontSize: 28, fontWeight: 900 }}>Мои прогнозы</h1>
-        <p style={{ marginTop: 8, opacity: 0.8 }}>Текущий этап не выбран.</p>
-        <div style={{ marginTop: 14 }}>
-          <Link href="/" style={{ textDecoration: "underline" }}>На главную</Link>
+      <main className="page">
+        <h1>Мои прогнозы</h1>
+        <p className="pageMeta">Текущий этап не выбран.</p>
+        <div className="navRow">
+          <Link href="/">На главную</Link>
         </div>
       </main>
     );
@@ -112,8 +112,11 @@ export default async function DashboardPage() {
 
   if (matchesErr) {
     return (
-      <main className="userMain hasBottomBar" style={{ color: "crimson" }}>
-        Ошибка matches: {matchesErr.message}
+      <main className="page">
+        <h1>Мои прогнозы</h1>
+        <p style={{ color: "crimson", marginTop: 10, fontWeight: 800 }}>
+          Ошибка matches: {matchesErr.message}
+        </p>
       </main>
     );
   }
@@ -129,8 +132,11 @@ export default async function DashboardPage() {
 
   if (predsErr) {
     return (
-      <main className="userMain hasBottomBar" style={{ color: "crimson" }}>
-        Ошибка predictions: {predsErr.message}
+      <main className="page">
+        <h1>Мои прогнозы</h1>
+        <p style={{ color: "crimson", marginTop: 10, fontWeight: 800 }}>
+          Ошибка predictions: {predsErr.message}
+        </p>
       </main>
     );
   }
@@ -144,85 +150,83 @@ export default async function DashboardPage() {
   }
 
   return (
-    <main className="userMain hasBottomBar">
-      <header style={{ marginBottom: 14 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Мои прогнозы</h1>
-        <div style={{ marginTop: 6, opacity: 0.8 }}>
-          Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-          {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
-          <span style={{ opacity: 0.65 }}> • {fpLogin}</span>
+    <main className="page">
+      <h1>Мои прогнозы</h1>
+      <div className="pageMeta">
+        Этап: <b>{stage.name ?? `#${stage.id}`}</b>
+        {stage.status ? <span> • {stage.status}</span> : null}
+        <span> • {fpLogin}</span>
+      </div>
+
+      {!matches || matches.length === 0 ? (
+        <div className="card" style={{ marginTop: 14, padding: 14 }}>
+          Матчей нет.
         </div>
-      </header>
+      ) : (
+        <div className="tableWrap">
+          <table className="table userPredTable">
+            <thead>
+              <tr>
+                <th style={{ width: 54 }}>#</th>
+                <th className="colDate">Дата</th>
+                <th className="colMatch">Матч</th>
+                <th className="colPred">Прогноз</th>
+              </tr>
+            </thead>
 
-      <section>
-        {!matches || matches.length === 0 ? (
-          <p style={{ marginTop: 14 }}>Матчей нет.</p>
-        ) : (
-          <div className="tableWrap">
-            <table className="table tableFixed userPredTable">
-              <thead>
-                <tr>
-                  <th style={{ width: 54 }}>#</th>
-                  <th className="colDate">Дата</th>
-                  <th className="colMatch">Матч</th>
-                  <th className="colPred">Прогноз</th>
-                </tr>
-              </thead>
+            <tbody>
+              {matches.map((m) => {
+                const kickoffStr = m.kickoff_at
+                  ? new Date(m.kickoff_at).toLocaleDateString("ru-RU", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "—";
 
-              <tbody>
-                {matches.map((m) => {
-                  const kickoffStr = m.kickoff_at
-                    ? new Date(m.kickoff_at).toLocaleDateString("ru-RU", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })
-                    : "—";
+                const d = daysTo(m.kickoff_at);
+                const kind = warnKind(d);
 
-                  const d = daysTo(m.kickoff_at);
-                  const kind = warnKind(d);
+                const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
-                  const pr = predByMatch.get(m.id) ?? { h: null, a: null };
+                return (
+                  <tr
+                    key={m.id}
+                    className={kind === "urgent" ? "rowUrgent" : kind === "soon" ? "rowSoon" : ""}
+                  >
+                    <td style={{ opacity: 0.9, fontWeight: 900 }}>{m.stage_match_no ?? "—"}</td>
 
-                  return (
-                    <tr
-                      key={m.id}
-                      className={kind === "urgent" ? "rowUrgent" : kind === "soon" ? "rowSoon" : ""}
-                    >
-                      <td style={{ opacity: 0.8, fontWeight: 900 }}>
-                        {m.stage_match_no ?? "—"}
-                      </td>
+                    <td style={{ whiteSpace: "nowrap" }}>{kickoffStr}</td>
 
-                      <td style={{ whiteSpace: "nowrap" }}>{kickoffStr}</td>
+                    <td>
+                      <div style={{ fontWeight: 900 }}>
+                        {teamName(m.home_team)} — {teamName(m.away_team)}
+                      </div>
 
-                      <td>
-                        <div style={{ fontWeight: 900 }}>
-                          {teamName(m.home_team)} — {teamName(m.away_team)}
-                        </div>
+                      {kind !== "none" ? <div className="rowWarn">⚠️ Скоро матч — сделай прогноз</div> : null}
+                    </td>
 
-                        {kind !== "none" ? (
-                          <div className="rowWarn">
-                            ⚠️ Скоро матч — сделай прогноз
-                          </div>
-                        ) : null}
-                      </td>
+                    <td>
+                      <PredCellEditable
+                        matchId={Number(m.id)}
+                        homePred={pr.h}
+                        awayPred={pr.a}
+                        canEdit={true}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-                      <td>
-                        <PredCellEditable
-                          matchId={Number(m.id)}
-                          homePred={pr.h}
-                          awayPred={pr.a}
-                          canEdit={true}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <div className="navRow">
+        <Link href="/dashboard/current">Текущая таблица</Link>
+        <Link href="/golden-boot">Золотая бутса</Link>
+        <Link href="/logout">Выйти</Link>
+      </div>
     </main>
   );
 }

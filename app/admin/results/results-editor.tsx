@@ -22,6 +22,20 @@ function teamName(t?: TeamObj) {
   return String(anyT?.name ?? "?");
 }
 
+function fmtDate(iso?: string | null) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
 export default function ResultsEditor(props: {
   stageId: number;
   initialMatches?: MatchRow[];
@@ -33,7 +47,6 @@ export default function ResultsEditor(props: {
     ? props.initialMatches
     : [];
 
-  // ✅ на всякий случай отсортируем и на клиенте
   const sorted = useMemo(() => {
     return [...matches].sort((a, b) => {
       const an = a.stage_match_no ?? 1e9;
@@ -59,8 +72,15 @@ export default function ResultsEditor(props: {
     return init;
   });
 
-  // ✅ статус кнопки “Сохранено успешно” по матчам
   const [okSaved, setOkSaved] = useState<Record<number, boolean>>({});
+
+  function setVal(matchId: number, patch: Partial<{ h: string; a: string }>) {
+    setVals((p) => ({
+      ...p,
+      [matchId]: { ...(p[matchId] ?? { h: "", a: "" }), ...patch },
+    }));
+    setOkSaved((p) => ({ ...p, [matchId]: false }));
+  }
 
   async function save(matchId: number) {
     setGlobalMsg(null);
@@ -73,8 +93,14 @@ export default function ResultsEditor(props: {
     const home = h === "" ? null : Number(h);
     const away = a === "" ? null : Number(a);
 
-    if (home !== null && (!Number.isFinite(home) || home < 0)) return setGlobalMsg("Некорректный счёт хозяев");
-    if (away !== null && (!Number.isFinite(away) || away < 0)) return setGlobalMsg("Некорректный счёт гостей");
+    if (home !== null && (!Number.isFinite(home) || home < 0)) {
+      setGlobalMsg("Некорректный счёт хозяев");
+      return;
+    }
+    if (away !== null && (!Number.isFinite(away) || away < 0)) {
+      setGlobalMsg("Некорректный счёт гостей");
+      return;
+    }
 
     setSaving(matchId);
     try {
@@ -86,7 +112,7 @@ export default function ResultsEditor(props: {
           id: matchId,
           home_score: home,
           away_score: away,
-          status: "finished", // можно убрать/изменить если не хочешь трогать status
+          status: "finished",
         }),
         cache: "no-store",
       });
@@ -106,18 +132,17 @@ export default function ResultsEditor(props: {
   }
 
   return (
-    <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, overflow: "hidden" }}>
-      <div style={{ padding: 12, background: "#fafafa", fontWeight: 900 }}>
-        Матчи: {sorted.length}
+    <div className="formCard">
+      <div className="formCardHead">
+        <span>Матчи: {sorted.length}</span>
+        <span className="smallHint">Сохранение пересчитает очки автоматически</span>
       </div>
 
       {globalMsg ? (
-        <div style={{ padding: 12, color: globalMsg.includes("✅") ? "inherit" : "crimson", fontWeight: 800 }}>
-          {globalMsg}
-        </div>
+        <div className={`alert ${globalMsg.includes("✅") ? "" : "alertErr"}`}>{globalMsg}</div>
       ) : null}
 
-      <div style={{ display: "grid", gap: 10, padding: 12 }}>
+      <div className="cardsGrid">
         {sorted.map((m) => {
           const home = teamName(m.home_team);
           const away = teamName(m.away_team);
@@ -125,54 +150,44 @@ export default function ResultsEditor(props: {
           const saved = !!okSaved[m.id];
 
           return (
-            <div key={m.id} style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
-              <div style={{ fontWeight: 900 }}>
-                {m.stage_match_no ? <span style={{ opacity: 0.8 }}>{m.stage_match_no}. </span> : null}
+            <div key={m.id} className="matchCard">
+              <div className="matchTitle">
+                {m.stage_match_no ? <span style={{ opacity: 0.75 }}>{m.stage_match_no}. </span> : null}
                 {home} — {away}
               </div>
 
-              <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <div className="matchMeta">
+                Дата: <b>{fmtDate(m.kickoff_at)}</b>
+                {m.status ? <span> • статус: <b>{m.status}</b></span> : null}
+              </div>
+
+              <div className="scoreRow">
                 <input
+                  className="scoreInput"
                   value={v.h}
-                  onChange={(e) =>
-                    setVals((p) => ({
-                      ...p,
-                      [m.id]: { ...(p[m.id] ?? { h: "", a: "" }), h: e.target.value },
-                    }))
-                  }
+                  onChange={(e) => setVal(m.id, { h: e.target.value })}
                   placeholder="х"
-                  style={{ width: 70, padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
+                  inputMode="numeric"
                 />
-                <span style={{ fontWeight: 900 }}>:</span>
+                <span className="scoreSep">:</span>
                 <input
+                  className="scoreInput"
                   value={v.a}
-                  onChange={(e) =>
-                    setVals((p) => ({
-                      ...p,
-                      [m.id]: { ...(p[m.id] ?? { h: "", a: "" }), a: e.target.value },
-                    }))
-                  }
+                  onChange={(e) => setVal(m.id, { a: e.target.value })}
                   placeholder="г"
-                  style={{ width: 70, padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
+                  inputMode="numeric"
                 />
 
                 <button
                   type="button"
                   onClick={() => save(m.id)}
                   disabled={saving === m.id}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid",
-                    borderColor: saved ? "rgba(16,185,129,0.7)" : "#111",
-                    background: saved ? "rgba(16,185,129,0.15)" : "#111",
-                    color: saved ? "#065f46" : "#fff",
-                    fontWeight: 900,
-                    cursor: "pointer",
-                  }}
+                  className={`saveBtn ${saved ? "saveBtnOk" : ""}`}
                 >
-                  {saving === m.id ? "..." : saved ? "Сохранено успешно" : "Сохранить"}
+                  {saving === m.id ? "..." : saved ? "Сохранено" : "Сохранить"}
                 </button>
+
+                {!saved ? <span className="smallHint">Enter не нужен — просто нажми “Сохранить”</span> : null}
               </div>
             </div>
           );
