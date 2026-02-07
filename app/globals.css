@@ -9,9 +9,6 @@
   --line: rgba(17,24,39,.12);
   --shadow: 0 10px 30px rgba(17,24,39,.08);
   --r: 16px;
-
-  /* фикс ширины колонок участников в текущей таблице */
-  --ct-col: 120px;
 }
 
 * { box-sizing: border-box; }
@@ -35,47 +32,63 @@ h1{ font-size: 32px; line-height: 1.15; margin: 0; }
 
 p{ margin: 0; color: var(--muted); }
 
-/* =========================================================
-   Root wrapper (опционально, но полезно)
-========================================================= */
-.appRoot{ min-height: 100vh; }
+/* root wrapper */
+.appRoot{
+  min-height: 100vh;
+}
 
 /* =========================================================
-   SiteHeader (страница логина/титульная)
-   -> СТРОГО по центру
+   Login Site Header (landing)
 ========================================================= */
 .siteHeader{
-  position: sticky;
-  top: 0;
-  z-index: 250;
+  border-bottom: 1px solid rgba(17,24,39,.10);
   background: rgba(246,247,251,.86);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(17,24,39,.10);
 }
 
 .siteHeaderInner{
   max-width: 1200px;
   margin: 0 auto;
-  padding: 14px 16px;
+  padding: 22px 16px;
   display: flex;
-  justify-content: center; /* ✅ центр */
+  flex-direction: column;
   align-items: center;
+  gap: 6px;
+  text-align: center;
 }
 
 .clubTitleLink{
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  color: #111827;           /* ✅ не синий */
-  text-decoration: none;    /* ✅ не подчёркнутый */
+  text-decoration: none;
+  color: var(--text);
   font-weight: 950;
   letter-spacing: -0.02em;
+  font-size: 24px;
 }
-.clubTitleLink:hover{ text-decoration: none; opacity: .95; }
+.clubTitleLink:hover{ text-decoration: none; opacity: .92; }
 
-.clubIcon{ font-size: 18px; line-height: 1; }
-.clubTitleText{ font-size: 18px; }
-.clubTitleText span{ opacity: .9; }
+.clubIcon{
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(37,99,235,.12);
+  border: 1px solid rgba(37,99,235,.18);
+  font-size: 18px;
+}
+
+.clubTitleText span{
+  opacity: .92;
+}
+
+.clubSubTitle{
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(17,24,39,.60);
+}
 
 /* =========================================================
    Containers
@@ -100,8 +113,12 @@ p{ margin: 0; color: var(--muted); }
   box-shadow: var(--shadow);
 }
 
+.cardBody{
+  padding: 16px;
+}
+
 /* =========================================================
-   App Header
+   App Header (user/admin)
 ========================================================= */
 .appHeader{
   position: sticky;
@@ -205,9 +222,6 @@ p{ margin: 0; color: var(--muted); }
   min-width: 900px;
 }
 
-/* ✅ включаем фиксированную раскладку только там, где нужно */
-.tableFixed{ table-layout: fixed; }
-
 .table thead th{
   position: sticky;
   top: 0;
@@ -233,41 +247,33 @@ p{ margin: 0; color: var(--muted); }
 .table tbody tr:hover td{ background: rgba(37,99,235,.06); }
 
 /* =========================================================
-   Current-table: фиксируем ширины колонок участников
-   и убираем "гуляние"
+   Current table: FIXED columns (no "jumping")
+   (то самое “2 строки” по смыслу: fixed layout + одинаковая ширина)
 ========================================================= */
+.currentTable{ table-layout: fixed; }
+.currentTable .ctUserHead,
+.currentTable .ctCell{ width: 132px; }
+
+/* current-table alignment */
+.ctCell{ position: relative; overflow: visible; text-align: left; }
 .ctUserHead{
-  width: var(--ct-col);
-  min-width: var(--ct-col);
-  max-width: var(--ct-col);
   font-weight: 900;
-  text-align: left; /* ✅ как просил — логины и колонки слева */
+  text-align: left;
   vertical-align: bottom;
   padding: 12px 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-
-.ctUserHead span{
+.ctUserHead .ctTotal{
   display: block;
   margin-top: 3px;
   font-weight: 900;
   opacity: .72;
 }
 
-.ctCell{
-  width: var(--ct-col);
-  min-width: var(--ct-col);
-  max-width: var(--ct-col);
-  position: relative;
-  overflow: visible;
-  text-align: left; /* ✅ прогноз + (баллы) слева */
-}
-
 .predText{
-  display: inline-block;
   font-weight: 900;
   white-space: nowrap;
+  margin-right: 6px;
+  display: inline-block;
 }
 
 /* =========================================================
@@ -280,7 +286,7 @@ p{ margin: 0; color: var(--muted); }
 }
 
 .predInput{
-  width: 34px; /* ✅ уже */
+  width: 36px;
   padding: 6px 6px;
   border-radius: 10px;
   border: 1px solid rgba(17,24,39,.16);
@@ -305,7 +311,8 @@ p{ margin: 0; color: var(--muted); }
   font-size: 12px;
 }
 
-.userPredTable .colPred{ width: 140px; } /* ✅ чуть уже */
+/* userPredTable sizing */
+.userPredTable .colPred{ width: 140px; }
 
 /* =========================================================
    Row warnings (soon/urgent)

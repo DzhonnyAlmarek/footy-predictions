@@ -3,46 +3,44 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function Tile({
-  href,
-  title,
-  desc,
-}: {
-  href: string;
-  title: string;
-  desc: string;
-}) {
+function Tile(props: { href: string; title: string; desc: string }) {
   return (
     <Link
-      href={href}
+      href={props.href}
       style={{
-        border: "1px solid rgba(0,0,0,0.10)",
-        borderRadius: 14,
+        border: "1px solid rgba(17,24,39,.12)",
+        borderRadius: 16,
         padding: 16,
         display: "block",
         textDecoration: "none",
         background: "#fff",
+        boxShadow: "0 10px 30px rgba(17,24,39,.06)",
+        color: "var(--text)",
       }}
     >
-      <div style={{ fontWeight: 900, fontSize: 18 }}>{title}</div>
-      <div style={{ marginTop: 6, opacity: 0.75 }}>{desc}</div>
+      <div style={{ fontWeight: 950, fontSize: 18, letterSpacing: "-0.02em" }}>
+        {props.title}
+      </div>
+      <div style={{ marginTop: 6, opacity: 0.7, fontWeight: 800 }}>
+        {props.desc}
+      </div>
     </Link>
   );
 }
 
 export default async function AdminHomePage() {
   return (
-    <div style={{ maxWidth: 920, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 34, fontWeight: 900, margin: "8px 0 0" }}>
+    <main className="page">
+      <h1 style={{ fontSize: 34, fontWeight: 950, margin: "8px 0 0" }}>
         Админ-панель
       </h1>
-      <div style={{ marginTop: 8, opacity: 0.75 }}>Выберите раздел</div>
+      <div className="pageMeta">Выберите раздел</div>
 
-      <div style={{ marginTop: 16, display: "grid", gap: 14 }}>
+      <div style={{ marginTop: 16, display: "grid", gap: 14, maxWidth: 920 }}>
         <Tile
           href="/admin/current-table"
           title="Текущая таблица"
-          desc="Этап → туры → матчи + прогнозы участников"
+          desc="Этап → матчи + прогнозы участников"
         />
         <Tile
           href="/admin/stages"
@@ -65,6 +63,6 @@ export default async function AdminHomePage() {
           desc="Создать / редактировать / удалить пользователей, сброс пароля"
         />
       </div>
-    </div>
+    </main>
   );
 }

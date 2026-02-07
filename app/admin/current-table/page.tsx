@@ -3,14 +3,10 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
-import PointsPopover, {
-  type PointsBreakdown as PtsBD,
-} from "@/app/_components/points-popover";
+import PointsPopover, { type PointsBreakdown as PtsBD } from "@/app/_components/points-popover";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-/* ================= utils ================= */
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -34,8 +30,6 @@ function service() {
   );
 }
 
-/* ================= types ================= */
-
 type TeamMaybeArray = { name: string } | { name: string }[] | null;
 
 type MatchRow = {
@@ -49,7 +43,6 @@ type MatchRow = {
 };
 
 type UserRow = { login: string; user_id: string };
-
 type Pred = { h: number | null; a: number | null };
 
 type ScoreRow = {
@@ -72,8 +65,6 @@ type ScoreRow = {
   pred_text: string;
   res_text: string;
 };
-
-/* ================= helpers ================= */
 
 function teamName(t: TeamMaybeArray): string {
   if (!t) return "?";
@@ -109,14 +100,9 @@ function toPtsBD(s: ScoreRow): PtsBD {
   };
 }
 
-/* ================= page ================= */
-
 export default async function AdminCurrentTablePage() {
   const cs = await cookies();
-  const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "")
-    .trim()
-    .toUpperCase();
-
+  const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
   if (!fpLogin) redirect("/");
   if (fpLogin !== "ADMIN") redirect("/dashboard");
 
@@ -166,7 +152,7 @@ export default async function AdminCurrentTablePage() {
 
   const { data: predsRaw } = await sb
     .from("predictions")
-    .select("match_id,user_id,home_pred,away_pred")
+    .select("id,match_id,user_id,home_pred,away_pred")
     .in("match_id", matchIds)
     .in("user_id", userIds);
 
@@ -202,12 +188,7 @@ export default async function AdminCurrentTablePage() {
     const mid = Number(m.id);
     for (const u of users) {
       const s = scoreByMatchUser.get(mid)?.get(u.user_id);
-      if (s) {
-        totalByUser.set(
-          u.user_id,
-          round2((totalByUser.get(u.user_id) ?? 0) + Number(s.total))
-        );
-      }
+      if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.total)));
     }
   }
 
@@ -215,22 +196,22 @@ export default async function AdminCurrentTablePage() {
     <main className="page">
       <h1>Текущая таблица (админ)</h1>
       <div className="pageMeta">
-        Этап: <b>{stage.name}</b>
+        Этап: <b>{stage.name ?? `#${stage.id}`}</b>
         {stage.status ? <span> • {stage.status}</span> : null}
       </div>
 
       <div className="tableWrap">
-        <table className="table">
+        <table className="table currentTable">
           <thead>
             <tr>
-              <th style={{ width: 56 }}>№</th>
-              <th>Матч</th>
-              <th style={{ width: 72 }}>Рез.</th>
+              <th style={{ width: 54 }}>№</th>
+              <th style={{ width: 320 }}>Матч</th>
+              <th style={{ width: 70 }}>Рез.</th>
 
               {users.map((u) => (
                 <th key={u.user_id} className="ctUserHead">
                   {u.login}
-                  <span>({formatPts(totalByUser.get(u.user_id) ?? 0)})</span>
+                  <span className="ctTotal">({formatPts(totalByUser.get(u.user_id) ?? 0)})</span>
                 </th>
               ))}
             </tr>
@@ -240,15 +221,12 @@ export default async function AdminCurrentTablePage() {
             {matches.map((m, idx) => {
               const no = m.stage_match_no ?? idx + 1;
               const res =
-                m.home_score == null || m.away_score == null
-                  ? "—"
-                  : `${m.home_score}:${m.away_score}`;
-
+                m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
               const mid = Number(m.id);
 
               return (
                 <tr key={m.id}>
-                  <td style={{ fontWeight: 900 }}>{no}</td>
+                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{no}</td>
 
                   <td>
                     <div style={{ fontWeight: 900 }}>
@@ -256,37 +234,17 @@ export default async function AdminCurrentTablePage() {
                     </div>
                   </td>
 
-                  <td style={{ fontWeight: 900 }}>{res}</td>
+                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{res}</td>
 
                   {users.map((u) => {
-                    const pr =
-                      predByMatchUser.get(mid)?.get(u.user_id) ?? {
-                        h: null,
-                        a: null,
-                      };
-
-                    const predText =
-                      pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
-
+                    const pr = predByMatchUser.get(mid)?.get(u.user_id) ?? { h: null, a: null };
+                    const predText = pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
                     const s = scoreByMatchUser.get(mid)?.get(u.user_id);
 
                     return (
                       <td key={u.user_id} className="ctCell">
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          <span style={{ fontWeight: 900 }}>{predText}</span>
-                          {s ? (
-                            <PointsPopover
-                              pts={Number(s.total)}
-                              breakdown={toPtsBD(s)}
-                            />
-                          ) : null}
-                        </div>
+                        <span className="predText">{predText}</span>
+                        {s ? <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} /> : null}
                       </td>
                     );
                   })}
@@ -298,7 +256,7 @@ export default async function AdminCurrentTablePage() {
       </div>
 
       <div className="navRow">
-        <Link href="/admin/results">Результаты</Link>
+        <Link href="/admin/results">Рез-ты</Link>
         <Link href="/admin/users">Юзеры</Link>
         <Link href="/logout">Выйти</Link>
       </div>

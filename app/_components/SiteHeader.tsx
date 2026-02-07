@@ -12,6 +12,8 @@ export default function SiteHeader() {
             Клуб <span>им. А.Н. Мурашева</span>
           </span>
         </Link>
+
+        <div className="clubSubTitle">Прогнозы • таблицы • рейтинги</div>
       </div>
     </header>
   );
