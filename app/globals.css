@@ -388,3 +388,60 @@ p{ margin: 0; color: var(--muted); }
   color: #991b1b;
   font-weight: 900;
 }
+/* =========================================================
+   Auth page (login)
+========================================================= */
+.authCenter{
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background: var(--bg);
+}
+
+.authWrap{
+  width: 100%;
+  max-width: 460px;
+  text-align: center;
+}
+
+.authHead{
+  margin-bottom: 18px;
+}
+
+.authTitle{
+  margin: 0;
+  font-size: 44px;
+  line-height: 1.05;
+  font-weight: 950;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+
+.authSub{
+  margin-top: 10px;
+  font-weight: 800;
+  color: rgba(15,23,42,.6);
+}
+
+.authCard{
+  margin-top: 16px;
+  background: #fff;
+  border: 1px solid rgba(17,24,39,.12);
+  border-radius: 18px;
+  box-shadow: 0 14px 40px rgba(17,24,39,.10);
+  padding: 18px;
+  text-align: left;
+}
+
+.authHint{
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(17,24,39,.65);
+}
+
+@media (max-width: 520px){
+  .authTitle{ font-size: 34px; }
+}
+

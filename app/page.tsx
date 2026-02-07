@@ -1,35 +1,29 @@
-import SiteHeader from "./_components/SiteHeader";
 import LoginWidget from "./login-widget";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function HomePage() {
   return (
-    <>
-      <SiteHeader />
+    <main className="authCenter">
+      <div className="authWrap">
+        {/* Название сайта — строго по центру */}
+        <div className="authHead">
+          <h1 className="authTitle">Клуб им. А.Н. Мурашева</h1>
+          <div className="authSub">
+            Прогнозы • таблицы • рейтинги
+          </div>
+        </div>
 
-      <main
-        style={{
-          maxWidth: 420,
-          margin: "0 auto",
-          padding: "32px 16px", // 32 сверху/снизу, 16 по бокам
-        }}
-      >
-        <div className="card">
-          <div
-            style={{
-              marginBottom: 16, // строго по сетке
-              fontSize: 14,
-              opacity: 0.75,
-              lineHeight: 1.4,
-            }}
-          >
+        {/* Карточка логина */}
+        <div className="authCard">
+          <div className="authHint">
             Выберите логин и введите пароль для входа
           </div>
 
-          <div className="cardBody">
-            <LoginWidget />
-          </div>
+          <LoginWidget />
         </div>
-      </main>
-    </>
+      </div>
+    </main>
   );
 }
