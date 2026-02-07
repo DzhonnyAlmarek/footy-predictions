@@ -1,7 +1,12 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+
 import AppHeader from "@/app/_components/AppHeader";
+import BottomBar from "@/app/_components/BottomBar";
+
+/* ===== utils ===== */
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -25,10 +30,15 @@ function service() {
   );
 }
 
+/* ===== layout ===== */
+
 export default async function UserLayout({ children }: { children: ReactNode }) {
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const login = decodeMaybe(rawLogin).trim().toUpperCase();
+
+  // если нет логина — на главную (авторизация)
+  if (!login) redirect("/");
 
   const sb = service();
   const { data: stage } = await sb
@@ -49,12 +59,16 @@ export default async function UserLayout({ children }: { children: ReactNode }) 
     <>
       <AppHeader
         title="Клуб им. А.Н. Мурашева"
-        login={login || undefined}
+        login={login}
         stageName={stage?.name ?? null}
         stageStatus={stage?.status ?? null}
         nav={nav}
       />
-      {children}
+
+      {/* Важно: hasBottomBar, чтобы контент не залезал под BottomBar */}
+      <div className="hasBottomBar">{children}</div>
+
+      <BottomBar variant="user" />
     </>
   );
 }
