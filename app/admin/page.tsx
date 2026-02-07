@@ -50,7 +50,7 @@ export default async function AdminHomePage() {
         <Tile
           href="/admin/results"
           title="Результаты"
-          desc="Ввод результатов и начисление очков"
+          desc="Ввод результатов"
         />
         <Tile
           href="/admin/teams"

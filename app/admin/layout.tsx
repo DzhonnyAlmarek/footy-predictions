@@ -43,7 +43,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     { href: "/admin/current-table", label: "Таблица" },
     { href: "/admin/results", label: "Результаты" },
     { href: "/admin/stages", label: "Этапы" },
-    { href: "/admin/users", label: "Юзеры" },
+    { href: "/admin/users", label: "Участники" },
     { href: "/logout", label: "Выйти" },
   ];
 

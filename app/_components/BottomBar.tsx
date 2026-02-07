@@ -11,16 +11,16 @@ type Item = {
 };
 
 const userItems: Item[] = [
-  { href: "/dashboard", label: "Мои", icon: "✍️" },
-  { href: "/dashboard/current", label: "Текущая", icon: "📊" },
-  { href: "/golden-boot", label: "Бутса", icon: "🥇" },
+  { href: "/dashboard", label: "Мои прогнозы", icon: "✍️" },
+  { href: "/dashboard/current", label: "Текущая таблица", icon: "📊" },
+  { href: "/golden-boot", label: "Золотая бутса", icon: "🥇" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
 
 const adminItems: Item[] = [
   { href: "/admin", label: "Админ", icon: "🛠️" },
-  { href: "/admin/results", label: "Рез-ты", icon: "✅" },
-  { href: "/admin/users", label: "Юзеры", icon: "👥" },
+  { href: "/admin/results", label: "Результаты", icon: "✅" },
+  { href: "/admin/users", label: "Участники", icon: "👥" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
 

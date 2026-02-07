@@ -3,10 +3,14 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
-import PointsPopover, { type PointsBreakdown as PtsBD } from "@/app/_components/points-popover";
+import PointsPopover, {
+  type PointsBreakdown as PtsBD,
+} from "@/app/_components/points-popover";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+/* ================= utils ================= */
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -30,18 +34,26 @@ function service() {
   );
 }
 
+/* ================= types ================= */
+
 type TeamMaybeArray = { name: string } | { name: string }[] | null;
 
 type MatchRow = {
   id: string;
   kickoff_at: string | null;
+  stage_match_no?: number | null; // ✅ добавили
   home_score: number | null;
   away_score: number | null;
+  tour?: { name: string } | { name: string }[] | null;
   home_team: TeamMaybeArray;
   away_team: TeamMaybeArray;
 };
 
-type UserRow = { login: string; user_id: string };
+type UserRow = {
+  login: string;
+  user_id: string;
+};
+
 type Pred = { h: number | null; a: number | null };
 
 type ScoreRow = {
@@ -64,6 +76,8 @@ type ScoreRow = {
   pred_text: string;
   res_text: string;
 };
+
+/* ================= helpers ================= */
 
 function teamName(t: TeamMaybeArray): string {
   if (!t) return "?";
@@ -99,7 +113,10 @@ function toPtsBD(s: ScoreRow): PtsBD {
   };
 }
 
+/* ================= page ================= */
+
 export default async function DashboardCurrentTablePage() {
+  // auth via fp_login
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
@@ -107,6 +124,7 @@ export default async function DashboardCurrentTablePage() {
 
   const sb = service();
 
+  // current stage
   const { data: stage } = await sb
     .from("stages")
     .select("id,name,status")
@@ -122,6 +140,7 @@ export default async function DashboardCurrentTablePage() {
     );
   }
 
+  // users (все участники, кроме ADMIN)
   const { data: usersRaw } = await sb
     .from("login_accounts")
     .select("login,user_id")
@@ -131,22 +150,28 @@ export default async function DashboardCurrentTablePage() {
   const users = (usersRaw ?? []) as UserRow[];
   const userIds = users.map((u) => u.user_id);
 
+  // matches
   const { data: matchesRaw } = await sb
     .from("matches")
     .select(`
       id,
       kickoff_at,
+      stage_match_no,
       home_score,
       away_score,
+      tour:tours ( name ),
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `)
     .eq("stage_id", stage.id)
-    .order("kickoff_at");
+    // ✅ сортировка по номеру матча этапа (если есть), потом по дате
+    .order("stage_match_no", { ascending: true, nullsFirst: false })
+    .order("kickoff_at", { ascending: true });
 
   const matches = (matchesRaw ?? []) as MatchRow[];
   const matchIds = matches.map((m) => Number(m.id));
 
+  // predictions (нужны для отображения predText даже если матч не сыгран)
   const { data: predsRaw } = await sb
     .from("predictions")
     .select("id,match_id,user_id,home_pred,away_pred")
@@ -166,6 +191,7 @@ export default async function DashboardCurrentTablePage() {
     });
   }
 
+  // prediction_scores for these matches/users
   const { data: scoresRaw } = await sb
     .from("prediction_scores")
     .select(
@@ -181,6 +207,7 @@ export default async function DashboardCurrentTablePage() {
     scoreByMatchUser.get(mid)!.set(s.user_id, s as ScoreRow);
   }
 
+  // totals by user from stored scores
   const totalByUser = new Map<string, number>();
   for (const u of users) totalByUser.set(u.user_id, 0);
 
@@ -188,7 +215,12 @@ export default async function DashboardCurrentTablePage() {
     const mid = Number(m.id);
     for (const u of users) {
       const s = scoreByMatchUser.get(mid)?.get(u.user_id);
-      if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.total)));
+      if (s) {
+        totalByUser.set(
+          u.user_id,
+          round2((totalByUser.get(u.user_id) ?? 0) + Number(s.total))
+        );
+      }
     }
   }
 
@@ -201,16 +233,20 @@ export default async function DashboardCurrentTablePage() {
       </div>
 
       <div className="tableWrap">
-        <table className="table" style={{ minWidth: 900 }}>
+        <table className="table" style={{ minWidth: 980 }}>
           <thead>
             <tr>
-              <th className="ctColDate">Дата</th>
-              <th className="ctColMatch">Матч</th>
-              <th className="ctColRes">Рез.</th>
+              {/* ✅ новая колонка № */}
+              <th style={{ width: 54 }}>№</th>
+              <th style={{ width: 110 }}>Дата</th>
+              <th>Матч</th>
+              <th style={{ width: 70 }}>Рез.</th>
+
               {users.map((u) => (
                 <th key={u.user_id} className="ctUserHead">
-                  {u.login}{" "}
-                  <span style={{ opacity: 0.7, fontWeight: 900 }}>
+                  {u.login}
+                  <span style={{ opacity: 0.7, fontWeight: 800 }}>
+                    {" "}
                     ({formatPts(totalByUser.get(u.user_id) ?? 0)})
                   </span>
                 </th>
@@ -219,14 +255,25 @@ export default async function DashboardCurrentTablePage() {
           </thead>
 
           <tbody>
-            {matches.map((m) => {
-              const date = m.kickoff_at ? new Date(m.kickoff_at).toLocaleDateString("ru-RU") : "—";
+            {matches.map((m, idx) => {
+              const date = m.kickoff_at
+                ? new Date(m.kickoff_at).toLocaleDateString("ru-RU")
+                : "—";
+
+              const no = m.stage_match_no ?? idx + 1; // ✅ номер матча этапа
+
               const res =
-                m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
+                m.home_score == null || m.away_score == null
+                  ? "—"
+                  : `${m.home_score}:${m.away_score}`;
+
               const mid = Number(m.id);
 
               return (
                 <tr key={m.id}>
+                  {/* ✅ № */}
+                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{no}</td>
+
                   <td style={{ whiteSpace: "nowrap" }}>{date}</td>
 
                   <td>
@@ -238,14 +285,20 @@ export default async function DashboardCurrentTablePage() {
                   <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{res}</td>
 
                   {users.map((u) => {
-                    const pr = predByMatchUser.get(mid)?.get(u.user_id)?.pred ?? { h: null, a: null };
-                    const predText = pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
+                    const predPack = predByMatchUser.get(mid)?.get(u.user_id);
+                    const pr = predPack?.pred ?? { h: null, a: null };
+
+                    const predText =
+                      pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
+
                     const s = scoreByMatchUser.get(mid)?.get(u.user_id);
 
                     return (
                       <td key={u.user_id} className="ctCell">
                         <span className="predText">{predText}</span>
-                        {s ? <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} /> : null}
+                        {s ? (
+                          <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} />
+                        ) : null}
                       </td>
                     );
                   })}
