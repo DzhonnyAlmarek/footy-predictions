@@ -9,12 +9,13 @@
   --line: rgba(17,24,39,.12);
   --shadow: 0 10px 30px rgba(17,24,39,.08);
   --r: 16px;
-  --brand: #0f172a;
-  --accent: #2563eb;
+
+  /* фикс ширины колонок участников в текущей таблице */
+  --ct-col: 120px;
 }
 
-*{ box-sizing: border-box; }
-html, body{ height: 100%; }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
 
 body{
   margin: 0;
@@ -22,11 +23,59 @@ body{
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial,
     "Apple Color Emoji","Segoe UI Emoji";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* links */
-a{ color: var(--accent); text-decoration: none; }
+a{ color: #2563eb; text-decoration: none; }
 a:hover{ text-decoration: underline; }
+
+h1, h2, h3{ letter-spacing: -0.02em; }
+h1{ font-size: 32px; line-height: 1.15; margin: 0; }
+
+p{ margin: 0; color: var(--muted); }
+
+/* =========================================================
+   Root wrapper (опционально, но полезно)
+========================================================= */
+.appRoot{ min-height: 100vh; }
+
+/* =========================================================
+   SiteHeader (страница логина/титульная)
+   -> СТРОГО по центру
+========================================================= */
+.siteHeader{
+  position: sticky;
+  top: 0;
+  z-index: 250;
+  background: rgba(246,247,251,.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(17,24,39,.10);
+}
+
+.siteHeaderInner{
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: center; /* ✅ центр */
+  align-items: center;
+}
+
+.clubTitleLink{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #111827;           /* ✅ не синий */
+  text-decoration: none;    /* ✅ не подчёркнутый */
+  font-weight: 950;
+  letter-spacing: -0.02em;
+}
+.clubTitleLink:hover{ text-decoration: none; opacity: .95; }
+
+.clubIcon{ font-size: 18px; line-height: 1; }
+.clubTitleText{ font-size: 18px; }
+.clubTitleText span{ opacity: .9; }
 
 /* =========================================================
    Containers
@@ -44,9 +93,6 @@ a:hover{ text-decoration: underline; }
   color: rgba(17,24,39,.68);
 }
 
-/* =========================================================
-   Cards
-========================================================= */
 .card{
   background: var(--card);
   border: 1px solid var(--line);
@@ -55,7 +101,93 @@ a:hover{ text-decoration: underline; }
 }
 
 /* =========================================================
-   Tables (FIXED layout)
+   App Header
+========================================================= */
+.appHeader{
+  position: sticky;
+  top: 0;
+  z-index: 300;
+  background: rgba(246,247,251,.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(17,24,39,.10);
+}
+
+.appHeaderInner{
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.appBrand{ display: flex; flex-direction: column; gap: 8px; }
+
+.brandLink{
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  color: #111827;
+  text-decoration: none;
+  font-size: 18px;
+}
+.brandLink:hover{ opacity: .9; text-decoration: none; }
+
+.brandMeta{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.metaPill{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.8);
+  border: 1px solid rgba(17,24,39,.12);
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(17,24,39,.75);
+}
+.metaPill b{ color: #111827; }
+.metaDot{ opacity: .55; }
+
+.appNav{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.navLink{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.85);
+  border: 1px solid rgba(17,24,39,.12);
+  font-weight: 900;
+  color: rgba(17,24,39,.85);
+  text-decoration: none;
+}
+.navLink:hover{ background: #fff; text-decoration: none; }
+
+.navActive{
+  border-color: rgba(37,99,235,.28);
+  background: rgba(37,99,235,.12);
+  color: #1d4ed8;
+}
+
+@media (max-width: 760px){
+  .appHeaderInner{ flex-direction: column; align-items: flex-start; }
+  .appNav{ justify-content: flex-start; }
+}
+
+/* =========================================================
+   Tables
 ========================================================= */
 .tableWrap{
   margin-top: 14px;
@@ -73,12 +205,14 @@ a:hover{ text-decoration: underline; }
   min-width: 900px;
 }
 
-.tableFixed{
-  table-layout: fixed;
-}
+/* ✅ включаем фиксированную раскладку только там, где нужно */
+.tableFixed{ table-layout: fixed; }
 
 .table thead th{
-  background: rgba(255,255,255,.95);
+  position: sticky;
+  top: 0;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
   font-size: 12px;
   text-transform: uppercase;
@@ -92,43 +226,52 @@ a:hover{ text-decoration: underline; }
 .table tbody td{
   border-bottom: 1px solid rgba(17,24,39,.08);
   padding: 10px 10px;
-  vertical-align: middle;
+  vertical-align: top;
 }
 
-.table tbody tr:hover td{
-  background: rgba(37,99,235,.05);
-}
+.table tbody tr:nth-child(odd) td{ background: rgba(17,24,39,.015); }
+.table tbody tr:hover td{ background: rgba(37,99,235,.06); }
 
-/* fixed columns */
-.ctColDate{ width: 56px; }
-.ctColMatch{ width: 320px; }
-.ctColRes{ width: 76px; }
-
-/* USERS columns — одинаковые */
+/* =========================================================
+   Current-table: фиксируем ширины колонок участников
+   и убираем "гуляние"
+========================================================= */
 .ctUserHead{
-  width: 120px;
-  min-width: 120px;
-  max-width: 120px;
-  text-align: left;
+  width: var(--ct-col);
+  min-width: var(--ct-col);
+  max-width: var(--ct-col);
   font-weight: 900;
+  text-align: left; /* ✅ как просил — логины и колонки слева */
+  vertical-align: bottom;
+  padding: 12px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ctUserHead span{
   display: block;
   margin-top: 3px;
-  opacity: .7;
+  font-weight: 900;
+  opacity: .72;
 }
 
 .ctCell{
-  width: 120px;
-  min-width: 120px;
-  max-width: 120px;
+  width: var(--ct-col);
+  min-width: var(--ct-col);
+  max-width: var(--ct-col);
+  position: relative;
+  overflow: visible;
+  text-align: left; /* ✅ прогноз + (баллы) слева */
+}
+
+.predText{
+  display: inline-block;
+  font-weight: 900;
   white-space: nowrap;
-  text-align: left;
 }
 
 /* =========================================================
-   Prediction inputs (compact)
+   Pred cell (compact)
 ========================================================= */
 .predCell{
   display: inline-flex;
@@ -137,45 +280,118 @@ a:hover{ text-decoration: underline; }
 }
 
 .predInput{
-  width: 36px;
-  padding: 6px;
-  border-radius: 8px;
+  width: 34px; /* ✅ уже */
+  padding: 6px 6px;
+  border-radius: 10px;
   border: 1px solid rgba(17,24,39,.16);
   font-weight: 900;
   text-align: center;
+  outline: none;
+  background: #fff;
   font-size: 13px;
 }
+.predInput:focus{
+  border-color: rgba(37,99,235,.55);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+}
 
-.predSep{ font-weight: 900; opacity: .6; }
+.predSep{ font-weight: 900; opacity: .65; }
+.predSaving{ opacity: .65; font-weight: 900; }
+
+.inlineErr{
+  margin-left: 6px;
+  color: #b91c1c;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.userPredTable .colPred{ width: 140px; } /* ✅ чуть уже */
+
+/* =========================================================
+   Row warnings (soon/urgent)
+========================================================= */
+.rowWarn{
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(180,83,9,.95);
+}
+
+.rowSoon td{ background: rgba(245,158,11,.08) !important; }
+.rowUrgent td{ background: rgba(239,68,68,.08) !important; }
 
 /* =========================================================
    Points Popover
 ========================================================= */
-.ppWrap{ position: relative; display: inline-flex; align-items: center; }
+.ppWrap { position: relative; display: inline-flex; align-items: center; }
 .ppBtn{
   border: 0;
   background: transparent;
   cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 8px;
   font-weight: 900;
-  opacity: .75;
+  opacity: 0.75;
 }
-.ppBtn:hover{ opacity: 1; }
+.ppBtn:hover { background: rgba(0,0,0,0.05); opacity: 1; }
 
 .ppPop{
   position: absolute;
   right: 0;
   top: 120%;
-  width: 300px;
+  min-width: 280px;
+  max-width: 360px;
   background: #fff;
-  border: 1px solid rgba(0,0,0,.14);
+  border: 1px solid rgba(0,0,0,0.14);
   border-radius: 14px;
-  box-shadow: 0 12px 28px rgba(0,0,0,.12);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.12);
   padding: 12px;
   z-index: 200;
 }
 
+.ppTitle{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.ppClose{
+  border: 0;
+  background: rgba(0,0,0,0.04);
+  border-radius: 10px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.ppLine{
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.ppKey{ opacity: 0.75; font-size: 12px; }
+.ppVal{ font-weight: 900; font-size: 13px; text-align: right; }
+.ppHint{ font-weight: 800; opacity: 0.7; font-size: 11px; margin-left: 6px; }
+
+.ppHr{ height: 1px; background: rgba(0,0,0,0.08); margin: 8px 0; }
+.ppTotal{ font-size: 13px; }
+.ppMini{ margin-top: 6px; font-size: 11px; opacity: 0.75; }
+
+.mono{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+@media (max-width: 520px){
+  .ppPop{ right: auto; left: 0; width: min(92vw, 360px); }
+}
+
 /* =========================================================
-   Bottom Bar
+   Bottom bar
 ========================================================= */
 .hasBottomBar{ padding-bottom: 74px; }
 
@@ -184,13 +400,14 @@ a:hover{ text-decoration: underline; }
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(246,247,251,.96);
+  z-index: 400;
+  background: rgba(246,247,251,.92);
+  backdrop-filter: blur(10px);
   border-top: 1px solid rgba(17,24,39,.10);
   display: flex;
   justify-content: center;
-  gap: 10px;
-  padding: 10px;
-  z-index: 400;
+  gap: 8px;
+  padding: 10px 12px;
 }
 
 .bbItem{
@@ -200,101 +417,42 @@ a:hover{ text-decoration: underline; }
   padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid rgba(17,24,39,.12);
-  background: #fff;
+  background: rgba(255,255,255,.88);
   font-weight: 900;
-  color: #111;
+  color: rgba(17,24,39,.85);
+  text-decoration: none;
   min-width: 110px;
   justify-content: center;
 }
 
+.bbItem:hover{ background: #fff; text-decoration: none; }
+
 .bbActive{
+  border-color: rgba(37,99,235,.28);
   background: rgba(37,99,235,.12);
-  border-color: rgba(37,99,235,.4);
   color: #1d4ed8;
 }
 
-/* =========================================================
-   AUTH (LOGIN PAGE)
-========================================================= */
-.authCenter{
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 32px 16px;
-}
-
-.authWrap{
-  max-width: 460px;
-  width: 100%;
-  text-align: center;
-}
-
-.authTitle{
-  font-size: 44px;
-  font-weight: 950;
-  letter-spacing: -0.03em;
-  color: var(--brand);
-}
-
-.authSub{
-  margin-top: 10px;
-  font-weight: 800;
-  color: rgba(15,23,42,.6);
-}
-
-.authCard{
-  margin-top: 20px;
-  background: #fff;
-  border-radius: 18px;
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  padding: 18px;
-  text-align: left;
-}
+.bbIcon{ font-size: 16px; line-height: 1; }
+.bbLabel{ font-size: 13px; }
 
 /* =========================================================
-   Admin menu (remove blue links)
+   Misc helpers
 ========================================================= */
-.adminMenu a{
-  color: inherit;
-  text-decoration: none;
-}
-/* ===== Auth page ===== */
-.authPage{
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px 16px;
+.navRow{
+  margin-top: 14px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.authCard{
-  width: min(420px, 92vw);
-  padding: 18px;
-}
-
-.authBrand{
-  text-align: center;
-  margin-bottom: 14px;
-}
-
-.authTitle{
-  font-weight: 950;
-  letter-spacing: -0.03em;
-  font-size: 22px;
-  color: #111827;
-}
-
-.authSubtitle{
-  margin-top: 6px;
-  font-weight: 800;
-  font-size: 12px;
-  color: rgba(17,24,39,.55);
-}
-
-.authHint{
-  margin-bottom: 14px;
-  font-size: 13px;
-  font-weight: 800;
-  color: rgba(17,24,39,.60);
-  text-align: center;
+.dashLock{
+  max-width: 1200px;
+  margin: 10px auto 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(239,68,68,.25);
+  background: rgba(239,68,68,.08);
+  color: #991b1b;
+  font-weight: 900;
 }
