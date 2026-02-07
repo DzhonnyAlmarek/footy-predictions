@@ -632,3 +632,43 @@ p{ margin: 0; color: var(--muted); }
   .resultActions{ flex-direction: row; }
   .btnSave{ min-width: 110px; }
 }
+/* ===== Admin Results (compact table) ===== */
+.resultsTable .colScore { width: 140px; }
+
+.resultCell { text-align: left; }
+.resultInputs { display: inline-flex; align-items: center; gap: 8px; }
+
+.resultInput{
+  width: 44px;
+  padding: 6px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(17,24,39,.16);
+  font-weight: 900;
+  text-align: center;
+  outline: none;
+  background: #fff;
+  font-size: 13px;
+}
+
+.resultInput:focus{
+  border-color: rgba(37,99,235,.55);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+}
+
+.resultSep{ font-weight: 900; opacity: .65; }
+
+.saveBtn{
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(17,24,39,.16);
+  background: rgba(255,255,255,.9);
+  font-weight: 900;
+  cursor: pointer;
+}
+.saveBtn:hover{ background: #fff; }
+
+.saveBtnOk{
+  border-color: rgba(16,185,129,.35);
+  background: rgba(16,185,129,.12);
+  color: #065f46;
+}

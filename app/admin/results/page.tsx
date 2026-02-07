@@ -1,44 +1,18 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-
+import { createClient } from "@/lib/supabase/server";
 import ResultsEditor from "./results-editor";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
-/* ===== utils ===== */
-
-function mustEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-function decodeMaybe(v: string): string {
-  try {
-    return decodeURIComponent(v);
-  } catch {
-    return v;
-  }
-}
-
-function service() {
-  return createClient(
-    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false } }
-  );
-}
-
 type TeamObj = { name: string } | { name: string }[] | null;
 
-export type MatchRow = {
+type MatchRow = {
   id: number;
-  stage_id?: number | null;
   stage_match_no?: number | null;
   kickoff_at?: string | null;
+  status?: string | null;
   home_score?: number | null;
   away_score?: number | null;
   home_team?: TeamObj;
@@ -46,15 +20,14 @@ export type MatchRow = {
 };
 
 export default async function AdminResultsPage() {
-  // ✅ admin auth via fp_login cookie (как в других админ-страницах)
-  const cs = await cookies();
-  const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
-  if (!fpLogin) redirect("/");
-  if (fpLogin !== "ADMIN") redirect("/dashboard");
+  const supabase = await createClient();
 
-  const sb = service();
+  // если у тебя админка на fp_login — оставь как есть у себя.
+  // этот вариант — через supabase auth (как у тебя было).
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) redirect("/");
 
-  const { data: stage } = await sb
+  const { data: stage } = await supabase
     .from("stages")
     .select("id,name,status")
     .eq("is_current", true)
@@ -69,13 +42,14 @@ export default async function AdminResultsPage() {
     );
   }
 
-  const { data: matchesRaw, error } = await sb
+  const { data: matchesRaw, error } = await supabase
     .from("matches")
     .select(
       `
       id,
       stage_match_no,
       kickoff_at,
+      status,
       home_score,
       away_score,
       home_team:teams!matches_home_team_id_fkey ( name ),
@@ -105,10 +79,9 @@ export default async function AdminResultsPage() {
       <div className="pageMeta">
         Этап: <b>{stage.name ?? `#${stage.id}`}</b>
         {stage.status ? <span> • {stage.status}</span> : null}
-        <span> • Матчей: {matches.length}</span>
       </div>
 
-      <div style={{ marginTop: 14 }}>
+      <div className="tableWrap" style={{ marginTop: 14 }}>
         <ResultsEditor stageId={Number(stage.id)} matches={matches} />
       </div>
     </main>
