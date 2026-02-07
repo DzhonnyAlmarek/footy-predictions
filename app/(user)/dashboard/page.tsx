@@ -56,8 +56,8 @@ function daysTo(kickoffIso: string | null): number | null {
 function warnKind(days: number | null): "none" | "soon" | "urgent" {
   if (days == null) return "none";
   if (days > 5) return "none";
-  if (days > 2) return "soon"; // 2..5
-  if (days > 1) return "urgent"; // 1..2
+  if (days > 2) return "soon";
+  if (days > 1) return "urgent";
   return "urgent";
 }
 
@@ -85,7 +85,7 @@ export default async function DashboardPage() {
 
   if (!stage) {
     return (
-      <main className="page">
+      <main className="page hasBottomBar">
         <h1>Мои прогнозы</h1>
         <p className="pageMeta">Текущий этап не выбран.</p>
         <div className="navRow">
@@ -112,7 +112,7 @@ export default async function DashboardPage() {
 
   if (matchesErr) {
     return (
-      <main className="page">
+      <main className="page hasBottomBar">
         <h1>Мои прогнозы</h1>
         <p style={{ color: "crimson", marginTop: 10, fontWeight: 800 }}>
           Ошибка matches: {matchesErr.message}
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
 
   if (predsErr) {
     return (
-      <main className="page">
+      <main className="page hasBottomBar">
         <h1>Мои прогнозы</h1>
         <p style={{ color: "crimson", marginTop: 10, fontWeight: 800 }}>
           Ошибка predictions: {predsErr.message}
@@ -150,7 +150,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <main className="page">
+    <main className="page hasBottomBar">
       <h1>Мои прогнозы</h1>
       <div className="pageMeta">
         Этап: <b>{stage.name ?? `#${stage.id}`}</b>
@@ -221,12 +221,6 @@ export default async function DashboardPage() {
           </table>
         </div>
       )}
-
-      <div className="navRow">
-        <Link href="/dashboard/current">Текущая таблица</Link>
-        <Link href="/golden-boot">Золотая бутса</Link>
-        <Link href="/logout">Выйти</Link>
-      </div>
     </main>
   );
 }

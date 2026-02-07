@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import AppHeader from "@/app/_components/AppHeader";
+import BottomBar from "@/app/_components/BottomBar";
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -55,7 +56,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         stageStatus={stage?.status ?? null}
         nav={nav}
       />
+
       {children}
+
+      <BottomBar variant="admin" />
     </>
   );
 }
