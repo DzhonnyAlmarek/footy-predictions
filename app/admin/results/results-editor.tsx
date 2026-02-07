@@ -22,12 +22,15 @@ function teamName(t?: TeamObj) {
   return String(anyT?.name ?? "?");
 }
 
-function fmtDateTimeRU(iso?: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  const date = d.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
-  const time = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-  return `${date}, ${time}`;
+function fmtKickoff(kickoff?: string | null) {
+  if (!kickoff) return "—";
+  const d = new Date(kickoff);
+  return d.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function ResultsEditor(props: {
@@ -53,7 +56,7 @@ export default function ResultsEditor(props: {
   }, [matches]);
 
   const [saving, setSaving] = useState<number | null>(null);
-  const [globalMsg, setGlobalMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [globalMsg, setGlobalMsg] = useState<string | null>(null);
 
   const [vals, setVals] = useState<Record<number, { h: string; a: string }>>(() => {
     const init: Record<number, { h: string; a: string }> = {};
@@ -73,20 +76,14 @@ export default function ResultsEditor(props: {
     setOkSaved((p) => ({ ...p, [matchId]: false }));
 
     const v = vals[matchId] ?? { h: "", a: "" };
-    const hh = v.h.trim();
-    const aa = v.a.trim();
+    const h = v.h.trim();
+    const a = v.a.trim();
 
-    const home = hh === "" ? null : Number(hh);
-    const away = aa === "" ? null : Number(aa);
+    const home = h === "" ? null : Number(h);
+    const away = a === "" ? null : Number(a);
 
-    if (home !== null && (!Number.isFinite(home) || home < 0 || !Number.isInteger(home))) {
-      setGlobalMsg({ text: "Некорректный счёт хозяев (целое число 0+ или пусто)", ok: false });
-      return;
-    }
-    if (away !== null && (!Number.isFinite(away) || away < 0 || !Number.isInteger(away))) {
-      setGlobalMsg({ text: "Некорректный счёт гостей (целое число 0+ или пусто)", ok: false });
-      return;
-    }
+    if (home !== null && (!Number.isFinite(home) || home < 0)) return setGlobalMsg("Некорректный счёт хозяев");
+    if (away !== null && (!Number.isFinite(away) || away < 0)) return setGlobalMsg("Некорректный счёт гостей");
 
     setSaving(matchId);
     try {
@@ -107,88 +104,85 @@ export default function ResultsEditor(props: {
       if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Ошибка сохранения");
 
       setOkSaved((p) => ({ ...p, [matchId]: true }));
-      setGlobalMsg({ text: "Сохранено ✅ Очки пересчитаны.", ok: true });
+      setGlobalMsg("Сохранено ✅ (очки пересчитаны)");
     } catch (e: any) {
-      setGlobalMsg({ text: e?.message ?? "Ошибка сохранения", ok: false });
+      setGlobalMsg(e?.message ?? "Ошибка сохранения");
     } finally {
       setSaving(null);
     }
   }
 
   return (
-    <div>
-      <div className="card" style={{ padding: 14 }}>
-        <div style={{ fontWeight: 950 }}>
-          Матчи: <span style={{ opacity: 0.75 }}>{sorted.length}</span>
-        </div>
-        <div style={{ marginTop: 6, color: "rgba(17,24,39,.65)", fontWeight: 800, fontSize: 12 }}>
-          Сохранение пересчитает очки автоматически
+    <div className="resultsWrap">
+      <div className="resultsTop">
+        <div className="resultsTitle">
+          Матчи: <b>{sorted.length}</b>
         </div>
 
         {globalMsg ? (
-          <div
-            className={`globalMsg ${globalMsg.ok ? "globalMsgOk" : "globalMsgBad"}`}
-            style={{ marginTop: 10 }}
-          >
-            {globalMsg.text}
+          <div className={`resultsMsg ${globalMsg.includes("✅") ? "ok" : "bad"}`}>
+            {globalMsg}
           </div>
         ) : null}
       </div>
 
-      <div className="resultsWrap">
-        {sorted.map((m, idx) => {
-          const no = m.stage_match_no ?? idx + 1;
+      <div className="resultsList">
+        {sorted.map((m) => {
           const home = teamName(m.home_team);
           const away = teamName(m.away_team);
-
           const v = vals[m.id] ?? { h: "", a: "" };
           const saved = !!okSaved[m.id];
 
           return (
             <div key={m.id} className="matchCard">
-              <div className="matchTop">
+              <div className="matchHead">
                 <div className="matchTitle">
-                  <span style={{ opacity: 0.7, fontWeight: 900, marginRight: 8 }}>{no}.</span>
-                  {home} — {away}
+                  <span className="matchNo">{m.stage_match_no ?? "—"}.</span> {home} — {away}
                 </div>
-                <div className="matchMeta">{fmtDateTimeRU(m.kickoff_at)}</div>
+                <div className="matchMeta">{fmtKickoff(m.kickoff_at)}</div>
               </div>
 
-              <div className="scoreRow" aria-label="Ввод результата">
-                <input
-                  className="scoreInput"
-                  value={v.h}
-                  onChange={(e) =>
-                    setVals((p) => ({
-                      ...p,
-                      [m.id]: { ...(p[m.id] ?? { h: "", a: "" }), h: e.target.value },
-                    }))
-                  }
-                  placeholder="х"
-                  inputMode="numeric"
-                />
-                <span style={{ fontWeight: 950, opacity: 0.7 }}>:</span>
-                <input
-                  className="scoreInput"
-                  value={v.a}
-                  onChange={(e) =>
-                    setVals((p) => ({
-                      ...p,
-                      [m.id]: { ...(p[m.id] ?? { h: "", a: "" }), a: e.target.value },
-                    }))
-                  }
-                  placeholder="г"
-                  inputMode="numeric"
-                />
+              <div className="matchControls">
+                <div className="scoreInputs">
+                  <input
+                    className="scoreInput"
+                    value={v.h}
+                    onChange={(e) =>
+                      setVals((p) => ({
+                        ...p,
+                        [m.id]: { ...(p[m.id] ?? { h: "", a: "" }), h: e.target.value },
+                      }))
+                    }
+                    inputMode="numeric"
+                    placeholder="0"
+                  />
+                  <span className="scoreSep">:</span>
+                  <input
+                    className="scoreInput"
+                    value={v.a}
+                    onChange={(e) =>
+                      setVals((p) => ({
+                        ...p,
+                        [m.id]: { ...(p[m.id] ?? { h: "", a: "" }), a: e.target.value },
+                      }))
+                    }
+                    inputMode="numeric"
+                    placeholder="0"
+                  />
+                </div>
 
                 <button
                   type="button"
-                  className={`saveBtn ${saved ? "saveOk" : ""}`}
+                  className={`btn ${saved ? "btnOk" : "btnDark"}`}
                   onClick={() => save(m.id)}
                   disabled={saving === m.id}
                 >
-                  {saving === m.id ? "..." : saved ? "Сохранено" : "Сохранить"}
+                  {saving === m.id ? "…" : saved ? "Сохранено" : "Сохранить"}
                 </button>
+
+                <div className="matchHint">
+                  Просто меняй счёт и жми <b>Сохранить</b>
+                </div>
               </div>
             </div>
           );
