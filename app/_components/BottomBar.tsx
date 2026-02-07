@@ -11,16 +11,17 @@ type Item = {
 };
 
 const userItems: Item[] = [
-  { href: "/dashboard", label: "Мои прогнозы", icon: "✍️" },
-  { href: "/dashboard/current", label: "Текущая таблица", icon: "📊" },
-  { href: "/golden-boot", label: "Золотая бутса", icon: "🥇" },
+  { href: "/dashboard", label: "Мои", icon: "✍️" },
+  { href: "/dashboard/current", label: "Текущая", icon: "📊" },
+  { href: "/golden-boot", label: "Бутса", icon: "🥇" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
 
 const adminItems: Item[] = [
   { href: "/admin", label: "Админ", icon: "🛠️" },
-  { href: "/admin/results", label: "Результаты", icon: "✅" },
-  { href: "/admin/users", label: "Участники", icon: "👥" },
+  { href: "/admin/current-table", label: "Таблица", icon: "📊" },
+  { href: "/admin/results", label: "Рез-ты", icon: "✅" },
+  { href: "/admin/users", label: "Юзеры", icon: "👥" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
 
@@ -30,30 +31,30 @@ export default function BottomBar({ variant = "user" }: { variant?: "user" | "ad
 
   return (
     <nav className="bottomBar" aria-label="Нижнее меню">
-      {items.map((i) => {
-        const active = !i.isLogout && (pathname === i.href || pathname.startsWith(i.href + "/"));
-        const cls = `bbItem ${active ? "bbActive" : ""}`;
+      <div className="bottomBarInner">
+        {items.map((i) => {
+          const active =
+            !i.isLogout && (pathname === i.href || pathname.startsWith(i.href + "/"));
 
-        if (i.isLogout) {
+          const cls = `bbItem ${active ? "bbActive" : ""}`;
+
+          if (i.isLogout) {
+            return (
+              <a key={i.href} href={i.href} className={cls}>
+                <span className="bbIcon">{i.icon}</span>
+                <span className="bbLabel">{i.label}</span>
+              </a>
+            );
+          }
+
           return (
-            <a key={i.href} href={i.href} className={cls}>
-              <span className="bbIcon" aria-hidden="true">
-                {i.icon}
-              </span>
+            <Link key={i.href} href={i.href} className={cls}>
+              <span className="bbIcon">{i.icon}</span>
               <span className="bbLabel">{i.label}</span>
-            </a>
+            </Link>
           );
-        }
-
-        return (
-          <Link key={i.href} href={i.href} className={cls}>
-            <span className="bbIcon" aria-hidden="true">
-              {i.icon}
-            </span>
-            <span className="bbLabel">{i.label}</span>
-          </Link>
-        );
-      })}
+        })}
+      </div>
     </nav>
   );
 }
