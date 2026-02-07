@@ -488,3 +488,147 @@ p{ margin: 0; color: var(--muted); }
   color: #991b1b;
   font-weight: 900;
 }
+/* =========================================================
+   Admin Results (pretty)
+========================================================= */
+.resultsMeta{
+  margin-top: 12px;
+  color: rgba(17,24,39,.72);
+  font-weight: 800;
+}
+
+.resultsList{
+  margin-top: 14px;
+}
+
+.resultsMsg{
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(17,24,39,.12);
+  background: rgba(255,255,255,.85);
+  font-weight: 900;
+  margin-bottom: 12px;
+}
+.resultsMsg.isErr{
+  border-color: rgba(239,68,68,.25);
+  background: rgba(239,68,68,.08);
+  color: #991b1b;
+}
+.resultsMsg.isOk{
+  border-color: rgba(16,185,129,.25);
+  background: rgba(16,185,129,.10);
+  color: #065f46;
+}
+
+.resultsGrid{
+  display: grid;
+  gap: 12px;
+}
+
+.resultCard{
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+}
+
+.resultTop{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.resultTitle{
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-weight: 950;
+}
+
+.resultNo{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(17,24,39,.12);
+  background: rgba(17,24,39,.03);
+  font-weight: 950;
+}
+
+.resultTeams{
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.resultDash{ opacity: .55; }
+
+.resultDate{
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(17,24,39,.62);
+  white-space: nowrap;
+}
+
+.resultActions{
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scoreInputs{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scoreInput{
+  width: 48px;                 /* узко */
+  padding: 8px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(17,24,39,.16);
+  font-weight: 950;
+  text-align: center;
+  outline: none;
+  background: #fff;
+  font-size: 14px;
+}
+.scoreInput:focus{
+  border-color: rgba(37,99,235,.55);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+}
+
+.scoreSep{
+  font-weight: 950;
+  opacity: .65;
+}
+
+.btnSave{
+  border: 1px solid rgba(17,24,39,.18);
+  background: #111827;
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 950;
+  cursor: pointer;
+  min-width: 120px;
+}
+.btnSave:hover{ opacity: .95; }
+
+.btnSave.isSaved{
+  border-color: rgba(16,185,129,.35);
+  background: rgba(16,185,129,.14);
+  color: #065f46;
+}
+
+@media (max-width: 520px){
+  .resultActions{ flex-direction: row; }
+  .btnSave{ min-width: 110px; }
+}

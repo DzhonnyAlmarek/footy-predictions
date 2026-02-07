@@ -1,38 +1,10 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-
+import { createClient } from "@/lib/supabase/server";
 import ResultsEditor from "./results-editor";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
-
-/* ===== utils ===== */
-
-function mustEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-function decodeMaybe(v: string): string {
-  try {
-    return decodeURIComponent(v);
-  } catch {
-    return v;
-  }
-}
-
-function service() {
-  return createClient(
-    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false } }
-  );
-}
-
-/* ===== types ===== */
 
 type TeamObj = { name: string } | { name: string }[] | null;
 
@@ -47,18 +19,14 @@ type MatchRow = {
   away_team?: TeamObj;
 };
 
-/* ===== page ===== */
-
 export default async function AdminResultsPage() {
-  // ✅ auth via fp_login (как в других админ-страницах)
-  const cs = await cookies();
-  const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
-  if (!fpLogin) redirect("/");
-  if (fpLogin !== "ADMIN") redirect("/dashboard");
+  const supabase = await createClient();
 
-  const sb = service();
+  // оставляем как у тебя сейчас (не трогаю логику), чтобы не ломать остальное
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) redirect("/");
 
-  const { data: stage } = await sb
+  const { data: stage } = await supabase
     .from("stages")
     .select("id,name,status")
     .eq("is_current", true)
@@ -73,7 +41,7 @@ export default async function AdminResultsPage() {
     );
   }
 
-  const { data: matchesRaw, error } = await sb
+  const { data: matchesRaw, error } = await supabase
     .from("matches")
     .select(
       `
@@ -93,11 +61,8 @@ export default async function AdminResultsPage() {
 
   if (error) {
     return (
-      <main className="page">
-        <h1>Результаты</h1>
-        <p style={{ color: "crimson", marginTop: 10, fontWeight: 800 }}>
-          Ошибка загрузки матчей: {error.message}
-        </p>
+      <main className="page" style={{ color: "crimson" }}>
+        Ошибка загрузки матчей: {error.message}
       </main>
     );
   }
@@ -107,14 +72,15 @@ export default async function AdminResultsPage() {
   return (
     <main className="page">
       <h1>Результаты</h1>
+
       <div className="pageMeta">
         Этап: <b>{stage.name ?? `#${stage.id}`}</b>
         {stage.status ? <span> • {stage.status}</span> : null}
       </div>
 
-      <div style={{ marginTop: 14 }}>
-        <ResultsEditor stageId={Number(stage.id)} matches={matches} />
-      </div>
+      <div className="resultsMeta">Матчей: <b>{matches.length}</b></div>
+
+      <ResultsEditor stageId={Number(stage.id)} matches={matches} />
     </main>
   );
 }

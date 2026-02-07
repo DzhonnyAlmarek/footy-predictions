@@ -22,22 +22,15 @@ function teamName(t?: TeamObj) {
   return String(anyT?.name ?? "?");
 }
 
-function fmtKickoff(kickoff?: string | null) {
-  if (!kickoff) return "—";
-  const d = new Date(kickoff);
-  return d.toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function formatKickoff(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
+  const time = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  return `${date}, ${time}`;
 }
 
-export default function ResultsEditor(props: {
-  stageId: number;
-  initialMatches?: MatchRow[];
-  matches?: MatchRow[];
-}) {
+export default function ResultsEditor(props: { stageId: number; matches?: MatchRow[]; initialMatches?: MatchRow[] }) {
   const matches: MatchRow[] = Array.isArray(props.matches)
     ? props.matches
     : Array.isArray(props.initialMatches)
@@ -82,8 +75,14 @@ export default function ResultsEditor(props: {
     const home = h === "" ? null : Number(h);
     const away = a === "" ? null : Number(a);
 
-    if (home !== null && (!Number.isFinite(home) || home < 0)) return setGlobalMsg("Некорректный счёт хозяев");
-    if (away !== null && (!Number.isFinite(away) || away < 0)) return setGlobalMsg("Некорректный счёт гостей");
+    if (home !== null && (!Number.isFinite(home) || home < 0 || !Number.isInteger(home))) {
+      setGlobalMsg("Счёт хозяев: целое число 0+ или пусто");
+      return;
+    }
+    if (away !== null && (!Number.isFinite(away) || away < 0 || !Number.isInteger(away))) {
+      setGlobalMsg("Счёт гостей: целое число 0+ или пусто");
+      return;
+    }
 
     setSaving(matchId);
     try {
@@ -104,7 +103,7 @@ export default function ResultsEditor(props: {
       if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Ошибка сохранения");
 
       setOkSaved((p) => ({ ...p, [matchId]: true }));
-      setGlobalMsg("Сохранено ✅ (очки пересчитаны)");
+      setGlobalMsg("Сохранено ✅");
     } catch (e: any) {
       setGlobalMsg(e?.message ?? "Ошибка сохранения");
     } finally {
@@ -113,36 +112,35 @@ export default function ResultsEditor(props: {
   }
 
   return (
-    <div className="resultsWrap">
-      <div className="resultsTop">
-        <div className="resultsTitle">
-          Матчи: <b>{sorted.length}</b>
+    <section className="resultsList">
+      {globalMsg ? (
+        <div className={`resultsMsg ${globalMsg.includes("✅") ? "isOk" : "isErr"}`}>
+          {globalMsg}
         </div>
+      ) : null}
 
-        {globalMsg ? (
-          <div className={`resultsMsg ${globalMsg.includes("✅") ? "ok" : "bad"}`}>
-            {globalMsg}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="resultsList">
+      <div className="resultsGrid">
         {sorted.map((m) => {
-          const home = teamName(m.home_team);
-          const away = teamName(m.away_team);
           const v = vals[m.id] ?? { h: "", a: "" };
           const saved = !!okSaved[m.id];
 
+          const home = teamName(m.home_team);
+          const away = teamName(m.away_team);
+
           return (
-            <div key={m.id} className="matchCard">
-              <div className="matchHead">
-                <div className="matchTitle">
-                  <span className="matchNo">{m.stage_match_no ?? "—"}.</span> {home} — {away}
+            <article key={m.id} className="resultCard">
+              <div className="resultTop">
+                <div className="resultTitle">
+                  <span className="resultNo">{m.stage_match_no ?? "—"}</span>
+                  <span className="resultTeams">
+                    {home} <span className="resultDash">—</span> {away}
+                  </span>
                 </div>
-                <div className="matchMeta">{fmtKickoff(m.kickoff_at)}</div>
+
+                <div className="resultDate">{formatKickoff(m.kickoff_at)}</div>
               </div>
 
-              <div className="matchControls">
+              <div className="resultActions">
                 <div className="scoreInputs">
                   <input
                     className="scoreInput"
@@ -154,7 +152,8 @@ export default function ResultsEditor(props: {
                       }))
                     }
                     inputMode="numeric"
-                    placeholder="0"
+                    placeholder=""
+                    aria-label="Счёт хозяев"
                   />
                   <span className="scoreSep">:</span>
                   <input
@@ -167,27 +166,24 @@ export default function ResultsEditor(props: {
                       }))
                     }
                     inputMode="numeric"
-                    placeholder="0"
+                    placeholder=""
+                    aria-label="Счёт гостей"
                   />
                 </div>
 
                 <button
                   type="button"
-                  className={`btn ${saved ? "btnOk" : "btnDark"}`}
+                  className={`btnSave ${saved ? "isSaved" : ""}`}
                   onClick={() => save(m.id)}
                   disabled={saving === m.id}
                 >
-                  {saving === m.id ? "…" : saved ? "Сохранено" : "Сохранить"}
+                  {saving === m.id ? "..." : saved ? "Сохранено" : "Сохранить"}
                 </button>
-
-                <div className="matchHint">
-                  Просто меняй счёт и жми <b>Сохранить</b>
-                </div>
               </div>
-            </div>
+            </article>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
