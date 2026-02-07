@@ -26,7 +26,7 @@ export default async function HomePage() {
               color: "rgba(17,24,39,.70)",
             }}
           >
-            Выберите логин и введите пароль для входа
+            Выберите свой логин и введите пароль для входа
           </div>
 
           <div className="cardBody">

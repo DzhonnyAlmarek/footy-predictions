@@ -31,15 +31,15 @@ export default function BottomBar({ variant = "user" }: { variant?: "user" | "ad
   return (
     <nav className="bottomBar" aria-label="Нижнее меню">
       {items.map((i) => {
-        const active =
-          !i.isLogout && (pathname === i.href || pathname.startsWith(i.href + "/"));
-
+        const active = !i.isLogout && (pathname === i.href || pathname.startsWith(i.href + "/"));
         const cls = `bbItem ${active ? "bbActive" : ""}`;
 
         if (i.isLogout) {
           return (
             <a key={i.href} href={i.href} className={cls}>
-              <span className="bbIcon" aria-hidden="true">{i.icon}</span>
+              <span className="bbIcon" aria-hidden="true">
+                {i.icon}
+              </span>
               <span className="bbLabel">{i.label}</span>
             </a>
           );
@@ -47,7 +47,9 @@ export default function BottomBar({ variant = "user" }: { variant?: "user" | "ad
 
         return (
           <Link key={i.href} href={i.href} className={cls}>
-            <span className="bbIcon" aria-hidden="true">{i.icon}</span>
+            <span className="bbIcon" aria-hidden="true">
+              {i.icon}
+            </span>
             <span className="bbLabel">{i.label}</span>
           </Link>
         );

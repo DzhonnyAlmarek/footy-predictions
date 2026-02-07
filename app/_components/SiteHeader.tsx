@@ -13,7 +13,7 @@ export default function SiteHeader() {
           </span>
         </Link>
 
-        <div className="clubSubTitle">Прогнозы • таблицы • рейтинги</div>
+        <div className="clubSubTitle">Вперед, к победам!</div>
       </div>
     </header>
   );
