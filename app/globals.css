@@ -24,6 +24,10 @@ body{
   -moz-osx-font-smoothing: grayscale;
 }
 
+.appRoot{
+  min-height: 100vh;
+}
+
 a{ color: #2563eb; text-decoration: none; }
 a:hover{ text-decoration: underline; }
 
@@ -31,6 +35,10 @@ h1, h2, h3{ letter-spacing: -0.02em; }
 h1{ font-size: 32px; line-height: 1.15; margin: 0; }
 
 p{ margin: 0; color: var(--muted); }
+
+.mono{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
 
 /* =========================================================
    Containers
@@ -55,8 +63,53 @@ p{ margin: 0; color: var(--muted); }
   box-shadow: var(--shadow);
 }
 
+.cardBody{ padding: 16px; }
+
 /* =========================================================
-   App Header
+   SiteHeader (login page)
+========================================================= */
+.siteHeader{
+  position: sticky;
+  top: 0;
+  z-index: 300;
+  background: rgba(246,247,251,.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(17,24,39,.10);
+}
+
+.siteHeaderInner{
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: center; /* ✅ строго по центру */
+}
+
+.clubTitleLink{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #111827;
+}
+
+.clubTitleLink:hover{ text-decoration: none; opacity: .92; }
+
+.clubIcon{ font-size: 22px; line-height: 1; }
+
+.clubTitleText{
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  font-size: 20px;
+}
+
+.clubTitleText span{
+  opacity: .85;
+  font-weight: 900;
+}
+
+/* =========================================================
+   App Header (user/admin)
 ========================================================= */
 .appHeader{
   position: sticky;
@@ -138,6 +191,11 @@ p{ margin: 0; color: var(--muted); }
   color: #1d4ed8;
 }
 
+@media (max-width: 760px){
+  .appHeaderInner{ flex-direction: column; align-items: stretch; }
+  .appNav{ justify-content: flex-start; }
+}
+
 /* =========================================================
    Tables
 ========================================================= */
@@ -177,8 +235,176 @@ p{ margin: 0; color: var(--muted); }
   vertical-align: top;
 }
 
+.table tbody tr:nth-child(odd) td{ background: rgba(17,24,39,.015); }
+.table tbody tr:hover td{ background: rgba(37,99,235,.06); }
+
 /* =========================================================
-   Bottom bar (SCROLLABLE)
+   Current table (fixed professional columns)
+========================================================= */
+.table.currentTable{
+  table-layout: fixed; /* ✅ чтобы колонки не “гуляли” */
+}
+
+.ctColNo{ width: 56px; }
+.ctColDate{ width: 110px; }
+.ctColMatch{ width: 320px; }
+.ctColRes{ width: 70px; }
+
+/* ширина колонок участников — одинаковая */
+.ctUserHead{
+  width: 128px;
+  min-width: 128px;
+  max-width: 128px;
+  text-align: center;
+  vertical-align: bottom;
+  padding: 12px 8px;
+  font-weight: 900;
+}
+
+.ctUserHead .ctTotal{
+  display: block;
+  margin-top: 3px;
+  font-weight: 900;
+  opacity: .72;
+}
+
+/* ячейка участника: прогноз + (pts) слева, аккуратно */
+.ctCell{
+  overflow: visible;
+  text-align: left;       /* ✅ как ты просил */
+  padding: 10px 8px;
+}
+
+.ctCellInner{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.predText{
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   Pred cell (compact) — user прогнозы
+========================================================= */
+.predCell{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.predInput{
+  width: 34px;            /* ✅ узкие */
+  padding: 6px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(17,24,39,.16);
+  font-weight: 900;
+  text-align: center;
+  outline: none;
+  background: #fff;
+  font-size: 13px;
+}
+.predInput:focus{
+  border-color: rgba(37,99,235,.55);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+}
+
+.predSep{ font-weight: 900; opacity: .65; }
+.predSaving{ opacity: .65; font-weight: 900; }
+
+.inlineErr{
+  margin-left: 6px;
+  color: #b91c1c;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* =========================================================
+   Row warnings (soon/urgent)
+========================================================= */
+.rowWarn{
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(180,83,9,.95);
+}
+
+.rowSoon td{ background: rgba(245,158,11,.08) !important; }
+.rowUrgent td{ background: rgba(239,68,68,.08) !important; }
+
+/* =========================================================
+   Points Popover
+========================================================= */
+.ppWrap { position: relative; display: inline-flex; align-items: center; }
+
+.ppBtn{
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 8px;
+  font-weight: 900;
+  opacity: 0.75;
+}
+
+.ppBtn:hover { background: rgba(0,0,0,0.05); opacity: 1; }
+
+.ppPop{
+  position: absolute;
+  right: 0;
+  top: 120%;
+  min-width: 280px;
+  max-width: 360px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.14);
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+  padding: 12px;
+  z-index: 200;
+}
+
+.ppTitle{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.ppClose{
+  border: 0;
+  background: rgba(0,0,0,0.04);
+  border-radius: 10px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.ppLine{
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.ppKey{ opacity: 0.75; font-size: 12px; }
+.ppVal{ font-weight: 900; font-size: 13px; text-align: right; }
+.ppHint{ font-weight: 800; opacity: 0.7; font-size: 11px; margin-left: 6px; }
+
+.ppHr{ height: 1px; background: rgba(0,0,0,0.08); margin: 8px 0; }
+
+.ppTotal{ font-size: 13px; }
+.ppMini{ margin-top: 6px; font-size: 11px; opacity: 0.75; }
+
+@media (max-width: 520px) {
+  .ppPop { right: auto; left: 0; width: min(92vw, 360px); }
+}
+
+/* =========================================================
+   Bottom bar (scrollable)
 ========================================================= */
 .hasBottomBar{
   padding-bottom: 82px;
@@ -202,16 +428,17 @@ p{ margin: 0; color: var(--muted); }
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
 
-  justify-content: flex-start;
+  justify-content: center; /* ✅ по центру, если влезает */
+}
+
+/* на узких экранах — пусть начинается слева, чтобы ясно было, что можно скроллить */
+@media (max-width: 520px){
+  .bottomBar{ justify-content: flex-start; }
 }
 
 /* скрываем скроллбар, но оставляем скролл */
-.bottomBar::-webkit-scrollbar{
-  display: none;
-}
-.bottomBar{
-  scrollbar-width: none;
-}
+.bottomBar::-webkit-scrollbar{ display: none; }
+.bottomBar{ scrollbar-width: none; }
 
 .bbItem{
   flex: 0 0 auto;
@@ -227,12 +454,10 @@ p{ margin: 0; color: var(--muted); }
   text-decoration: none;
   min-width: max-content;
   white-space: nowrap;
+  justify-content: center;
 }
 
-.bbItem:hover{
-  background: #fff;
-  text-decoration: none;
-}
+.bbItem:hover{ background: #fff; text-decoration: none; }
 
 .bbActive{
   border-color: rgba(37,99,235,.28);
@@ -240,7 +465,7 @@ p{ margin: 0; color: var(--muted); }
   color: #1d4ed8;
 }
 
-.bbIcon{ font-size: 16px; }
+.bbIcon{ font-size: 16px; line-height: 1; }
 .bbLabel{ font-size: 13px; }
 
 /* =========================================================
