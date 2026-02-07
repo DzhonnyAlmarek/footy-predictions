@@ -1,300 +1,280 @@
-import { createClient } from "@/lib/supabase/server";
-import type { CSSProperties } from "react";
-import PointsPopover from "@/app/_components/points-popover";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
+
+import PointsPopover, {
+  type PointsBreakdown as PtsBD,
+} from "@/app/_components/points-popover";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function fmt(x: number) {
-  return Number(x ?? 0).toFixed(2).replace(/\.00$/, "");
+/* ================= utils ================= */
+
+function mustEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
 }
 
-function plus(x: number) {
-  const v = Number(x ?? 0);
-  return (v > 0 ? "+" : "") + fmt(v);
+function decodeMaybe(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
 }
 
-function winnersCountFromBonus(bonus: number) {
-  const b = Number(bonus ?? 0);
-  if (b >= 1.49) return 1;
-  if (b >= 0.99) return 2;
-  if (b >= 0.49) return 3;
-  return null;
+function service() {
+  return createClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    { auth: { persistSession: false } }
+  );
 }
 
-type Breakdown = {
-  outcomeBase: number;
-  outcomeBonus: number;
-  diffBase: number;
-  diffBonus: number;
-  h1: number;
-  h2: number;
-  bonus: number;
+/* ================= types ================= */
+
+type TeamMaybeArray = { name: string } | { name: string }[] | null;
+
+type MatchRow = {
+  id: string;
+  kickoff_at: string | null;
+  stage_match_no?: number | null;
+  home_score: number | null;
+  away_score: number | null;
+  home_team: TeamMaybeArray;
+  away_team: TeamMaybeArray;
 };
 
-function outcome(a: number | null, b: number | null) {
-  if (a === null || b === null) return null;
-  if (a === b) return "D";
-  return a > b ? "H" : "A";
+type UserRow = { login: string; user_id: string };
+
+type Pred = { h: number | null; a: number | null };
+
+type ScoreRow = {
+  prediction_id: number;
+  match_id: number;
+  user_id: string;
+
+  total: number;
+
+  team_goals: number;
+  outcome: number;
+  diff: number;
+  near_bonus: number;
+
+  outcome_guessed: number;
+  outcome_mult: number;
+  diff_guessed: number;
+  diff_mult: number;
+
+  pred_text: string;
+  res_text: string;
+};
+
+/* ================= helpers ================= */
+
+function teamName(t: TeamMaybeArray): string {
+  if (!t) return "?";
+  if (Array.isArray(t)) return t[0]?.name ?? "?";
+  return t.name ?? "?";
 }
 
-function cellStyle(
-  pred: string,
-  pts: number | undefined,
-  homeScore: number | null,
-  awayScore: number | null
-): CSSProperties {
-  if (homeScore === null || awayScore === null) return {};
-
-  const [ph, pa] = pred.split(":").map((x) => Number(x));
-  if (!Number.isFinite(ph) || !Number.isFinite(pa)) return {};
-
-  const exact = ph === homeScore && pa === awayScore;
-  const out = outcome(ph, pa);
-  const real = outcome(homeScore, awayScore);
-  const outcomeHit = out !== null && real !== null && out === real;
-
-  if (exact) {
-    return {
-      fontWeight: 800,
-      color: "#14532d",
-      background: "rgba(34,197,94,0.12)",
-      borderRadius: 6,
-      padding: "2px 6px",
-      display: "inline-block",
-    };
-  }
-
-  if (outcomeHit) {
-    return {
-      fontWeight: 700,
-      color: "#1f2937",
-      background: "rgba(59,130,246,0.10)",
-      borderRadius: 6,
-      padding: "2px 6px",
-      display: "inline-block",
-    };
-  }
-
-  if (typeof pts === "number" && pts > 0) {
-    return {
-      fontWeight: 600,
-      background: "rgba(0,0,0,0.04)",
-      borderRadius: 6,
-      padding: "2px 6px",
-      display: "inline-block",
-    };
-  }
-
-  return {};
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
+
+function formatPts(n: number | null): string {
+  if (n == null) return "";
+  const x = Math.round(n * 100) / 100;
+  return Number.isInteger(x) ? String(x) : String(x);
+}
+
+function toPtsBD(s: ScoreRow): PtsBD {
+  return {
+    total: Number(s.total),
+    teamGoals: Number(s.team_goals),
+    outcome: Number(s.outcome),
+    diff: Number(s.diff),
+    nearBonus: Number(s.near_bonus),
+
+    outcomeGuessed: Number(s.outcome_guessed),
+    outcomeMult: Number(s.outcome_mult),
+    diffGuessed: Number(s.diff_guessed),
+    diffMult: Number(s.diff_mult),
+
+    predText: s.pred_text,
+    resText: s.res_text,
+  };
+}
+
+/* ================= page ================= */
 
 export default async function AdminCurrentTablePage() {
-  const supabase = await createClient();
+  const cs = await cookies();
+  const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
+  if (!fpLogin) redirect("/");
+  if (fpLogin !== "ADMIN") redirect("/dashboard");
 
-  const { data: stage } = await supabase
+  const sb = service();
+
+  const { data: stage } = await sb
     .from("stages")
     .select("id,name,status")
     .eq("is_current", true)
     .maybeSingle();
 
-  if (!stage) return <main style={{ padding: 24 }}>Текущий этап не выбран</main>;
+  if (!stage) {
+    return (
+      <main className="userMain hasBottomBar">
+        <h1 style={{ fontWeight: 900, margin: 0 }}>Текущая таблица (админ)</h1>
+        <p style={{ marginTop: 10, opacity: 0.8 }}>Текущий этап не выбран</p>
+      </main>
+    );
+  }
 
-  const { data: users } = await supabase
+  const { data: usersRaw } = await sb
     .from("login_accounts")
     .select("login,user_id")
     .neq("login", "ADMIN")
-    .order("login", { ascending: true });
+    .order("login");
 
-  const logins = users?.map((u) => u.login) ?? [];
-  const userIds = users?.map((u) => u.user_id) ?? [];
-  const userIdToLogin = new Map(users?.map((u) => [u.user_id, u.login]));
+  const users = (usersRaw ?? []) as UserRow[];
+  const userIds = users.map((u) => u.user_id);
 
-  const { data: tours } = await supabase
-    .from("tours")
-    .select("id,tour_no,name")
-    .eq("stage_id", stage.id)
-    .order("tour_no", { ascending: true });
-
-  const { data: matches } = await supabase
+  const { data: matchesRaw } = await sb
     .from("matches")
     .select(`
-      id,tour_id,stage_match_no,home_score,away_score,
-      home_team:teams!matches_home_team_id_fkey(name),
-      away_team:teams!matches_away_team_id_fkey(name)
+      id,
+      kickoff_at,
+      stage_match_no,
+      home_score,
+      away_score,
+      home_team:teams!matches_home_team_id_fkey ( name ),
+      away_team:teams!matches_away_team_id_fkey ( name )
     `)
     .eq("stage_id", stage.id)
-    .order("tour_id", { ascending: true })
+    .order("stage_match_no", { ascending: true, nullsFirst: false })
     .order("kickoff_at", { ascending: true });
 
-  const matchIds = (matches ?? []).map((m: any) => m.id);
+  const matches = (matchesRaw ?? []) as MatchRow[];
+  const matchIds = matches.map((m) => Number(m.id));
 
-  const { data: preds } = await supabase
+  const { data: predsRaw } = await sb
     .from("predictions")
-    .select("match_id,user_id,home_pred,away_pred")
-    .in("match_id", matchIds);
+    .select("id,match_id,user_id,home_pred,away_pred")
+    .in("match_id", matchIds)
+    .in("user_id", userIds);
 
-  const predMap = new Map<string, string>();
-  for (const p of preds ?? []) {
-    const l = userIdToLogin.get(p.user_id);
-    if (l) predMap.set(`${p.match_id}::${l}`, `${p.home_pred}:${p.away_pred}`);
+  const predByMatchUser = new Map<number, Map<string, Pred>>();
+  for (const p of predsRaw ?? []) {
+    const mid = Number(p.match_id);
+    if (!predByMatchUser.has(mid)) predByMatchUser.set(mid, new Map());
+    predByMatchUser.get(mid)!.set(p.user_id, {
+      h: p.home_pred == null ? null : Number(p.home_pred),
+      a: p.away_pred == null ? null : Number(p.away_pred),
+    });
   }
 
-  const { data: rows } = await supabase
-    .from("points_ledger")
+  const { data: scoresRaw } = await sb
+    .from("prediction_scores")
     .select(
-      "match_id,user_id,points,points_outcome_base,points_outcome_bonus,points_diff_base,points_diff_bonus,points_h1,points_h2,points_bonus"
+      "prediction_id,match_id,user_id,total,team_goals,outcome,diff,near_bonus,outcome_guessed,outcome_mult,diff_guessed,diff_mult,pred_text,res_text"
     )
     .in("match_id", matchIds)
     .in("user_id", userIds);
 
-  const pointsMap = new Map<string, number>();
-  const breakdownMap = new Map<string, Breakdown>();
-  const totalByLogin = new Map<string, number>();
-
-  for (const r of rows ?? []) {
-    const login = userIdToLogin.get(r.user_id);
-    if (!login) continue;
-
-    const pts = Number(r.points ?? 0);
-    pointsMap.set(`${r.match_id}::${login}`, pts);
-    totalByLogin.set(login, (totalByLogin.get(login) ?? 0) + pts);
-
-    breakdownMap.set(`${r.match_id}::${login}`, {
-      outcomeBase: Number(r.points_outcome_base ?? 0),
-      outcomeBonus: Number(r.points_outcome_bonus ?? 0),
-      diffBase: Number(r.points_diff_base ?? 0),
-      diffBonus: Number(r.points_diff_bonus ?? 0),
-      h1: Number(r.points_h1 ?? 0),
-      h2: Number(r.points_h2 ?? 0),
-      bonus: Number(r.points_bonus ?? 0),
-    });
+  const scoreByMatchUser = new Map<number, Map<string, ScoreRow>>();
+  for (const s of (scoresRaw ?? []) as any[]) {
+    const mid = Number(s.match_id);
+    if (!scoreByMatchUser.has(mid)) scoreByMatchUser.set(mid, new Map());
+    scoreByMatchUser.get(mid)!.set(s.user_id, s as ScoreRow);
   }
 
-  const gridCols = `minmax(220px, 1.6fr) 80px repeat(${logins.length}, minmax(120px, 1fr))`;
+  const totalByUser = new Map<string, number>();
+  for (const u of users) totalByUser.set(u.user_id, 0);
+
+  for (const m of matches) {
+    const mid = Number(m.id);
+    for (const u of users) {
+      const s = scoreByMatchUser.get(mid)?.get(u.user_id);
+      if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.total)));
+    }
+  }
 
   return (
-    <main style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
-      <div className="card">
-        <div className="cardHeader">
-          <div className="cardTitle">Текущая таблица</div>
-          <div className="cardSub">
-            Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-            {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
-          </div>
-        </div>
+    <main className="userMain hasBottomBar">
+      <h1 style={{ fontWeight: 900, margin: 0 }}>Текущая таблица (админ)</h1>
+      <div style={{ marginTop: 6, opacity: 0.8 }}>
+        Этап: <b>{stage.name ?? `#${stage.id}`}</b>
+        {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
+      </div>
 
-        <div className="cardBody">
-          <div className="cardSoft">
-            <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, overflow: "hidden" }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: gridCols,
-                  padding: "8px 10px",
-                  background: "#f7f7f7",
-                  fontWeight: 900,
-                  columnGap: 8,
-                  alignItems: "center",
-                }}
-              >
-                <div>Матч</div>
-                <div style={{ textAlign: "center" }}>Рез.</div>
-                {logins.map((l) => (
-                  <div key={l}>
-                    {l} <span style={{ opacity: 0.75 }}>({fmt(totalByLogin.get(l) ?? 0)})</span>
-                  </div>
-                ))}
-              </div>
+      <div className="tableWrap" style={{ marginTop: 14 }}>
+        <table className="table" style={{ minWidth: 900 }}>
+          <thead>
+            <tr>
+              <th className="ctSticky ctColDate">№</th>
+              <th className="ctSticky ctColMatch">Матч</th>
+              <th className="ctSticky ctColRes">Рез.</th>
+              {users.map((u) => (
+                <th key={u.user_id} className="ctUserHead">
+                  {u.login}
+                  <span style={{ opacity: 0.7, fontWeight: 800 }}>
+                    {" "}
+                    ({formatPts(totalByUser.get(u.user_id) ?? 0)})
+                  </span>
+                </th>
+              ))}
+            </tr>
+          </thead>
 
-              {(tours ?? []).map((t: any) => {
-                const list = (matches ?? []).filter((m: any) => m.tour_id === t.id);
-                if (!list.length) return null;
+          <tbody>
+            {matches.map((m, idx) => {
+              const no = m.stage_match_no ?? idx + 1;
+              const res =
+                m.home_score == null || m.away_score == null
+                  ? "—"
+                  : `${m.home_score}:${m.away_score}`;
 
-                return (
-                  <div key={t.id}>
-                    <div style={{ padding: "8px 10px", fontWeight: 900, background: "#fafafa" }}>
-                      Тур {t.tour_no}
-                      {t.name ? ` — ${t.name}` : ""}
+              const mid = Number(m.id);
+
+              return (
+                <tr key={m.id}>
+                  <td className="ctSticky ctColDate" style={{ fontWeight: 900, whiteSpace: "nowrap" }}>
+                    {no}
+                  </td>
+
+                  <td className="ctSticky ctColMatch">
+                    <div style={{ fontWeight: 900 }}>
+                      {teamName(m.home_team)} — {teamName(m.away_team)}
                     </div>
+                  </td>
 
-                    {list.map((m: any) => {
-                      const result =
-                        m.home_score !== null && m.away_score !== null ? `${m.home_score}:${m.away_score}` : "";
+                  <td className="ctSticky ctColRes" style={{ fontWeight: 900, whiteSpace: "nowrap" }}>
+                    {res}
+                  </td>
 
-                      return (
-                        <div
-                          key={m.id}
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: gridCols,
-                            padding: "6px 10px",
-                            borderTop: "1px solid #eee",
-                            columnGap: 8,
-                            alignItems: "center",
-                          }}
-                        >
-                          <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            <b>{m.stage_match_no}.</b> {m.home_team.name} — {m.away_team.name}
-                          </div>
+                  {users.map((u) => {
+                    const pr = predByMatchUser.get(mid)?.get(u.user_id) ?? { h: null, a: null };
+                    const predText = pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
 
-                          <div style={{ textAlign: "center", fontWeight: 900 }}>{result}</div>
+                    const s = scoreByMatchUser.get(mid)?.get(u.user_id);
 
-                          {logins.map((l) => {
-                            const key = `${m.id}::${l}`;
-                            const pred = predMap.get(key) ?? "";
-                            const pts = pointsMap.get(key);
-                            const bd = breakdownMap.get(key);
-
-                            const outcomeX = bd ? winnersCountFromBonus(bd.outcomeBonus) : null;
-                            const diffX = bd ? winnersCountFromBonus(bd.diffBonus) : null;
-
-                            const tip = bd
-                              ? `Исход: ${fmt(bd.outcomeBase)}
-${outcomeX ? `Надбавка за ${outcomeX} угадавших исход: ${plus(bd.outcomeBonus)}` : `Надбавка за угадавших исход: ${plus(bd.outcomeBonus)}`}
-Итого за исход: ${fmt(bd.outcomeBase + bd.outcomeBonus)}
-
-Разница: ${fmt(bd.diffBase)}
-${diffX ? `Надбавка за ${diffX} угадавших разницу: ${plus(bd.diffBonus)}` : `Надбавка за угадавших разницу: ${plus(bd.diffBonus)}`}
-Итого за разницу: ${fmt(bd.diffBase + bd.diffBonus)}
-
-Голы 1-й команды: ${fmt(bd.h1)}
-Голы 2-й команды: ${fmt(bd.h2)}
-Бонус за отклонение 1 мяч: ${fmt(bd.bonus)}
-
-Итого: ${fmt(
-                                  bd.outcomeBase +
-                                    bd.outcomeBonus +
-                                    bd.diffBase +
-                                    bd.diffBonus +
-                                    bd.h1 +
-                                    bd.h2 +
-                                    bd.bonus
-                                )}`
-                              : "";
-
-                            return (
-                              <div key={l} style={{ minHeight: 22 }}>
-                                <span style={cellStyle(pred, pts, m.home_score, m.away_score)}>
-                                  {pred}
-                                  {typeof pts === "number" ? (
-                                    <span style={{ opacity: 0.85 }}> ({fmt(pts)})</span>
-                                  ) : null}
-                                </span>
-
-                                {tip ? <PointsPopover tip={tip} /> : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+                    return (
+                      <td key={u.user_id} className="ctCell">
+                        <span style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{predText}</span>
+                        {s ? (
+                          <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} />
+                        ) : null}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </main>
   );

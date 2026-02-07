@@ -1,162 +1,138 @@
-:root {
-  color-scheme: light;
-}
+/* ===============================
+   Points Popover
+   =============================== */
 
-* { box-sizing: border-box; }
-
-html, body { padding: 0; margin: 0; }
-
-body {
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans",
-    "Apple Color Emoji", "Segoe UI Emoji";
-  background: #fff;
-  color: #111;
-}
-
-/* ссылки по умолчанию не синие */
-a { color: inherit; }
-
-/* ===== Header centered ===== */
-.siteHeader {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.siteHeaderInner {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 10px 16px;
-  display: flex;
-  justify-content: center;
-}
-
-.clubTitleLink {
+.ppWrap {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  color: inherit;
 }
 
-.clubIcon {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.ppBtn {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 4px;
   border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.10);
-  background: rgba(0, 0, 0, 0.03);
+  font-weight: 900;
+  opacity: 0.75;
 }
 
-.clubTitleText { font-weight: 900; line-height: 1.05; }
+.ppBtn:hover {
+  background: rgba(0,0,0,0.05);
+  opacity: 1;
+}
 
-.clubTitleText span {
+.ppPop {
+  position: absolute;
+  right: 0;
+  top: 120%;
+  min-width: 280px;
+  max-width: 360px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.14);
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+  padding: 12px;
+  z-index: 200;
+}
+
+.ppTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.ppClose {
+  border: 0;
+  background: rgba(0,0,0,0.04);
+  border-radius: 10px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.ppClose:hover {
+  background: rgba(0,0,0,0.08);
+}
+
+.ppLine {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.ppKey {
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.ppVal {
+  font-weight: 900;
+  font-size: 13px;
+  text-align: right;
+}
+
+.ppHint {
   font-weight: 800;
   opacity: 0.7;
+  font-size: 11px;
   margin-left: 6px;
 }
 
-/* ===== Main container ===== */
-.userMain {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 18px 16px;
+.ppHr {
+  height: 1px;
+  background: rgba(0,0,0,0.08);
+  margin: 8px 0;
 }
 
-.hasBottomBar { padding-bottom: 86px; }
-
-/* ===== Table responsive ===== */
-.tableWrap {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  border-radius: 14px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #fff;
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 720px;
-}
-
-.table th, .table td {
-  padding: 10px 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-  vertical-align: middle;
-}
-
-.table thead th {
-  border-top: none;
+.ppTotal {
   font-size: 13px;
-  opacity: 0.85;
-  text-align: left;
-  background: rgba(0, 0, 0, 0.02);
 }
 
-.tableFixed { table-layout: fixed; width: 100%; }
-
-/* таблица "Мои прогнозы": ровные колонки */
-.userPredTable .colDate { width: 140px; }
-.userPredTable .colPred { width: 170px; }
-.userPredTable .colMatch { width: auto; }
-
-@media (min-width: 480px) {
-  .userPredTable .colDate { width: 170px; }
-  .userPredTable .colPred { width: 190px; }
-}
-
-/* подсветка по "скоро матч" */
-.rowSoon td {
-  background: rgba(234, 179, 8, 0.10);
-}
-.rowUrgent td {
-  background: rgba(220, 38, 38, 0.08);
-}
-.rowWarn {
+.ppMini {
   margin-top: 6px;
-  font-size: 12px;
-  font-weight: 800;
-  opacity: 0.9;
+  font-size: 11px;
+  opacity: 0.75;
 }
 
-/* ===== BottomBar ===== */
-.bottomBar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 80;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", monospace;
 }
 
-.bbItem {
-  display: grid;
-  place-items: center;
-  gap: 4px;
-  padding: 10px 6px;
-  border-radius: 12px;
-  text-decoration: none;
-  color: inherit;
-  border: 1px solid transparent;
+/* ===============================
+   ФИКС ДЛЯ ТАБЛИЦ (ВАЖНО)
+   =============================== */
+
+/* чтобы popover не обрезался */
+.tableWrap {
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
-.bbActive {
-  border-color: rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.04);
+.tableWrap table {
+  overflow: visible;
 }
 
-.bbIcon { font-size: 18px; line-height: 1; }
-.bbLabel { font-size: 11px; font-weight: 800; opacity: 0.9; }
+/* каждая ячейка может быть якорем для popover */
+.ctCell {
+  position: relative;
+  overflow: visible;
+}
+
+/* ===============================
+   Mobile
+   =============================== */
+
+@media (max-width: 520px) {
+  .ppPop {
+    right: auto;
+    left: 0;
+    width: min(92vw, 360px);
+  }
+}

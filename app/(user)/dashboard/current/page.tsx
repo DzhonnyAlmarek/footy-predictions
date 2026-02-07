@@ -3,6 +3,10 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
+import PointsPopover, {
+  type PointsBreakdown as PtsBD,
+} from "@/app/_components/points-popover";
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -39,7 +43,6 @@ type MatchRow = {
   kickoff_at: string | null;
   home_score: number | null;
   away_score: number | null;
-  // tour оставляем в типе (может быть в select), но в UI не показываем
   tour?: { name: string } | { name: string }[] | null;
   home_team: TeamMaybeArray;
   away_team: TeamMaybeArray;
@@ -52,24 +55,33 @@ type UserRow = {
 
 type Pred = { h: number | null; a: number | null };
 
+type ScoreRow = {
+  prediction_id: number;
+  match_id: number;
+  user_id: string;
+
+  total: number;
+
+  team_goals: number;
+  outcome: number;
+  diff: number;
+  near_bonus: number;
+
+  outcome_guessed: number;
+  outcome_mult: number;
+  diff_guessed: number;
+  diff_mult: number;
+
+  pred_text: string;
+  res_text: string;
+};
+
 /* ================= helpers ================= */
 
 function teamName(t: TeamMaybeArray): string {
   if (!t) return "?";
   if (Array.isArray(t)) return t[0]?.name ?? "?";
   return t.name ?? "?";
-}
-
-function signOutcome(h: number, a: number): -1 | 0 | 1 {
-  if (h === a) return 0;
-  return h > a ? 1 : -1;
-}
-
-function multByCount(cnt: number): number {
-  if (cnt === 1) return 1.75;
-  if (cnt === 2) return 1.5;
-  if (cnt === 3) return 1.25;
-  return 1;
 }
 
 function round2(n: number): number {
@@ -79,67 +91,25 @@ function round2(n: number): number {
 function formatPts(n: number | null): string {
   if (n == null) return "";
   const x = Math.round(n * 100) / 100;
-  // чтобы было красиво: 12 вместо 12.0
   return Number.isInteger(x) ? String(x) : String(x);
 }
 
-function buildBreakdown(params: {
-  pred: Pred;
-  resH: number | null;
-  resA: number | null;
-  outcomeMult: number;
-  diffMult: number;
-}): { pts: number | null; breakdown: string } {
-  const { pred, resH, resA, outcomeMult, diffMult } = params;
+function toPtsBD(s: ScoreRow): PtsBD {
+  return {
+    total: Number(s.total),
+    teamGoals: Number(s.team_goals),
+    outcome: Number(s.outcome),
+    diff: Number(s.diff),
+    nearBonus: Number(s.near_bonus),
 
-  if (pred.h == null || pred.a == null) return { pts: null, breakdown: "Нет прогноза" };
-  if (resH == null || resA == null) return { pts: null, breakdown: "Матч не сыгран" };
+    outcomeGuessed: Number(s.outcome_guessed),
+    outcomeMult: Number(s.outcome_mult),
+    diffGuessed: Number(s.diff_guessed),
+    diffMult: Number(s.diff_mult),
 
-  const lines: string[] = [];
-  let pts = 0;
-
-  // голы команд
-  const hOk = pred.h === resH;
-  const aOk = pred.a === resA;
-  if (hOk) {
-    pts += 0.5;
-    lines.push("0.5 — голы хозяев угаданы");
-  }
-  if (aOk) {
-    pts += 0.5;
-    lines.push("0.5 — голы гостей угаданы");
-  }
-
-  // исход
-  const outOk = signOutcome(pred.h, pred.a) === signOutcome(resH, resA);
-  if (outOk) {
-    const add = 2 * outcomeMult;
-    pts += add;
-    lines.push(`${formatPts(add)} — исход (${formatPts(2)} × ${formatPts(outcomeMult)})`);
-  }
-
-  // разница
-  const diffOk = pred.h - pred.a === resH - resA;
-  if (diffOk) {
-    const add = 1 * diffMult;
-    pts += add;
-    lines.push(`${formatPts(add)} — разница (${formatPts(1)} × ${formatPts(diffMult)})`);
-  }
-
-  // промах на 1 мяч (в сумме)
-  const dist = Math.abs(pred.h - resH) + Math.abs(pred.a - resA);
-  if (dist === 1) {
-    pts += 0.5;
-    lines.push("0.5 — промах на 1 мяч (в сумме)");
-  }
-
-  pts = round2(pts);
-
-  if (lines.length === 0) {
-    return { pts, breakdown: "0 — нет совпадений" };
-  }
-
-  return { pts, breakdown: lines.join("\n") };
+    predText: s.pred_text,
+    resText: s.res_text,
+  };
 }
 
 /* ================= page ================= */
@@ -195,65 +165,53 @@ export default async function DashboardCurrentTablePage() {
     .order("kickoff_at");
 
   const matches = (matchesRaw ?? []) as MatchRow[];
-  const matchIds = matches.map((m) => m.id);
+  const matchIds = matches.map((m) => Number(m.id));
 
-  // predictions
+  // predictions (нужны для отображения predText даже если матч не сыгран)
   const { data: predsRaw } = await sb
     .from("predictions")
-    .select("match_id,user_id,home_pred,away_pred")
+    .select("id,match_id,user_id,home_pred,away_pred")
     .in("match_id", matchIds)
     .in("user_id", userIds);
 
-  // map preds
-  const predByMatchUser = new Map<string, Map<string, Pred>>();
+  const predByMatchUser = new Map<number, Map<string, { pred: Pred; predictionId: number }>>();
   for (const p of predsRaw ?? []) {
-    if (!predByMatchUser.has(p.match_id)) predByMatchUser.set(p.match_id, new Map());
-    predByMatchUser.get(p.match_id)!.set(p.user_id, {
-      h: p.home_pred == null ? null : Number(p.home_pred),
-      a: p.away_pred == null ? null : Number(p.away_pred),
+    const mid = Number(p.match_id);
+    if (!predByMatchUser.has(mid)) predByMatchUser.set(mid, new Map());
+    predByMatchUser.get(mid)!.set(p.user_id, {
+      predictionId: Number(p.id),
+      pred: {
+        h: p.home_pred == null ? null : Number(p.home_pred),
+        a: p.away_pred == null ? null : Number(p.away_pred),
+      },
     });
   }
 
-  // counts per match (для мультипликаторов)
-  const outcomeCount = new Map<string, number>();
-  const diffCount = new Map<string, number>();
+  // prediction_scores for these matches/users
+  const { data: scoresRaw } = await sb
+    .from("prediction_scores")
+    .select(
+      "prediction_id,match_id,user_id,total,team_goals,outcome,diff,near_bonus,outcome_guessed,outcome_mult,diff_guessed,diff_mult,pred_text,res_text"
+    )
+    .in("match_id", matchIds)
+    .in("user_id", userIds);
 
-  for (const m of matches) {
-    let o = 0;
-    let d = 0;
-
-    if (m.home_score != null && m.away_score != null) {
-      for (const u of users) {
-        const pr = predByMatchUser.get(m.id)?.get(u.user_id);
-        if (!pr || pr.h == null || pr.a == null) continue;
-        if (signOutcome(pr.h, pr.a) === signOutcome(m.home_score, m.away_score)) o++;
-        if (pr.h - pr.a === m.home_score - m.away_score) d++;
-      }
-    }
-
-    outcomeCount.set(m.id, o);
-    diffCount.set(m.id, d);
+  const scoreByMatchUser = new Map<number, Map<string, ScoreRow>>();
+  for (const s of (scoresRaw ?? []) as any[]) {
+    const mid = Number(s.match_id);
+    if (!scoreByMatchUser.has(mid)) scoreByMatchUser.set(mid, new Map());
+    scoreByMatchUser.get(mid)!.set(s.user_id, s as ScoreRow);
   }
 
-  // totals by user
+  // totals by user from stored scores
   const totalByUser = new Map<string, number>();
   for (const u of users) totalByUser.set(u.user_id, 0);
 
   for (const m of matches) {
-    const om = multByCount(outcomeCount.get(m.id) ?? 0);
-    const dm = multByCount(diffCount.get(m.id) ?? 0);
-
+    const mid = Number(m.id);
     for (const u of users) {
-      const pr = predByMatchUser.get(m.id)?.get(u.user_id) ?? { h: null, a: null };
-      const { pts } = buildBreakdown({
-        pred: pr,
-        resH: m.home_score,
-        resA: m.away_score,
-        outcomeMult: om,
-        diffMult: dm,
-      });
-
-      if (pts != null) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + pts));
+      const s = scoreByMatchUser.get(mid)?.get(u.user_id);
+      if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.total)));
     }
   }
 
@@ -294,8 +252,7 @@ export default async function DashboardCurrentTablePage() {
                   ? "—"
                   : `${m.home_score}:${m.away_score}`;
 
-              const om = multByCount(outcomeCount.get(m.id) ?? 0);
-              const dm = multByCount(diffCount.get(m.id) ?? 0);
+              const mid = Number(m.id);
 
               return (
                 <tr key={m.id}>
@@ -307,7 +264,6 @@ export default async function DashboardCurrentTablePage() {
                     <div style={{ fontWeight: 900 }}>
                       {teamName(m.home_team)} — {teamName(m.away_team)}
                     </div>
-                    {/* ✅ убрали тур полностью */}
                   </td>
 
                   <td className="ctSticky ctColRes" style={{ fontWeight: 900, whiteSpace: "nowrap" }}>
@@ -315,18 +271,13 @@ export default async function DashboardCurrentTablePage() {
                   </td>
 
                   {users.map((u) => {
-                    const pr = predByMatchUser.get(m.id)?.get(u.user_id) ?? { h: null, a: null };
-
-                    const { pts, breakdown } = buildBreakdown({
-                      pred: pr,
-                      resH: m.home_score,
-                      resA: m.away_score,
-                      outcomeMult: om,
-                      diffMult: dm,
-                    });
+                    const predPack = predByMatchUser.get(mid)?.get(u.user_id);
+                    const pr = predPack?.pred ?? { h: null, a: null };
 
                     const predText =
                       pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
+
+                    const s = scoreByMatchUser.get(mid)?.get(u.user_id);
 
                     return (
                       <td key={u.user_id} className="ctCell">
@@ -334,35 +285,8 @@ export default async function DashboardCurrentTablePage() {
                           {predText}
                         </span>
 
-                        {pts != null ? (
-                          <details style={{ display: "inline-block", marginLeft: 8 }}>
-                            <summary
-                              style={{
-                                display: "inline",
-                                cursor: "pointer",
-                                opacity: 0.8,
-                                fontWeight: 900,
-                                whiteSpace: "nowrap",
-                              }}
-                              title="Нажми, чтобы увидеть расшифровку"
-                            >
-                              {formatPts(pts)}
-                            </summary>
-                            <div
-                              style={{
-                                marginTop: 8,
-                                padding: 10,
-                                borderRadius: 10,
-                                border: "1px solid rgba(0,0,0,0.10)",
-                                background: "rgba(0,0,0,0.03)",
-                                whiteSpace: "pre-line",
-                                fontSize: 12,
-                                maxWidth: 260,
-                              }}
-                            >
-                              {breakdown}
-                            </div>
-                          </details>
+                        {s ? (
+                          <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} />
                         ) : null}
                       </td>
                     );
