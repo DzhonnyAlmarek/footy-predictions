@@ -34,7 +34,7 @@ async function readLogin() {
 }
 
 /* ================= GET ================= */
-// вернуть все прогнозы пользователя
+// все прогнозы текущего пользователя
 
 export async function GET() {
   try {
@@ -45,15 +45,12 @@ export async function GET() {
 
     const sb = service();
 
-    const { data: acc, error: accErr } = await sb
+    const { data: acc } = await sb
       .from("login_accounts")
       .select("user_id")
       .eq("login", fpLogin)
       .maybeSingle();
 
-    if (accErr) {
-      return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
-    }
     if (!acc?.user_id) {
       return NextResponse.json({ ok: false, error: "not_auth" }, { status: 401 });
     }
@@ -70,7 +67,7 @@ export async function GET() {
     return NextResponse.json({ ok: true, data });
   } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: e?.message ?? "unknown_error" },
+      { ok: false, error: e?.message ?? "unknown error" },
       { status: 500 }
     );
   }
@@ -89,35 +86,27 @@ export async function POST(req: Request) {
     const payload = await req.json();
 
     const match_id = Number(payload?.match_id);
-    const home_raw = payload?.home_pred;
-    const away_raw = payload?.away_pred;
+    const rawHome = payload?.home_pred;
+    const rawAway = payload?.away_pred;
 
-    if (!Number.isInteger(match_id)) {
+    if (!Number.isFinite(match_id)) {
       return NextResponse.json({ ok: false, error: "bad_match_id" }, { status: 400 });
     }
 
-    const home_pred =
-      home_raw === null || home_raw === undefined ? null : Number(home_raw);
-    const away_pred =
-      away_raw === null || away_raw === undefined ? null : Number(away_raw);
-
     const sb = service();
 
-    const { data: acc, error: accErr } = await sb
+    const { data: acc } = await sb
       .from("login_accounts")
       .select("user_id")
       .eq("login", fpLogin)
       .maybeSingle();
 
-    if (accErr) {
-      return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
-    }
     if (!acc?.user_id) {
       return NextResponse.json({ ok: false, error: "not_auth" }, { status: 401 });
     }
 
-    /* ===== кейс 1: оба null → удалить прогноз ===== */
-    if (home_pred === null && away_pred === null) {
+    /* ===== удаление прогноза ===== */
+    if (rawHome === null && rawAway === null) {
       const { error } = await sb
         .from("predictions")
         .delete()
@@ -131,40 +120,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, deleted: true });
     }
 
-    /* ===== кейс 2: оба числа >= 0 ===== */
+    /* ===== сохранение / обновление ===== */
+    const home_pred = Number(rawHome);
+    const away_pred = Number(rawAway);
+
     if (
-      Number.isInteger(home_pred) &&
-      Number.isInteger(away_pred) &&
-      home_pred >= 0 &&
-      away_pred >= 0
+      !Number.isInteger(home_pred) ||
+      !Number.isInteger(away_pred) ||
+      home_pred < 0 ||
+      away_pred < 0
     ) {
-      const { error } = await sb
-        .from("predictions")
-        .upsert(
-          {
-            user_id: acc.user_id,
-            match_id,
-            home_pred,
-            away_pred,
-          },
-          { onConflict: "match_id,user_id" }
-        );
-
-      if (error) {
-        return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
-      }
-
-      return NextResponse.json({ ok: true });
+      return NextResponse.json(
+        { ok: false, error: "bad_pred_values" },
+        { status: 400 }
+      );
     }
 
-    /* ===== всё остальное — ошибка ===== */
-    return NextResponse.json(
-      { ok: false, error: "bad_pred_values" },
-      { status: 400 }
-    );
+    const { error } = await sb
+      .from("predictions")
+      .upsert(
+        {
+          user_id: acc.user_id,
+          match_id,
+          home_pred,
+          away_pred,
+        },
+        { onConflict: "match_id,user_id" }
+      );
+
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: e?.message ?? "unknown_error" },
+      { ok: false, error: e?.message ?? "unknown error" },
       { status: 500 }
     );
   }
