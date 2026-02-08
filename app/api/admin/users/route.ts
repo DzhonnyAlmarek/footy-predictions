@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { createServerClient } from "@supabase/ssr";
 
 /* ================== helpers ================== */
 
@@ -9,6 +8,14 @@ function mustEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
+}
+
+function decodeMaybe(v: string) {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
 }
 
 function genTempPassword() {
@@ -23,48 +30,24 @@ function getServiceSupabase() {
   );
 }
 
-async function getAuthedSupabase() {
-  const cookieStore = await cookies();
+async function requireAdminByCookie() {
+  const cs = await cookies();
+  const raw = cs.get("fp_login")?.value ?? "";
+  const fpLogin = decodeMaybe(raw).trim().toUpperCase();
 
-  return createServerClient(
-    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll() {},
-      },
-    }
-  );
-}
-
-async function requireAdmin() {
-  const supabase = await getAuthedSupabase();
-  const { data } = await supabase.auth.getUser();
-
-  if (!data.user) {
-    return { ok: false, res: NextResponse.json({ error: "not_auth" }, { status: 401 }) };
+  if (fpLogin !== "ADMIN") {
+    return {
+      ok: false as const,
+      res: NextResponse.json({ error: "not_auth" }, { status: 401 }),
+    };
   }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", data.user.id)
-    .single();
-
-  if (profile?.role !== "admin") {
-    return { ok: false, res: NextResponse.json({ error: "admin_only" }, { status: 403 }) };
-  }
-
-  return { ok: true };
+  return { ok: true as const };
 }
 
 /* ================== GET ================== */
 
 export async function GET() {
-  const gate = await requireAdmin();
+  const gate = await requireAdminByCookie();
   if (!gate.ok) return gate.res;
 
   const svc = getServiceSupabase();
@@ -75,14 +58,13 @@ export async function GET() {
     .order("login", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
   return NextResponse.json({ users: data ?? [] });
 }
 
 /* ================== POST ================== */
 
 export async function POST(req: Request) {
-  const gate = await requireAdmin();
+  const gate = await requireAdminByCookie();
   if (!gate.ok) return gate.res;
 
   const body = await req.json().catch(() => ({}));
@@ -91,7 +73,6 @@ export async function POST(req: Request) {
 
   if (!login) return NextResponse.json({ error: "login_required" }, { status: 400 });
 
-  // Если пароль не передали — генерим. Если передали — проверяем длину.
   const password = String(body.password ?? "").trim() || genTempPassword();
   if (password.length < 6) {
     return NextResponse.json({ error: "password_too_short" }, { status: 400 });
@@ -116,15 +97,12 @@ export async function POST(req: Request) {
 
   const userId = created.data.user.id;
 
-  // profiles
   const { error: pErr } = await svc.from("profiles").insert({ id: userId, username: login, role });
   if (pErr) {
-    // supabase-js auth admin методы — Promise, их можно catch
     await svc.auth.admin.deleteUser(userId).catch(() => {});
     return NextResponse.json({ error: pErr.message }, { status: 400 });
   }
 
-  // login_accounts (+temp_password)
   const { error: aErr } = await svc.from("login_accounts").insert({
     user_id: userId,
     login,
@@ -133,13 +111,10 @@ export async function POST(req: Request) {
   });
 
   if (aErr) {
-    // ВАЖНО: query builder без .catch — используем try/catch
     try {
       await svc.from("profiles").delete().eq("id", userId);
     } catch {}
-
     await svc.auth.admin.deleteUser(userId).catch(() => {});
-
     return NextResponse.json({ error: aErr.message }, { status: 400 });
   }
 
@@ -149,12 +124,11 @@ export async function POST(req: Request) {
 /* ================== PATCH ================== */
 
 export async function PATCH(req: Request) {
-  const gate = await requireAdmin();
+  const gate = await requireAdminByCookie();
   if (!gate.ok) return gate.res;
 
   const body = await req.json().catch(() => ({}));
   const userId = String(body.user_id ?? "").trim();
-
   if (!userId) return NextResponse.json({ error: "user_id_required" }, { status: 400 });
 
   const svc = getServiceSupabase();
@@ -178,14 +152,12 @@ export async function PATCH(req: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  // сброс пароля (временный)
+  // сброс пароля
   if (body.reset_password === true) {
     const tempPassword = genTempPassword();
 
     const upd = await svc.auth.admin.updateUserById(userId, { password: tempPassword });
-    if (upd.error) {
-      return NextResponse.json({ error: upd.error.message }, { status: 400 });
-    }
+    if (upd.error) return NextResponse.json({ error: upd.error.message }, { status: 400 });
 
     const { error } = await svc
       .from("login_accounts")
@@ -203,12 +175,11 @@ export async function PATCH(req: Request) {
 /* ================== DELETE ================== */
 
 export async function DELETE(req: Request) {
-  const gate = await requireAdmin();
+  const gate = await requireAdminByCookie();
   if (!gate.ok) return gate.res;
 
   const body = await req.json().catch(() => ({}));
   const userId = String(body.user_id ?? "").trim();
-
   if (!userId) return NextResponse.json({ error: "user_id_required" }, { status: 400 });
 
   const svc = getServiceSupabase();
@@ -216,7 +187,6 @@ export async function DELETE(req: Request) {
   try {
     await svc.from("login_accounts").delete().eq("user_id", userId);
   } catch {}
-
   try {
     await svc.from("profiles").delete().eq("id", userId);
   } catch {}
