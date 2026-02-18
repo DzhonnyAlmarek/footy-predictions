@@ -22,7 +22,6 @@ export async function GET() {
   try {
     const sb = service();
 
-    // ВАЖНО: temp_password НЕ отдаём публично
     const { data, error } = await sb
       .from("login_accounts")
       .select("login,must_change_password")
@@ -40,7 +39,6 @@ export async function GET() {
       })),
     });
   } catch (e: any) {
-    // Это как раз поймает Missing env на Vercel
     return NextResponse.json(
       { ok: false, error: e?.message ?? "unknown_error" },
       { status: 500 }
