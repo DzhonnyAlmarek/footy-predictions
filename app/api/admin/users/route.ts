@@ -10,7 +10,7 @@ function mustEnv(name: string) {
   return v;
 }
 
-function decodeMaybe(v: string) {
+function decodeMaybe(v: string): string {
   try {
     return decodeURIComponent(v);
   } catch {
@@ -30,16 +30,13 @@ function getServiceSupabase() {
   );
 }
 
-async function requireAdminByCookie() {
+async function requireAdmin() {
   const cs = await cookies();
   const raw = cs.get("fp_login")?.value ?? "";
   const fpLogin = decodeMaybe(raw).trim().toUpperCase();
 
   if (fpLogin !== "ADMIN") {
-    return {
-      ok: false as const,
-      res: NextResponse.json({ error: "not_auth" }, { status: 401 }),
-    };
+    return { ok: false, res: NextResponse.json({ error: "not_auth" }, { status: 401 }) };
   }
   return { ok: true as const };
 }
@@ -47,7 +44,7 @@ async function requireAdminByCookie() {
 /* ================== GET ================== */
 
 export async function GET() {
-  const gate = await requireAdminByCookie();
+  const gate = await requireAdmin();
   if (!gate.ok) return gate.res;
 
   const svc = getServiceSupabase();
@@ -58,13 +55,14 @@ export async function GET() {
     .order("login", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
   return NextResponse.json({ users: data ?? [] });
 }
 
 /* ================== POST ================== */
 
 export async function POST(req: Request) {
-  const gate = await requireAdminByCookie();
+  const gate = await requireAdmin();
   if (!gate.ok) return gate.res;
 
   const body = await req.json().catch(() => ({}));
@@ -74,9 +72,7 @@ export async function POST(req: Request) {
   if (!login) return NextResponse.json({ error: "login_required" }, { status: 400 });
 
   const password = String(body.password ?? "").trim() || genTempPassword();
-  if (password.length < 6) {
-    return NextResponse.json({ error: "password_too_short" }, { status: 400 });
-  }
+  if (password.length < 6) return NextResponse.json({ error: "password_too_short" }, { status: 400 });
 
   const svc = getServiceSupabase();
   const email = `${login.toLowerCase()}.${Date.now()}@local.invalid`;
@@ -124,7 +120,7 @@ export async function POST(req: Request) {
 /* ================== PATCH ================== */
 
 export async function PATCH(req: Request) {
-  const gate = await requireAdminByCookie();
+  const gate = await requireAdmin();
   if (!gate.ok) return gate.res;
 
   const body = await req.json().catch(() => ({}));
@@ -175,7 +171,7 @@ export async function PATCH(req: Request) {
 /* ================== DELETE ================== */
 
 export async function DELETE(req: Request) {
-  const gate = await requireAdminByCookie();
+  const gate = await requireAdmin();
   if (!gate.ok) return gate.res;
 
   const body = await req.json().catch(() => ({}));
@@ -187,6 +183,7 @@ export async function DELETE(req: Request) {
   try {
     await svc.from("login_accounts").delete().eq("user_id", userId);
   } catch {}
+
   try {
     await svc.from("profiles").delete().eq("id", userId);
   } catch {}

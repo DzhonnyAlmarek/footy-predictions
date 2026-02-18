@@ -9,82 +9,82 @@ type Props = {
   canEdit: boolean;
 };
 
-function isInt0(v: number) {
-  return Number.isInteger(v) && v >= 0;
+function norm(v: string) {
+  return v.replace(/[^\d]/g, ""); // только цифры
 }
 
 export default function PredCellEditable({ matchId, homePred, awayPred, canEdit }: Props) {
-  // локальное состояние — источник правды при вводе
   const [h, setH] = useState(homePred == null ? "" : String(homePred));
   const [a, setA] = useState(awayPred == null ? "" : String(awayPred));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // чтобы не перетирать ввод пользователя старыми props
-  const hydratedRef = useRef(false);
-  const lastMatchIdRef = useRef(matchId);
+  // чтобы не перетирать ввод пользователя, пока он печатает
+  const dirtyRef = useRef(false);
 
-  // 1) при смене matchId — реинициализируем
   useEffect(() => {
-    if (lastMatchIdRef.current !== matchId) {
-      lastMatchIdRef.current = matchId;
-      hydratedRef.current = false;
-      setH(homePred == null ? "" : String(homePred));
-      setA(awayPred == null ? "" : String(awayPred));
-      setError(null);
-    }
-  }, [matchId, homePred, awayPred]);
-
-  // 2) один раз на монтировании — заполняем из props
-  useEffect(() => {
-    if (hydratedRef.current) return;
-    hydratedRef.current = true;
+    if (dirtyRef.current) return;
     setH(homePred == null ? "" : String(homePred));
-    setA(awayPred == null ? "" : String(awayPred));
-  }, [homePred, awayPred]);
+  }, [homePred]);
 
-  async function persist() {
+  useEffect(() => {
+    if (dirtyRef.current) return;
+    setA(awayPred == null ? "" : String(awayPred));
+  }, [awayPred]);
+
+  async function saveCurrent(nextH: string, nextA: string) {
     if (!canEdit) return;
 
-    setError(null);
+    const hh = nextH.trim();
+    const aa = nextA.trim();
 
-    const hh = h.trim();
-    const aa = a.trim();
-
-    // ✅ если оба пустые — это "удалить прогноз"
-    const wantDelete = hh === "" && aa === "";
-
-    // ✅ если заполнено только одно поле — НЕ сохраняем и НЕ ругаемся
-    if (!wantDelete && (hh === "" || aa === "")) return;
-
-    // парсим
-    const home = wantDelete ? null : Number(hh);
-    const away = wantDelete ? null : Number(aa);
-
-    if (!wantDelete) {
-      if (!Number.isFinite(home!) || !Number.isFinite(away!)) return;
-      if (!isInt0(home!) || !isInt0(away!)) {
-        setError("Только целые числа 0+");
-        return;
+    // ✅ оба пустые -> удалить прогноз
+    if (hh === "" && aa === "") {
+      setSaving(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/predictions", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ match_id: matchId, home_pred: null, away_pred: null }),
+          cache: "no-store",
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json?.ok) throw new Error(json?.error || "Ошибка удаления");
+      } catch (e: any) {
+        setError(e?.message || "Ошибка");
+      } finally {
+        setSaving(false);
+        dirtyRef.current = false;
       }
+      return;
+    }
+
+    // ✅ сохраняем только когда оба заполнены и валидны (без “введите оба числа”)
+    if (hh === "" || aa === "") return;
+
+    const home = Number(hh);
+    const away = Number(aa);
+
+    if (!Number.isInteger(home) || home < 0 || !Number.isInteger(away) || away < 0) {
+      setError("Только целые 0+");
+      return;
     }
 
     setSaving(true);
+    setError(null);
     try {
       const res = await fetch("/api/predictions", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          match_id: matchId,
-          home_pred: home, // null => delete
-          away_pred: away, // null => delete
-        }),
+        body: JSON.stringify({ match_id: matchId, home_pred: home, away_pred: away }),
         cache: "no-store",
       });
-
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) throw new Error(json?.error || "Ошибка сохранения");
+      dirtyRef.current = false;
     } catch (e: any) {
       setError(e?.message || "Ошибка");
     } finally {
@@ -93,11 +93,7 @@ export default function PredCellEditable({ matchId, homePred, awayPred, canEdit 
   }
 
   if (!canEdit) {
-    return (
-      <span className="mono">
-        {homePred == null || awayPred == null ? "—" : `${homePred}:${awayPred}`}
-      </span>
-    );
+    return <span className="mono">{homePred == null || awayPred == null ? "—" : `${homePred}:${awayPred}`}</span>;
   }
 
   return (
@@ -105,23 +101,29 @@ export default function PredCellEditable({ matchId, homePred, awayPred, canEdit 
       <input
         className="predInput"
         value={h}
-        onChange={(e) => setH(e.target.value)}
-        onBlur={persist}
+        onChange={(e) => {
+          dirtyRef.current = true;
+          setError(null);
+          setH(norm(e.target.value));
+        }}
+        onBlur={() => saveCurrent(h, a)}
         inputMode="numeric"
         placeholder=""
         disabled={saving}
-        aria-label="Голы хозяев"
       />
       <span className="predSep">:</span>
       <input
         className="predInput"
         value={a}
-        onChange={(e) => setA(e.target.value)}
-        onBlur={persist}
+        onChange={(e) => {
+          dirtyRef.current = true;
+          setError(null);
+          setA(norm(e.target.value));
+        }}
+        onBlur={() => saveCurrent(h, a)}
         inputMode="numeric"
         placeholder=""
         disabled={saving}
-        aria-label="Голы гостей"
       />
 
       {saving ? <span className="predSaving">…</span> : null}
