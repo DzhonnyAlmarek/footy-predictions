@@ -4,8 +4,6 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-/* ===== utils ===== */
-
 function mustEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
@@ -20,12 +18,11 @@ function service() {
   );
 }
 
-/* ===== handler ===== */
-
 export async function GET() {
   try {
     const sb = service();
 
+    // ВАЖНО: temp_password НЕ отдаём публично
     const { data, error } = await sb
       .from("login_accounts")
       .select("login,must_change_password")
@@ -43,8 +40,9 @@ export async function GET() {
       })),
     });
   } catch (e: any) {
+    // Это как раз поймает Missing env на Vercel
     return NextResponse.json(
-      { ok: false, error: e?.message ?? "unknown error" },
+      { ok: false, error: e?.message ?? "unknown_error" },
       { status: 500 }
     );
   }
