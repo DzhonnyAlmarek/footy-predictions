@@ -465,6 +465,286 @@ $$;
 ALTER FUNCTION "public"."publish_stage"("p_stage_id" bigint) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."recalculate_stage_analytics"("p_stage_id" bigint) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+declare
+  v_threshold numeric := 0.9; -- 0.9σ
+begin
+  -- 0) чистим агрегаты этого этапа
+  delete from public.analytics_stage_user_archetype where stage_id = p_stage_id;
+  delete from public.analytics_stage_baseline where stage_id = p_stage_id;
+  delete from public.analytics_stage_user where stage_id = p_stage_id;
+
+  -- 1) собираем по finished матчам и заполненным прогнозам
+  with finished_matches as (
+    select m.id as match_id, m.stage_id, m.home_score, m.away_score
+    from public.matches m
+    where m.stage_id = p_stage_id
+      and m.status = 'finished'
+      and m.home_score is not null
+      and m.away_score is not null
+  ),
+  pred as (
+    select
+      p.user_id,
+      fm.stage_id,
+      fm.match_id,
+      p.home_pred,
+      p.away_pred,
+      fm.home_score,
+      fm.away_score
+    from public.predictions p
+    join finished_matches fm on fm.match_id = p.match_id
+    where p.home_pred is not null
+      and p.away_pred is not null
+  ),
+  agg as (
+    select
+      stage_id,
+      user_id,
+      count(*)::int as matches_count,
+
+      sum(case when home_pred > away_pred then 1 else 0 end)::int as pred_home_count,
+      sum(case when home_pred = away_pred then 1 else 0 end)::int as pred_draw_count,
+      sum(case when home_pred < away_pred then 1 else 0 end)::int as pred_away_count,
+
+      sum(case when home_pred = home_score and away_pred = away_score then 1 else 0 end)::int as exact_count,
+
+      sum((home_pred + away_pred)::numeric) as pred_total_sum,
+      sum(abs(home_pred - away_pred)::numeric) as pred_absdiff_sum,
+      sum(case when abs(home_pred - away_pred) >= 2 then 1 else 0 end)::int as pred_bigdiff_count
+
+    from pred
+    group by stage_id, user_id
+  )
+  insert into public.analytics_stage_user (
+    stage_id, user_id,
+    matches_count,
+    pred_home_count, pred_draw_count, pred_away_count,
+    exact_count,
+    pred_total_sum, pred_absdiff_sum, pred_bigdiff_count,
+    updated_at
+  )
+  select
+    stage_id, user_id,
+    matches_count,
+    pred_home_count, pred_draw_count, pred_away_count,
+    exact_count,
+    pred_total_sum, pred_absdiff_sum, pred_bigdiff_count,
+    now()
+  from agg;
+
+  -- 2) baseline mean/std по этапу (по пользователям, у кого есть хоть 1 учтённый матч)
+  with u as (
+    select
+      stage_id,
+      user_id,
+      matches_count,
+      (exact_count::numeric / nullif(matches_count,0)) as exact_rate,
+      (pred_draw_count::numeric / nullif(matches_count,0)) as draw_rate,
+      (pred_home_count::numeric / nullif(matches_count,0)) as home_rate,
+      (pred_away_count::numeric / nullif(matches_count,0)) as away_rate,
+      (pred_total_sum / nullif(matches_count,0)) as avg_total,
+      (pred_absdiff_sum / nullif(matches_count,0)) as absdiff_avg
+    from public.analytics_stage_user
+    where stage_id = p_stage_id
+      and matches_count > 0
+  )
+  insert into public.analytics_stage_baseline (
+    stage_id, users_count,
+    mean_exact_rate, std_exact_rate,
+    mean_draw_rate,  std_draw_rate,
+    mean_home_rate,  std_home_rate,
+    mean_away_rate,  std_away_rate,
+    mean_avg_total,  std_avg_total,
+    mean_absdiff_avg, std_absdiff_avg,
+    updated_at
+  )
+  select
+    p_stage_id,
+    count(*)::int as users_count,
+
+    coalesce(avg(exact_rate),0),
+    coalesce(stddev_samp(exact_rate),0),
+
+    coalesce(avg(draw_rate),0),
+    coalesce(stddev_samp(draw_rate),0),
+
+    coalesce(avg(home_rate),0),
+    coalesce(stddev_samp(home_rate),0),
+
+    coalesce(avg(away_rate),0),
+    coalesce(stddev_samp(away_rate),0),
+
+    coalesce(avg(avg_total),0),
+    coalesce(stddev_samp(avg_total),0),
+
+    coalesce(avg(absdiff_avg),0),
+    coalesce(stddev_samp(absdiff_avg),0),
+
+    now()
+  from u;
+
+  -- 3) архетипы + русские пояснения
+  with base as (
+    select *
+    from public.analytics_stage_baseline
+    where stage_id = p_stage_id
+  ),
+  u as (
+    select
+      a.*,
+      (a.exact_count::numeric / nullif(a.matches_count,0)) as exact_rate,
+      (a.pred_draw_count::numeric / nullif(a.matches_count,0)) as draw_rate,
+      (a.pred_home_count::numeric / nullif(a.matches_count,0)) as home_rate,
+      (a.pred_away_count::numeric / nullif(a.matches_count,0)) as away_rate,
+      (a.pred_total_sum / nullif(a.matches_count,0)) as avg_total,
+      (a.pred_absdiff_sum / nullif(a.matches_count,0)) as absdiff_avg,
+      (a.pred_bigdiff_count::numeric / nullif(a.matches_count,0)) as bigdiff_rate
+    from public.analytics_stage_user a
+    where a.stage_id = p_stage_id
+  ),
+  scored as (
+    select
+      u.*,
+      b.users_count,
+
+      case when b.std_exact_rate > 0 then (u.exact_rate - b.mean_exact_rate)/b.std_exact_rate else 0 end as z_exact,
+      case when b.std_draw_rate  > 0 then (u.draw_rate  - b.mean_draw_rate )/b.std_draw_rate  else 0 end as z_draw,
+      case when b.std_home_rate  > 0 then (u.home_rate  - b.mean_home_rate )/b.std_home_rate  else 0 end as z_home,
+      case when b.std_away_rate  > 0 then (u.away_rate  - b.mean_away_rate )/b.std_away_rate  else 0 end as z_away,
+      case when b.std_avg_total  > 0 then (u.avg_total  - b.mean_avg_total )/b.std_avg_total  else 0 end as z_total,
+      case when b.std_absdiff_avg> 0 then (u.absdiff_avg- b.mean_absdiff_avg)/b.std_absdiff_avg else 0 end as z_risk,
+
+      b.mean_exact_rate, b.mean_draw_rate, b.mean_home_rate, b.mean_away_rate, b.mean_avg_total, b.mean_absdiff_avg
+    from u
+    cross join base b
+  ),
+  classified as (
+    select
+      s.*,
+
+      case
+        when s.matches_count < 8 then 'forming'
+        when s.matches_count < 13 then 'preliminary'
+        else 'final'
+      end as state,
+
+      (s.z_exact >= v_threshold) as is_sniper,
+      (s.z_draw  >= v_threshold) as is_peace,
+      (s.z_risk  >= v_threshold) as is_risky,
+      (s.z_total <= -v_threshold and s.z_risk <= 0) as is_rational,
+      (s.z_home  >= v_threshold and s.home_rate > s.away_rate) as is_homebias,
+      (s.z_away  >= v_threshold and s.away_rate > s.home_rate) as is_awaybias
+    from scored s
+  ),
+  picked as (
+    select
+      c.*,
+      case
+        when c.state = 'forming' then 'forming'
+        when c.is_sniper then 'sniper'
+        when c.is_peace  then 'peacekeeper'
+        when c.is_risky  then 'risky'
+        when c.is_rational then 'rational'
+        when c.is_homebias then 'home'
+        when c.is_awaybias then 'away'
+        else 'universal'
+      end as archetype_key
+    from classified c
+  )
+  insert into public.analytics_stage_user_archetype (
+    stage_id, user_id,
+    archetype_key, title_ru, summary_ru, reasons_ru,
+    state, updated_at
+  )
+  select
+    p_stage_id,
+    p.user_id,
+
+    p.archetype_key,
+
+    case p.archetype_key
+      when 'forming' then 'Формируется'
+      when 'sniper' then 'Снайпер'
+      when 'peacekeeper' then 'Миротворец'
+      when 'risky' then 'Рисковый'
+      when 'rational' then 'Рационалист'
+      when 'home' then 'Домосед'
+      when 'away' then 'Гостевой романтик'
+      else 'Универсал'
+    end as title_ru,
+
+    case p.archetype_key
+      when 'forming' then format('Недостаточно данных: учтено %s из 8 матчей.', p.matches_count)
+      when 'sniper' then 'Чаще других попадаете в точный счёт.'
+      when 'peacekeeper' then 'Чаще остальных ставите на ничьи.'
+      when 'risky' then 'Любите уверенные победы и крупные разницы.'
+      when 'rational' then 'Предпочитаете аккуратные и низовые счета.'
+      when 'home' then 'Чаще верите в победу хозяев.'
+      when 'away' then 'Чаще других ставите на гостей.'
+      else 'Ваш стиль близок к среднему по этапу.'
+    end as summary_ru,
+
+    case p.archetype_key
+      when 'forming' then jsonb_build_array(
+        format('Матчей учтено: %s.', p.matches_count),
+        'Архетип появится, когда будет достаточно завершённых матчей.'
+      )
+      when 'sniper' then jsonb_build_array(
+        format('Точные счета: %s%% (среднее по этапу: %s%%).',
+          round(p.exact_rate*100), round(p.mean_exact_rate*100)),
+        format('Матчей учтено: %s.', p.matches_count)
+      )
+      when 'peacekeeper' then jsonb_build_array(
+        format('Ничьи в прогнозах: %s%% (среднее: %s%%).',
+          round(p.draw_rate*100), round(p.mean_draw_rate*100)),
+        format('Матчей учтено: %s.', p.matches_count)
+      )
+      when 'risky' then jsonb_build_array(
+        format('Средняя разница в прогнозах: %s (среднее: %s).',
+          round(p.absdiff_avg::numeric, 2), round(p.mean_absdiff_avg::numeric, 2)),
+        format('Крупные разницы (2+): %s%%.', round(p.bigdiff_rate*100)),
+        format('Матчей учтено: %s.', p.matches_count)
+      )
+      when 'rational' then jsonb_build_array(
+        format('Средний тотал прогноза: %s (среднее: %s).',
+          round(p.avg_total::numeric, 2), round(p.mean_avg_total::numeric, 2)),
+        format('Средняя разница: %s (среднее: %s).',
+          round(p.absdiff_avg::numeric, 2), round(p.mean_absdiff_avg::numeric, 2)),
+        format('Матчей учтено: %s.', p.matches_count)
+      )
+      when 'home' then jsonb_build_array(
+        format('На хозяев: %s%% (среднее: %s%%).',
+          round(p.home_rate*100), round(p.mean_home_rate*100)),
+        format('Матчей учтено: %s.', p.matches_count)
+      )
+      when 'away' then jsonb_build_array(
+        format('На гостей: %s%% (среднее: %s%%).',
+          round(p.away_rate*100), round(p.mean_away_rate*100)),
+        format('Матчей учтено: %s.', p.matches_count)
+      )
+      else jsonb_build_array(
+        format('Точные счета: %s%% (среднее: %s%%).',
+          round(p.exact_rate*100), round(p.mean_exact_rate*100)),
+        format('Ничьи: %s%% (среднее: %s%%).',
+          round(p.draw_rate*100), round(p.mean_draw_rate*100)),
+        format('Матчей учтено: %s.', p.matches_count)
+      )
+    end as reasons_ru,
+
+    p.state,
+    now()
+  from picked p;
+
+end;
+$$;
+
+
+ALTER FUNCTION "public"."recalculate_stage_analytics"("p_stage_id" bigint) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."score_match"("p_match_id" bigint) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -678,6 +958,61 @@ ALTER FUNCTION "public"."set_updated_at"() OWNER TO "postgres";
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."analytics_stage_baseline" (
+    "stage_id" bigint NOT NULL,
+    "users_count" integer DEFAULT 0 NOT NULL,
+    "mean_exact_rate" numeric DEFAULT 0 NOT NULL,
+    "std_exact_rate" numeric DEFAULT 0 NOT NULL,
+    "mean_draw_rate" numeric DEFAULT 0 NOT NULL,
+    "std_draw_rate" numeric DEFAULT 0 NOT NULL,
+    "mean_home_rate" numeric DEFAULT 0 NOT NULL,
+    "std_home_rate" numeric DEFAULT 0 NOT NULL,
+    "mean_away_rate" numeric DEFAULT 0 NOT NULL,
+    "std_away_rate" numeric DEFAULT 0 NOT NULL,
+    "mean_avg_total" numeric DEFAULT 0 NOT NULL,
+    "std_avg_total" numeric DEFAULT 0 NOT NULL,
+    "mean_absdiff_avg" numeric DEFAULT 0 NOT NULL,
+    "std_absdiff_avg" numeric DEFAULT 0 NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."analytics_stage_baseline" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."analytics_stage_user" (
+    "stage_id" bigint NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "matches_count" integer DEFAULT 0 NOT NULL,
+    "pred_home_count" integer DEFAULT 0 NOT NULL,
+    "pred_draw_count" integer DEFAULT 0 NOT NULL,
+    "pred_away_count" integer DEFAULT 0 NOT NULL,
+    "exact_count" integer DEFAULT 0 NOT NULL,
+    "pred_total_sum" numeric DEFAULT 0 NOT NULL,
+    "pred_absdiff_sum" numeric DEFAULT 0 NOT NULL,
+    "pred_bigdiff_count" integer DEFAULT 0 NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."analytics_stage_user" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."analytics_stage_user_archetype" (
+    "stage_id" bigint NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "archetype_key" "text" NOT NULL,
+    "title_ru" "text" NOT NULL,
+    "summary_ru" "text" NOT NULL,
+    "reasons_ru" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "state" "text" NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."analytics_stage_user_archetype" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."audit_log" (
@@ -1012,6 +1347,21 @@ ALTER TABLE ONLY "public"."tours" ALTER COLUMN "id" SET DEFAULT "nextval"('"publ
 
 
 
+ALTER TABLE ONLY "public"."analytics_stage_baseline"
+    ADD CONSTRAINT "analytics_stage_baseline_pkey" PRIMARY KEY ("stage_id");
+
+
+
+ALTER TABLE ONLY "public"."analytics_stage_user_archetype"
+    ADD CONSTRAINT "analytics_stage_user_archetype_pk" PRIMARY KEY ("stage_id", "user_id");
+
+
+
+ALTER TABLE ONLY "public"."analytics_stage_user"
+    ADD CONSTRAINT "analytics_stage_user_pk" PRIMARY KEY ("stage_id", "user_id");
+
+
+
 ALTER TABLE ONLY "public"."audit_log"
     ADD CONSTRAINT "audit_log_pkey" PRIMARY KEY ("id");
 
@@ -1319,6 +1669,27 @@ CREATE POLICY "admin_read_all_prediction_scores" ON "public"."prediction_scores"
 CREATE POLICY "admin_read_all_scores" ON "public"."prediction_scores" FOR SELECT USING ((EXISTS ( SELECT 1
    FROM "public"."profiles" "p"
   WHERE (("p"."id" = "auth"."uid"()) AND ("p"."role" = 'admin'::"text")))));
+
+
+
+ALTER TABLE "public"."analytics_stage_baseline" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "analytics_stage_baseline_select_public" ON "public"."analytics_stage_baseline" FOR SELECT USING (true);
+
+
+
+ALTER TABLE "public"."analytics_stage_user" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."analytics_stage_user_archetype" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "analytics_stage_user_archetype_select_public" ON "public"."analytics_stage_user_archetype" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "analytics_stage_user_select_public" ON "public"."analytics_stage_user" FOR SELECT USING (true);
 
 
 
@@ -1741,6 +2112,12 @@ GRANT ALL ON FUNCTION "public"."publish_stage"("p_stage_id" bigint) TO "service_
 
 
 
+GRANT ALL ON FUNCTION "public"."recalculate_stage_analytics"("p_stage_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."recalculate_stage_analytics"("p_stage_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recalculate_stage_analytics"("p_stage_id" bigint) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."score_match"("p_match_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."score_match"("p_match_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."score_match"("p_match_id" bigint) TO "service_role";
@@ -1783,6 +2160,24 @@ GRANT ALL ON FUNCTION "public"."set_updated_at"() TO "service_role";
 
 
 
+
+
+
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_baseline" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_baseline" TO "authenticated";
+GRANT ALL ON TABLE "public"."analytics_stage_baseline" TO "service_role";
+
+
+
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_user" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_user" TO "authenticated";
+GRANT ALL ON TABLE "public"."analytics_stage_user" TO "service_role";
+
+
+
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_user_archetype" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_user_archetype" TO "authenticated";
+GRANT ALL ON TABLE "public"."analytics_stage_user_archetype" TO "service_role";
 
 
 
