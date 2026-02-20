@@ -28,7 +28,8 @@ function getSiteUrl(): string {
   return "https://footy-predictions.vercel.app";
 }
 
-// ---------- formatting helpers ----------
+/* ---------------- helpers ---------------- */
+
 function escapeHtml(s: string): string {
   return String(s ?? "")
     .replaceAll("&", "&amp;")
@@ -40,6 +41,7 @@ function escapeHtml(s: string): string {
 function fmtRuDateTime(iso?: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
+  // твой TZ = Europe/Amsterdam
   return d.toLocaleString("ru-RU", {
     timeZone: "Europe/Amsterdam",
     day: "2-digit",
@@ -54,15 +56,11 @@ function fmtRemain(ms: number): string {
   if (ms <= 0) return "0м";
 
   const totalMin = Math.floor(ms / 60000);
-  const dd = Math.floor(totalMin / (60 * 24));
-  const hh = Math.floor((totalMin % (60 * 24)) / 60);
-  const mm = totalMin % 60;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
 
-  const parts: string[] = [];
-  if (dd) parts.push(`${dd}д`);
-  if (hh) parts.push(`${hh}ч`);
-  if (mm || parts.length === 0) parts.push(`${mm}м`);
-  return parts.join(" ");
+  if (h <= 0) return `${m}м`;
+  return `${h}ч ${m}м`;
 }
 
 type TeamObj = { name: string } | { name: string }[] | null;
@@ -74,28 +72,12 @@ function teamName(t: TeamObj): string {
   return String(anyT?.name ?? "?");
 }
 
-// ---------- telegram ----------
-async function tgSendMessage(params: {
-  text: string;
-  buttonUrl: string;
-  buttonText?: string;
-  extraButtonUrl?: string;
-  extraButtonText?: string;
-}) {
+/* ---------------- telegram ---------------- */
+
+async function tgSendMessage(params: { text: string; buttonUrl: string; buttonText: string }) {
   const token = mustEnv("TELEGRAM_BOT_TOKEN");
   const chatId = mustEnv("TELEGRAM_CHAT_ID");
-
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
-
-  const inline_keyboard: Array<Array<{ text: string; url: string }>> = [
-    [{ text: params.buttonText ?? "Открыть дашборд", url: params.buttonUrl }],
-  ];
-
-  if (params.extraButtonUrl) {
-    inline_keyboard.push([
-      { text: params.extraButtonText ?? "Открыть матч", url: params.extraButtonUrl },
-    ]);
-  }
 
   const res = await fetch(url, {
     method: "POST",
@@ -105,7 +87,9 @@ async function tgSendMessage(params: {
       text: params.text,
       parse_mode: "HTML",
       disable_web_page_preview: true,
-      reply_markup: { inline_keyboard },
+      reply_markup: {
+        inline_keyboard: [[{ text: params.buttonText, url: params.buttonUrl }]],
+      },
     }),
   });
 
@@ -115,21 +99,18 @@ async function tgSendMessage(params: {
   }
 }
 
-// ---------- business logic ----------
-const HOURS_24_MS = 24 * 60 * 60 * 1000;
+/* ---------------- data ---------------- */
 
 async function getNearestMatch(sb: ReturnType<typeof service>) {
   const nowIso = new Date().toISOString();
 
-  const { data: stage, error: sErr } = await sb
+  const { data: stage } = await sb
     .from("stages")
     .select("id")
     .eq("is_current", true)
     .maybeSingle();
 
-  if (sErr) throw new Error(`stage_failed: ${sErr.message}`);
-
-  // ближайший по deadline_at (логично для напоминаний)
+  // ближайший по kickoff_at
   let q = sb
     .from("matches")
     .select(
@@ -137,34 +118,6 @@ async function getNearestMatch(sb: ReturnType<typeof service>) {
       id,
       stage_id,
       kickoff_at,
-      deadline_at,
-      status,
-      stage_match_no,
-      home_team:teams!matches_home_team_id_fkey ( name ),
-      away_team:teams!matches_away_team_id_fkey ( name )
-    `
-    )
-    .gt("deadline_at", nowIso)
-    .order("deadline_at", { ascending: true })
-    .limit(1);
-
-  if (stage?.id) q = q.eq("stage_id", Number(stage.id));
-
-  const { data, error } = await q;
-  if (error) throw new Error(`nearest_match_failed: ${error.message}`);
-
-  const m: any = (data ?? [])[0];
-  if (m?.id) return m;
-
-  // fallback — если deadline_at не используется
-  let q2 = sb
-    .from("matches")
-    .select(
-      `
-      id,
-      stage_id,
-      kickoff_at,
-      deadline_at,
       status,
       stage_match_no,
       home_team:teams!matches_home_team_id_fkey ( name ),
@@ -175,25 +128,21 @@ async function getNearestMatch(sb: ReturnType<typeof service>) {
     .order("kickoff_at", { ascending: true })
     .limit(1);
 
-  if (stage?.id) q2 = q2.eq("stage_id", Number(stage.id));
+  if (stage?.id) q = q.eq("stage_id", Number(stage.id));
 
-  const { data: data2, error: err2 } = await q2;
-  if (err2) throw new Error(`nearest_match_fallback_failed: ${err2.message}`);
+  const { data, error } = await q;
+  if (error) throw new Error(`nearest_match_failed: ${error.message}`);
 
-  return (data2 ?? [])[0] ?? null;
+  return (data ?? [])[0] ?? null;
 }
 
-/**
- * Берём участников из login_accounts (исключаем ADMIN).
- * Имя = login.
- */
 async function getParticipants(sb: ReturnType<typeof service>) {
-  const { data: accounts, error: aErr } = await sb
+  const { data: accounts, error } = await sb
     .from("login_accounts")
     .select("user_id,login")
     .not("user_id", "is", null);
 
-  if (aErr) throw new Error(`accounts_failed: ${aErr.message}`);
+  if (error) throw new Error(`accounts_failed: ${error.message}`);
 
   const real = (accounts ?? []).filter(
     (a: any) => String(a?.login ?? "").trim().toUpperCase() !== "ADMIN"
@@ -213,7 +162,8 @@ async function getParticipants(sb: ReturnType<typeof service>) {
 
 /**
  * Кто НЕ поставил прогноз на матч:
- * нет строки в predictions или home_pred/away_pred null.
+ * - нет строки в predictions
+ * - или home_pred/away_pred = null
  */
 async function getMissingUsersForMatch(
   sb: ReturnType<typeof service>,
@@ -222,13 +172,13 @@ async function getMissingUsersForMatch(
 ): Promise<Set<string>> {
   if (userIds.length === 0) return new Set();
 
-  const { data: preds, error: prErr } = await sb
+  const { data: preds, error } = await sb
     .from("predictions")
     .select("user_id,home_pred,away_pred")
     .eq("match_id", matchId)
     .in("user_id", userIds);
 
-  if (prErr) throw new Error(`predictions_failed: ${prErr.message}`);
+  if (error) throw new Error(`predictions_failed: ${error.message}`);
 
   const done = new Set<string>();
   for (const p of preds ?? []) {
@@ -244,6 +194,44 @@ async function getMissingUsersForMatch(
   return missing;
 }
 
+/* ---------------- bucket logic ---------------- */
+
+// без 4 часов — только 24/12/1
+const BUCKETS = [
+  { key: "24h", hours: 24 },
+  { key: "12h", hours: 12 },
+  { key: "1h", hours: 1 },
+] as const;
+
+// cron каждые 10 минут => окно +/- 10 минут
+const WINDOW_MINUTES = 10;
+const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
+
+function pickBucket(msToKickoff: number): (typeof BUCKETS)[number] | null {
+  for (const b of BUCKETS) {
+    const target = b.hours * 60 * 60 * 1000;
+    if (Math.abs(msToKickoff - target) <= WINDOW_MS) return b;
+  }
+  return null;
+}
+
+async function tryLogSend(sb: ReturnType<typeof service>, matchId: number, bucketKey: string) {
+  // В таблице telegram_broadcast_log должен быть уникальный (match_id, bucket)
+  const { error } = await sb
+    .from("telegram_broadcast_log")
+    .insert({ match_id: matchId, bucket: bucketKey });
+
+  if (!error) return true;
+
+  const msg = String((error as any).message ?? "");
+  const low = msg.toLowerCase();
+  if (low.includes("duplicate") || low.includes("unique")) return false;
+
+  throw new Error(`log_failed: ${msg}`);
+}
+
+/* ---------------- handler ---------------- */
+
 export async function POST(req: Request) {
   const auth = req.headers.get("authorization") ?? "";
   const secret = mustEnv("CRON_SECRET");
@@ -254,80 +242,88 @@ export async function POST(req: Request) {
   try {
     const sb = service();
     const site = getSiteUrl();
-
-    const dashUrl = `${site}/dashboard`;
+    const entryUrl = `${site}/`; // вход/титульная
 
     const match = await getNearestMatch(sb);
-    if (!match?.id) {
+    if (!match?.id || !match?.kickoff_at) {
       return NextResponse.json({ ok: true, skipped: true, reason: "no_upcoming_matches" });
     }
 
     const matchId = Number(match.id);
-    const home = teamName(match.home_team);
-    const away = teamName(match.away_team);
+    const kickoffAt = String(match.kickoff_at);
+    const kickoffMs = new Date(kickoffAt).getTime();
+    const nowMs = Date.now();
+    const msToKickoff = kickoffMs - nowMs;
 
-    const kickoffAt = match.kickoff_at as string | null;
-    const deadlineAt = (match.deadline_at as string | null) ?? kickoffAt;
+    if (!Number.isFinite(msToKickoff) || msToKickoff <= 0) {
+      return NextResponse.json({ ok: true, skipped: true, reason: "match_started" });
+    }
 
-    const now = Date.now();
-    const deadlineMs = deadlineAt ? new Date(deadlineAt).getTime() : NaN;
-    const remainMs = Number.isFinite(deadlineMs) ? deadlineMs - now : NaN;
+    const bucket = pickBucket(msToKickoff);
+    if (!bucket) {
+      return NextResponse.json({ ok: true, skipped: true, reason: "outside_windows" });
+    }
 
     const { userIds, nameById } = await getParticipants(sb);
     const missing = await getMissingUsersForMatch(sb, matchId, userIds);
 
-    const isUrgent = Number.isFinite(remainMs) ? remainMs <= HOURS_24_MS : true;
-    const hasMissing = missing.size > 0;
-
-    // умная отправка: если не срочно и все уже поставили — пропускаем
-    if (!isUrgent && !hasMissing) {
-      return NextResponse.json({ ok: true, skipped: true, reason: "not_urgent_and_all_done" });
+    // ✅ отправляем только если есть “должники”
+    if (missing.size === 0) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "no_missing_users",
+        bucket: bucket.key,
+      });
     }
 
-    const title =
-      `⚽ <b>Напоминание</b>\n` +
-      `Проверьте прогнозы на ближайшие матчи.`;
+    // ✅ анти-дубли
+    const shouldSend = await tryLogSend(sb, matchId, bucket.key);
+    if (!shouldSend) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "already_sent",
+        bucket: bucket.key,
+      });
+    }
 
-    const matchBlock =
-      `\n\n<b>Ближайший матч:</b>\n` +
-      `${escapeHtml(home)} — ${escapeHtml(away)}\n` +
-      `Начало: <b>${escapeHtml(fmtRuDateTime(kickoffAt))}</b>\n` +
-      `Дедлайн: <b>${escapeHtml(fmtRuDateTime(deadlineAt))}</b>`;
-
-    const remainLine = Number.isFinite(remainMs)
-      ? `\nДо дедлайна: <b>${escapeHtml(fmtRemain(remainMs))}</b>`
-      : "";
+    const home = teamName(match.home_team);
+    const away = teamName(match.away_team);
 
     const MAX_NAMES = 12;
     const missingNames = Array.from(missing)
       .map((uid) => nameById.get(uid) ?? uid.slice(0, 8))
       .slice(0, MAX_NAMES);
 
-    const missingBlock = hasMissing
-      ? `\n\n<b>Не поставили прогноз:</b>\n` +
-        `${missingNames.map((n) => `• ${escapeHtml(n)}`).join("\n")}` +
-        (missing.size > MAX_NAMES ? `\n…и ещё ${missing.size - MAX_NAMES}` : "")
-      : `\n\n✅ <b>Все участники уже поставили прогноз</b>`;
+    const title = `⚽ <b>Напоминание за ${bucket.hours}ч</b>\nПора внести прогноз.`;
 
-    const footer = `\n\nОткрыть: ${escapeHtml(dashUrl)}`;
+    const matchBlock =
+      `\n\n<b>Ближайший матч:</b>\n` +
+      `${escapeHtml(home)} — ${escapeHtml(away)}\n` +
+      `Начало: <b>${escapeHtml(fmtRuDateTime(kickoffAt))}</b>\n` +
+      `До начала: <b>${escapeHtml(fmtRemain(msToKickoff))}</b>`;
 
-    const text = `${title}${matchBlock}${remainLine}${missingBlock}${footer}`;
+    const missingBlock =
+      `\n\n<b>Нет прогноза у:</b>\n` +
+      `${missingNames.map((n) => `• ${escapeHtml(n)}`).join("\n")}` +
+      (missing.size > MAX_NAMES ? `\n…и ещё ${missing.size - MAX_NAMES}` : "");
 
-    const matchUrl = `${site}/match/${matchId}`;
+    const footer = `\n\nПерейти на сайт: ${escapeHtml(entryUrl)}`;
+
+    const text = `${title}${matchBlock}${missingBlock}${footer}`;
 
     await tgSendMessage({
       text,
-      buttonUrl: dashUrl,
-      buttonText: "Открыть дашборд",
-      extraButtonUrl: matchUrl,
-      extraButtonText: "Открыть матч",
+      buttonUrl: entryUrl,
+      buttonText: "Перейти на сайт для внесения прогноза",
     });
 
     return NextResponse.json({
       ok: true,
+      bucket: bucket.key,
       match_id: matchId,
       missing_count: missing.size,
-      urgent: isUrgent,
     });
   } catch (e: any) {
     return NextResponse.json(
