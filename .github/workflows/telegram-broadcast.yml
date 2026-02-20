@@ -1,0 +1,17 @@
+name: telegram-broadcast
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # каждый час (UTC)
+  workflow_dispatch:
+
+jobs:
+  broadcast:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call broadcast endpoint
+        run: |
+          curl -sS -X POST "${{ secrets.BROADCAST_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --data "{}"
