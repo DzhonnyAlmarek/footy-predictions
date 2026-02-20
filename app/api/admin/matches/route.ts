@@ -112,7 +112,6 @@ function computeBreakdown(params: {
 }
 
 async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId: number) {
-  // 1) берём результат матча
   const { data: match, error: mErr } = await sb
     .from("matches")
     .select("id,home_score,away_score")
@@ -125,14 +124,13 @@ async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId
   const resH = match.home_score;
   const resA = match.away_score;
 
-  // если результат очищен — удаляем breakdown (чтобы UI не показывал старое)
+  // если результат очищен — удаляем breakdown
   if (resH == null || resA == null) {
     const { error: delErr } = await sb.from("prediction_scores").delete().eq("match_id", matchId);
     if (delErr) throw new Error(delErr.message);
     return;
   }
 
-  // 2) берём все прогнозы на матч (нужны id, user_id, home_pred, away_pred)
   const { data: preds, error: pErr } = await sb
     .from("predictions")
     .select("id,match_id,user_id,home_pred,away_pred")
@@ -142,7 +140,6 @@ async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId
 
   const predRows = (preds ?? []).filter((p: any) => p.home_pred != null && p.away_pred != null);
 
-  // 3) считаем, сколько угадали исход и разницу (среди заполненных прогнозов)
   let outcomeGuessed = 0;
   let diffGuessed = 0;
 
@@ -154,7 +151,6 @@ async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId
     if (ph - pa === resH - resA) diffGuessed++;
   }
 
-  // 4) готовим UPSERT-массив
   const upserts = predRows.map((p: any) => {
     const ph = Number(p.home_pred);
     const pa = Number(p.away_pred);
@@ -193,7 +189,6 @@ async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId
     };
   });
 
-  // 5) upsert
   if (upserts.length > 0) {
     const { error: uErr } = await sb
       .from("prediction_scores")
@@ -201,7 +196,6 @@ async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId
 
     if (uErr) throw new Error(uErr.message);
   } else {
-    // нет заполненных прогнозов — на всякий случай чистим существующие строки
     const { error: delErr } = await sb.from("prediction_scores").delete().eq("match_id", matchId);
     if (delErr) throw new Error(delErr.message);
   }
@@ -243,36 +237,57 @@ export async function GET(req: Request) {
   return NextResponse.json({ ok: true, matches: data ?? [] });
 }
 
+/**
+ * PATCH поддерживает частичное обновление:
+ * - можно менять только дату (kickoff_at/deadline_at)
+ * - или только счёт
+ * - или всё вместе
+ */
 type PatchBody = {
   id: number;
-  home_score: number | null;
-  away_score: number | null;
+
+  home_score?: number | null;
+  away_score?: number | null;
   status?: string | null;
+
+  kickoff_at?: string | null;
+  deadline_at?: string | null;
 };
 
-/** PATCH /api/admin/matches  body: {id, home_score, away_score, status?} */
+/** PATCH /api/admin/matches */
 export async function PATCH(req: Request) {
   const adm = await requireAdmin();
   if (!adm.ok) return adm.res;
 
   const body = (await req.json().catch(() => null)) as PatchBody | null;
+
+  // важно: теперь home_score/away_score не обязательны
   if (!body?.id) {
     return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
   }
 
   const sb = service();
 
-  const upd: any = {
-    home_score: body.home_score,
-    away_score: body.away_score,
-  };
-  if (body.status != null) upd.status = body.status;
+  const upd: any = {};
+
+  // обновляем только те поля, которые реально пришли
+  if ("home_score" in body) upd.home_score = body.home_score ?? null;
+  if ("away_score" in body) upd.away_score = body.away_score ?? null;
+  if ("status" in body) upd.status = body.status ?? null;
+
+  if ("kickoff_at" in body) upd.kickoff_at = body.kickoff_at;
+  if ("deadline_at" in body) upd.deadline_at = body.deadline_at;
+
+  // если вообще ничего не передали кроме id — смысла апдейтить нет
+  if (Object.keys(upd).length === 0) {
+    return NextResponse.json({ ok: false, error: "nothing_to_update" }, { status: 400 });
+  }
 
   const { data, error } = await sb
     .from("matches")
     .update(upd)
     .eq("id", body.id)
-    .select("id,stage_id,home_score,away_score,status")
+    .select("id,stage_id,home_score,away_score,status,kickoff_at,deadline_at")
     .maybeSingle();
 
   if (error) {
@@ -282,32 +297,36 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: false, error: "not_updated" }, { status: 400 });
   }
 
-  // ✅ если результат задан (или очищен) — пересчитываем/чистим prediction_scores
-  try {
-    await recomputePredictionScores(sb, Number(body.id));
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: "score_recompute_failed", detail: String(e?.message ?? e) },
-      { status: 500 }
-    );
-  }
+  // ✅ пересчёты делаем ТОЛЬКО если менялся счёт
+  const scoresTouched = ("home_score" in body) || ("away_score" in body);
 
-  // ✅ пересчёт аналитики по этапу (rebuild)
-  try {
-    const stageId = Number((data as any).stage_id);
-    const { error: aErr } = await sb.rpc("recalculate_stage_analytics", { p_stage_id: stageId });
-    if (aErr) throw new Error(aErr.message);
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: "analytics_recompute_failed", detail: String(e?.message ?? e) },
-      { status: 500 }
-    );
+  if (scoresTouched) {
+    try {
+      await recomputePredictionScores(sb, Number(body.id));
+    } catch (e: any) {
+      return NextResponse.json(
+        { ok: false, error: "score_recompute_failed", detail: String(e?.message ?? e) },
+        { status: 500 }
+      );
+    }
+
+    // ✅ пересчёт аналитики по этапу — тоже только при изменении результата
+    try {
+      const stageId = Number((data as any).stage_id);
+      const { error: aErr } = await sb.rpc("recalculate_stage_analytics", { p_stage_id: stageId });
+      if (aErr) throw new Error(aErr.message);
+    } catch (e: any) {
+      return NextResponse.json(
+        { ok: false, error: "analytics_recompute_failed", detail: String(e?.message ?? e) },
+        { status: 500 }
+      );
+    }
   }
 
   return NextResponse.json({ ok: true, match: data });
 }
 
-/** (опционально) POST /api/admin/matches — если у тебя используется создание матчей */
+/** POST /api/admin/matches — создание матча */
 export async function POST(req: Request) {
   const adm = await requireAdmin();
   if (!adm.ok) return adm.res;
