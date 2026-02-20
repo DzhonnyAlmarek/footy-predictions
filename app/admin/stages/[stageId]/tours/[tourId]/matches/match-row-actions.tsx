@@ -9,6 +9,7 @@ type Team = { id: number; name: string };
 type Props = {
   matchId: number;
   kickoffAt?: string | null;
+  deadlineAt?: string | null;
   homeScore?: number | null;
   awayScore?: number | null;
   homeTeamId: number;
@@ -21,9 +22,18 @@ function isoToDateValue(iso?: string | null) {
   return String(iso).slice(0, 10);
 }
 
+// Ставим техническое время 12:00 UTC, чтобы дата была стабильной и не "прыгала" из-за TZ.
+function dateToIsoUTC(dateYYYYMMDD: string): string | null {
+  const d = (dateYYYYMMDD ?? "").trim();
+  if (!d) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  return `${d}T12:00:00.000Z`;
+}
+
 export default function MatchRowActions({
   matchId,
   kickoffAt,
+  deadlineAt,
   homeScore,
   awayScore,
   homeTeamId,
@@ -50,7 +60,8 @@ export default function MatchRowActions({
     const res = await fetch("/api/admin/matches", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ match_id: matchId, ...body }),
+      // ✅ ВАЖНО: сервер ждёт id
+      body: JSON.stringify({ id: matchId, ...body }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json?.error ?? `Ошибка (${res.status})`);
@@ -68,7 +79,7 @@ export default function MatchRowActions({
     setTeams(data ?? []);
   }
 
-  // ✅ Автосохранение даты
+  // ✅ Автосохранение даты (kickoff_at / deadline_at)
   useEffect(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
@@ -80,7 +91,14 @@ export default function MatchRowActions({
     const t = setTimeout(async () => {
       try {
         setLoading(true);
-        await patch({ date: date || "" });
+
+        const iso = dateToIsoUTC(date);
+        // Если дату очистили — чистим kickoff/deadline
+        await patch({
+          kickoff_at: iso,
+          deadline_at: iso, // если хочешь отдельно — можно поменять
+        });
+
         setMsg("дата сохранена ✅");
         router.refresh();
       } catch (e: any) {
@@ -130,9 +148,10 @@ export default function MatchRowActions({
 
     setLoading(true);
     try {
+      // сервер ждёт number|null, а не "" — отправляем null при очистке
       await patch({
-        home_score: hh === "" ? "" : Number(hh),
-        away_score: aa === "" ? "" : Number(aa),
+        home_score: hh === "" ? null : Number(hh),
+        away_score: aa === "" ? null : Number(aa),
       });
       setMsg("счёт сохранён ✅");
       router.refresh();
@@ -152,7 +171,8 @@ export default function MatchRowActions({
       const res = await fetch("/api/admin/matches", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ match_id: matchId }),
+        // если у тебя DELETE реализован на сервере как {id} — тоже важно
+        body: JSON.stringify({ id: matchId }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error ?? `Ошибка (${res.status})`);

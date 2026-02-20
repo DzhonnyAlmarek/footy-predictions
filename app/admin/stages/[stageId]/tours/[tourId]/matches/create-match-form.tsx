@@ -6,6 +6,13 @@ import { createClient } from "@/lib/supabase/client";
 
 type Team = { id: number; name: string };
 
+function dateToIsoUTC(dateYYYYMMDD: string): string | null {
+  const d = (dateYYYYMMDD ?? "").trim();
+  if (!d) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  return `${d}T12:00:00.000Z`;
+}
+
 export default function CreateMatchForm({ stageId, tourId }: { stageId: number; tourId: number }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -40,6 +47,8 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
     if (!Number.isFinite(a)) return setMsg("Выберите гостей");
     if (h === a) return setMsg("Команды должны быть разными");
 
+    const iso = dateToIsoUTC(date);
+
     setLoading(true);
     try {
       const res = await fetch("/api/admin/matches", {
@@ -50,7 +59,8 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
           tour_id: tourId,
           home_team_id: h,
           away_team_id: a,
-          date: date || "", // YYYY-MM-DD или пусто
+          kickoff_at: iso,
+          deadline_at: iso,
         }),
       });
 
@@ -60,10 +70,9 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
       setHomeTeamId("");
       setAwayTeamId("");
       setDate("");
-      setMsg(`Матч создан ✅ (№ ${json?.stage_match_no ?? "?"})`);
+      setMsg("Матч создан ✅");
       router.refresh();
     } catch (e: any) {
-      // "Failed to fetch" теперь почти не должно быть, но если сервер упал — увидим
       setMsg(e?.message ?? "Ошибка создания матча");
     } finally {
       setLoading(false);
@@ -107,7 +116,6 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
           ))}
         </select>
 
-        {/* ✅ только дата, без времени */}
         <input
           type="date"
           value={date}
@@ -115,7 +123,7 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
           onInput={(e) => setDate((e.target as HTMLInputElement).value)}
           disabled={loading}
           style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
-          title="Дата матча (время не требуется)"
+          title="Дата матча"
         />
 
         <button
@@ -142,7 +150,7 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
       ) : null}
 
       <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
-        Дата фиксируется сразу при выборе. Время не вводим (на сервере ставится техническое 12:00 UTC).
+        Дата хранится как kickoff_at/deadline_at (техническое время 12:00 UTC).
       </div>
     </form>
   );

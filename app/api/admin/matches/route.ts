@@ -38,6 +38,13 @@ async function requireAdmin(): Promise<{ ok: true } | { ok: false; res: NextResp
   return { ok: true };
 }
 
+function dateToIsoUTC(dateYYYYMMDD: string): string | null {
+  const d = (dateYYYYMMDD ?? "").trim();
+  if (!d) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  return `${d}T12:00:00.000Z`;
+}
+
 /* ================= scoring helpers ================= */
 
 function signOutcome(h: number, a: number): -1 | 0 | 1 {
@@ -190,10 +197,7 @@ async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId
   });
 
   if (upserts.length > 0) {
-    const { error: uErr } = await sb
-      .from("prediction_scores")
-      .upsert(upserts, { onConflict: "prediction_id" });
-
+    const { error: uErr } = await sb.from("prediction_scores").upsert(upserts, { onConflict: "prediction_id" });
     if (uErr) throw new Error(uErr.message);
   } else {
     const { error: delErr } = await sb.from("prediction_scores").delete().eq("match_id", matchId);
@@ -230,21 +234,22 @@ export async function GET(req: Request) {
     .order("stage_match_no", { ascending: true, nullsFirst: false })
     .order("kickoff_at", { ascending: true });
 
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true, matches: data ?? [] });
 }
 
 /**
  * PATCH поддерживает частичное обновление:
- * - можно менять только дату (kickoff_at/deadline_at)
- * - или только счёт
+ * - kickoff_at/deadline_at
+ * - или счёт
  * - или всё вместе
+ *
+ * + совместимость: match_id вместо id, date вместо kickoff_at
  */
 type PatchBody = {
-  id: number;
+  id?: number;
+  match_id?: number; // legacy
 
   home_score?: number | null;
   away_score?: number | null;
@@ -252,17 +257,18 @@ type PatchBody = {
 
   kickoff_at?: string | null;
   deadline_at?: string | null;
+
+  date?: string; // legacy YYYY-MM-DD
 };
 
-/** PATCH /api/admin/matches */
 export async function PATCH(req: Request) {
   const adm = await requireAdmin();
   if (!adm.ok) return adm.res;
 
   const body = (await req.json().catch(() => null)) as PatchBody | null;
 
-  // важно: теперь home_score/away_score не обязательны
-  if (!body?.id) {
+  const id = Number(body?.id ?? body?.match_id);
+  if (!Number.isFinite(id) || id <= 0) {
     return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
   }
 
@@ -270,15 +276,20 @@ export async function PATCH(req: Request) {
 
   const upd: any = {};
 
-  // обновляем только те поля, которые реально пришли
-  if ("home_score" in body) upd.home_score = body.home_score ?? null;
-  if ("away_score" in body) upd.away_score = body.away_score ?? null;
-  if ("status" in body) upd.status = body.status ?? null;
+  // legacy: date -> kickoff_at/deadline_at
+  if (typeof body?.date === "string") {
+    const iso = dateToIsoUTC(body.date);
+    upd.kickoff_at = iso;
+    upd.deadline_at = iso;
+  }
 
-  if ("kickoff_at" in body) upd.kickoff_at = body.kickoff_at;
-  if ("deadline_at" in body) upd.deadline_at = body.deadline_at;
+  if ("home_score" in (body ?? {})) upd.home_score = body?.home_score ?? null;
+  if ("away_score" in (body ?? {})) upd.away_score = body?.away_score ?? null;
+  if ("status" in (body ?? {})) upd.status = body?.status ?? null;
 
-  // если вообще ничего не передали кроме id — смысла апдейтить нет
+  if ("kickoff_at" in (body ?? {})) upd.kickoff_at = body?.kickoff_at ?? null;
+  if ("deadline_at" in (body ?? {})) upd.deadline_at = body?.deadline_at ?? null;
+
   if (Object.keys(upd).length === 0) {
     return NextResponse.json({ ok: false, error: "nothing_to_update" }, { status: 400 });
   }
@@ -286,23 +297,19 @@ export async function PATCH(req: Request) {
   const { data, error } = await sb
     .from("matches")
     .update(upd)
-    .eq("id", body.id)
+    .eq("id", id)
     .select("id,stage_id,home_score,away_score,status,kickoff_at,deadline_at")
     .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  }
-  if (!data?.id) {
-    return NextResponse.json({ ok: false, error: "not_updated" }, { status: 400 });
-  }
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (!data?.id) return NextResponse.json({ ok: false, error: "not_updated" }, { status: 400 });
 
-  // ✅ пересчёты делаем ТОЛЬКО если менялся счёт
-  const scoresTouched = ("home_score" in body) || ("away_score" in body);
+  // пересчёты только если трогали счёт
+  const scoresTouched = ("home_score" in (body ?? {})) || ("away_score" in (body ?? {}));
 
   if (scoresTouched) {
     try {
-      await recomputePredictionScores(sb, Number(body.id));
+      await recomputePredictionScores(sb, Number(id));
     } catch (e: any) {
       return NextResponse.json(
         { ok: false, error: "score_recompute_failed", detail: String(e?.message ?? e) },
@@ -310,7 +317,6 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // ✅ пересчёт аналитики по этапу — тоже только при изменении результата
     try {
       const stageId = Number((data as any).stage_id);
       const { error: aErr } = await sb.rpc("recalculate_stage_analytics", { p_stage_id: stageId });
@@ -326,22 +332,28 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ ok: true, match: data });
 }
 
-/** POST /api/admin/matches — создание матча */
+/** POST /api/admin/matches — создание матча
+ * + совместимость: date (YYYY-MM-DD) -> kickoff_at/deadline_at
+ */
 export async function POST(req: Request) {
   const adm = await requireAdmin();
   if (!adm.ok) return adm.res;
 
-  const payload = await req.json().catch(() => null);
-  if (!payload) {
-    return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
+  const payload = (await req.json().catch(() => null)) as any;
+  if (!payload) return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
+
+  // legacy: date
+  if (typeof payload.date === "string" && !("kickoff_at" in payload)) {
+    const iso = dateToIsoUTC(payload.date);
+    payload.kickoff_at = iso;
+    payload.deadline_at = iso;
+    delete payload.date;
   }
 
   const sb = service();
 
   const { data, error } = await sb.from("matches").insert(payload).select("*");
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true, data });
 }
