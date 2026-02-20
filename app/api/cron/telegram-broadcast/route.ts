@@ -19,24 +19,32 @@ function service() {
 }
 
 function getSiteUrl(): string {
-  // 1) Явная настройка (рекомендую)
+  // Рекомендуется задать SITE_URL в Vercel Production
   const explicit = process.env.SITE_URL?.trim();
   if (explicit) return explicit.replace(/\/+$/, "");
 
-  // 2) Vercel системная (если SITE_URL не задан)
+  // Vercel системная (если SITE_URL не задан)
   const vercel = process.env.VERCEL_URL?.trim();
   if (vercel) return `https://${vercel.replace(/\/+$/, "")}`;
 
-  // 3) Фолбэк
+  // fallback
   return "https://footy-predictions.vercel.app";
+}
+
+// ---- formatting helpers ----
+
+function escapeHtml(s: string): string {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function fmtRuDateTime(iso?: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-
-  // Пользователь в NL, но матчевое расписание обычно удобно показывать локально для клуба.
-  // Если хочешь — поменяй timeZone на "Europe/Moscow" или убери совсем.
+  // timezone можно поменять на Europe/Moscow, если нужно
   return d.toLocaleString("ru-RU", {
     timeZone: "Europe/Amsterdam",
     day: "2-digit",
@@ -46,8 +54,23 @@ function fmtRuDateTime(iso?: string | null): string {
   });
 }
 
-type TeamObj = { name: string } | { name: string }[] | null;
+function fmtRemain(ms: number): string {
+  if (!Number.isFinite(ms)) return "—";
+  if (ms <= 0) return "0м";
 
+  const totalMin = Math.floor(ms / 60000);
+  const d = Math.floor(totalMin / (60 * 24));
+  const h = Math.floor((totalMin % (60 * 24)) / 60);
+  const m = totalMin % 60;
+
+  const parts: string[] = [];
+  if (d) parts.push(`${d}д`);
+  if (h) parts.push(`${h}ч`);
+  if (m || parts.length === 0) parts.push(`${m}м`);
+  return parts.join(" ");
+}
+
+type TeamObj = { name: string } | { name: string }[] | null;
 function teamName(t: TeamObj): string {
   if (!t) return "?";
   const anyT: any = t as any;
@@ -55,20 +78,39 @@ function teamName(t: TeamObj): string {
   return String(anyT?.name ?? "?");
 }
 
-async function tgSendMessage(text: string) {
+// ---- telegram ----
+
+async function tgSendMessage(params: {
+  text: string;
+  buttonUrl: string;
+  buttonText?: string;
+  extraButtonUrl?: string;
+  extraButtonText?: string;
+}) {
   const token = mustEnv("TELEGRAM_BOT_TOKEN");
   const chatId = mustEnv("TELEGRAM_CHAT_ID");
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
+
+  const inline_keyboard: Array<Array<{ text: string; url: string }>> = [
+    [{ text: params.buttonText ?? "Открыть дашборд", url: params.buttonUrl }],
+  ];
+
+  if (params.extraButtonUrl) {
+    inline_keyboard.push([
+      { text: params.extraButtonText ?? "Открыть матч", url: params.extraButtonUrl },
+    ]);
+  }
 
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       chat_id: chatId,
-      text,
+      text: params.text,
       parse_mode: "HTML",
       disable_web_page_preview: true,
+      reply_markup: { inline_keyboard },
     }),
   });
 
@@ -78,7 +120,17 @@ async function tgSendMessage(text: string) {
   }
 }
 
-async function getNextMatchLine(sb: ReturnType<typeof service>) {
+// ---- business logic ----
+
+const HOURS_24_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Берём ближайший матч по дедлайну (это логичнее для "внести прогнозы").
+ * Если дедлайна нет — fallback к kickoff_at.
+ */
+async function getNearestMatch(sb: ReturnType<typeof service>) {
+  const nowIso = new Date().toISOString();
+
   // текущий этап (если есть)
   const { data: stage, error: sErr } = await sb
     .from("stages")
@@ -88,37 +140,138 @@ async function getNextMatchLine(sb: ReturnType<typeof service>) {
 
   if (sErr) throw new Error(`stage_failed: ${sErr.message}`);
 
-  const nowIso = new Date().toISOString();
-
   let q = sb
     .from("matches")
     .select(
       `
       id,
+      stage_id,
       kickoff_at,
       deadline_at,
       status,
+      stage_match_no,
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `
     )
-    // ближайший матч после "сейчас"
-    .gt("kickoff_at", nowIso)
-    .order("kickoff_at", { ascending: true })
+    // ближайшее событие после "сейчас"
+    // сначала пробуем по deadline_at
+    .gt("deadline_at", nowIso)
+    .order("deadline_at", { ascending: true })
     .limit(1);
 
   if (stage?.id) q = q.eq("stage_id", Number(stage.id));
 
   const { data, error } = await q;
-  if (error) throw new Error(`next_match_failed: ${error.message}`);
+  if (error) throw new Error(`nearest_match_failed: ${error.message}`);
 
   const m: any = (data ?? [])[0];
-  if (!m?.id) return `Ближайший матч: —`;
+  if (m?.id) return m;
 
-  const home = teamName(m.home_team);
-  const away = teamName(m.away_team);
+  // fallback: если в базе нет deadline_at у будущих матчей — ищем по kickoff_at
+  let q2 = sb
+    .from("matches")
+    .select(
+      `
+      id,
+      stage_id,
+      kickoff_at,
+      deadline_at,
+      status,
+      stage_match_no,
+      home_team:teams!matches_home_team_id_fkey ( name ),
+      away_team:teams!matches_away_team_id_fkey ( name )
+    `
+    )
+    .gt("kickoff_at", nowIso)
+    .order("kickoff_at", { ascending: true })
+    .limit(1);
 
-  return `Ближайший матч: <b>${fmtRuDateTime(m.kickoff_at)}</b> · ${home} — ${away}`;
+  if (stage?.id) q2 = q2.eq("stage_id", Number(stage.id));
+
+  const { data: data2, error: err2 } = await q2;
+  if (err2) throw new Error(`nearest_match_fallback_failed: ${err2.message}`);
+
+  const m2: any = (data2 ?? [])[0];
+  return m2 ?? null;
+}
+
+/**
+ * Реальные участники (исключаем ADMIN).
+ * Берём display_name если есть, иначе login.
+ */
+async function getParticipants(sb: ReturnType<typeof service>) {
+  const { data: accounts, error: aErr } = await sb
+    .from("login_accounts")
+    .select("user_id,login")
+    .not("user_id", "is", null);
+
+  if (aErr) throw new Error(`accounts_failed: ${aErr.message}`);
+
+  const real = (accounts ?? []).filter(
+    (a: any) => String(a?.login ?? "").trim().toUpperCase() !== "ADMIN"
+  );
+
+  const userIds = Array.from(new Set(real.map((a: any) => String(a.user_id))));
+
+  if (userIds.length === 0) return { userIds: [], nameById: new Map<string, string>() };
+
+  const { data: profiles, error: pErr } = await sb
+    .from("profiles")
+    .select("id,display_name")
+    .in("id", userIds);
+
+  if (pErr) throw new Error(`profiles_failed: ${pErr.message}`);
+
+  const profMap = new Map<string, any>();
+  for (const p of profiles ?? []) profMap.set(String(p.id), p);
+
+  const nameById = new Map<string, string>();
+  for (const uid of userIds) {
+    const acc = real.find((x: any) => String(x.user_id) === uid);
+    const prof = profMap.get(uid);
+    const name =
+      String(prof?.display_name ?? "").trim() ||
+      String(acc?.login ?? "").trim() ||
+      uid.slice(0, 8);
+    nameById.set(uid, name);
+  }
+
+  return { userIds, nameById };
+}
+
+/**
+ * Кто НЕ поставил прогноз на конкретный матч.
+ * Считаем "поставил", если есть prediction и оба поля home_pred/away_pred не null.
+ */
+async function getMissingUsersForMatch(
+  sb: ReturnType<typeof service>,
+  matchId: number,
+  userIds: string[]
+): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+
+  const { data: preds, error: prErr } = await sb
+    .from("predictions")
+    .select("user_id,home_pred,away_pred")
+    .eq("match_id", matchId)
+    .in("user_id", userIds);
+
+  if (prErr) throw new Error(`predictions_failed: ${prErr.message}`);
+
+  const done = new Set<string>();
+  for (const p of preds ?? []) {
+    const uid = String((p as any).user_id);
+    const h = (p as any).home_pred;
+    const a = (p as any).away_pred;
+    if (uid && h != null && a != null) done.add(uid);
+  }
+
+  const missing = new Set<string>();
+  for (const uid of userIds) {
+    if (!done.has(uid)) missing.add(uid);
+  }
+  return missing;
 }
 
 export async function POST(req: Request) {
@@ -132,19 +285,87 @@ export async function POST(req: Request) {
   try {
     const sb = service();
     const site = getSiteUrl();
-    const dashboardUrl = `${site}/dashboard`;
 
-    const nextMatchLine = await getNextMatchLine(sb);
+    const dashUrl = `${site}/dashboard`;
 
-    const text =
+    const match = await getNearestMatch(sb);
+    if (!match?.id) {
+      // Нечего напоминать
+      return NextResponse.json({ ok: true, skipped: true, reason: "no_upcoming_matches" });
+    }
+
+    const matchId = Number(match.id);
+    const home = teamName(match.home_team);
+    const away = teamName(match.away_team);
+
+    const kickoffAt = match.kickoff_at as string | null;
+    const deadlineAt = (match.deadline_at as string | null) ?? kickoffAt;
+
+    const now = Date.now();
+    const deadlineMs = deadlineAt ? new Date(deadlineAt).getTime() : NaN;
+    const remainMs = Number.isFinite(deadlineMs) ? deadlineMs - now : NaN;
+
+    const { userIds, nameById } = await getParticipants(sb);
+    const missing = await getMissingUsersForMatch(sb, matchId, userIds);
+
+    // ---- (1) умная отправка ----
+    const isUrgent = Number.isFinite(remainMs) ? remainMs <= HOURS_24_MS : true;
+    const hasMissing = missing.size > 0;
+
+    // Если не срочно и все уже поставили — можно не спамить
+    if (!isUrgent && !hasMissing) {
+      return NextResponse.json({ ok: true, skipped: true, reason: "not_urgent_and_all_done" });
+    }
+
+    // ---- (2) красивое сообщение ----
+    const titleLine =
       `⚽ <b>Напоминание</b>\n` +
-      `Проверьте прогнозы на ближайшие матчи.\n\n` +
-      `${nextMatchLine}\n` +
-      `Открыть: ${dashboardUrl}`;
+      `Проверьте прогнозы на ближайшие матчи.`;
 
-    await tgSendMessage(text);
+    const matchLine =
+      `\n\n<b>Ближайший матч:</b>\n` +
+      `${escapeHtml(home)} — ${escapeHtml(away)}\n` +
+      `Начало: <b>${escapeHtml(fmtRuDateTime(kickoffAt))}</b>\n` +
+      `Дедлайн: <b>${escapeHtml(fmtRuDateTime(deadlineAt))}</b>`;
 
-    return NextResponse.json({ ok: true });
+    const remainLine = Number.isFinite(remainMs)
+      ? `\nДо дедлайна: <b>${escapeHtml(fmtRemain(remainMs))}</b>`
+      : "";
+
+    // список должников (ограничим, чтобы не было полотна)
+    const MAX_NAMES = 12;
+    const missingNames = Array.from(missing)
+      .map((uid) => nameById.get(uid) ?? uid.slice(0, 8))
+      .slice(0, MAX_NAMES);
+
+    const missingLine = hasMissing
+      ? `\n\n<b>Не поставили прогноз:</b>\n` +
+        `${missingNames.map((n) => `• ${escapeHtml(n)}`).join("\n")}` +
+        (missing.size > MAX_NAMES ? `\n…и ещё ${missing.size - MAX_NAMES}` : "")
+      : `\n\n✅ <b>Все участники уже поставили прогноз</b>`;
+
+    const footer = `\n\nОткрыть: ${escapeHtml(dashUrl)}`;
+
+    const text = `${titleLine}${matchLine}${remainLine}${missingLine}${footer}`;
+
+    // ---- (3) inline кнопка ----
+    // если хочешь кнопку на конкретный матч — можно сделать /match/<id>
+    const matchUrl = `${site}/match/${matchId}`;
+
+    await tgSendMessage({
+      text,
+      buttonUrl: dashUrl,
+      buttonText: "Открыть дашборд",
+      extraButtonUrl: matchUrl,
+      extraButtonText: "Открыть матч",
+    });
+
+    return NextResponse.json({
+      ok: true,
+      match_id: matchId,
+      missing_count: missing.size,
+      urgent: isUrgent,
+    });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: "broadcast_failed", message: String(e?.message ?? e) },
