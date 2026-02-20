@@ -471,12 +471,10 @@ CREATE OR REPLACE FUNCTION "public"."recalculate_stage_analytics"("p_stage_id" b
 declare
   v_threshold numeric := 0.9; -- 0.9σ
 begin
-  -- 0) чистим агрегаты этого этапа
   delete from public.analytics_stage_user_archetype where stage_id = p_stage_id;
   delete from public.analytics_stage_baseline where stage_id = p_stage_id;
   delete from public.analytics_stage_user where stage_id = p_stage_id;
 
-  -- 1) собираем по finished матчам и заполненным прогнозам
   with finished_matches as (
     select m.id as match_id, m.stage_id, m.home_score, m.away_score
     from public.matches m
@@ -499,6 +497,24 @@ begin
     where p.home_pred is not null
       and p.away_pred is not null
   ),
+  pred2 as (
+    select
+      stage_id,
+      user_id,
+      match_id,
+      home_pred,
+      away_pred,
+      home_score,
+      away_score,
+      case
+        when home_pred = away_pred and home_score = away_score then 1
+        when home_pred > away_pred and home_score > away_score then 1
+        when home_pred < away_pred and home_score < away_score then 1
+        else 0
+      end as outcome_hit,
+      case when (home_pred - away_pred) = (home_score - away_score) then 1 else 0 end as diff_hit
+    from pred
+  ),
   agg as (
     select
       stage_id,
@@ -513,9 +529,11 @@ begin
 
       sum((home_pred + away_pred)::numeric) as pred_total_sum,
       sum(abs(home_pred - away_pred)::numeric) as pred_absdiff_sum,
-      sum(case when abs(home_pred - away_pred) >= 2 then 1 else 0 end)::int as pred_bigdiff_count
+      sum(case when abs(home_pred - away_pred) >= 2 then 1 else 0 end)::int as pred_bigdiff_count,
 
-    from pred
+      sum(outcome_hit)::int as outcome_hit_count,
+      sum(diff_hit)::int as diff_hit_count
+    from pred2
     group by stage_id, user_id
   )
   insert into public.analytics_stage_user (
@@ -524,6 +542,7 @@ begin
     pred_home_count, pred_draw_count, pred_away_count,
     exact_count,
     pred_total_sum, pred_absdiff_sum, pred_bigdiff_count,
+    outcome_hit_count, diff_hit_count,
     updated_at
   )
   select
@@ -532,10 +551,11 @@ begin
     pred_home_count, pred_draw_count, pred_away_count,
     exact_count,
     pred_total_sum, pred_absdiff_sum, pred_bigdiff_count,
+    outcome_hit_count, diff_hit_count,
     now()
   from agg;
 
-  -- 2) baseline mean/std по этапу (по пользователям, у кого есть хоть 1 учтённый матч)
+  -- baseline mean/std по этапу
   with u as (
     select
       stage_id,
@@ -546,7 +566,9 @@ begin
       (pred_home_count::numeric / nullif(matches_count,0)) as home_rate,
       (pred_away_count::numeric / nullif(matches_count,0)) as away_rate,
       (pred_total_sum / nullif(matches_count,0)) as avg_total,
-      (pred_absdiff_sum / nullif(matches_count,0)) as absdiff_avg
+      (pred_absdiff_sum / nullif(matches_count,0)) as absdiff_avg,
+      (outcome_hit_count::numeric / nullif(matches_count,0)) as outcome_hit_rate,
+      (diff_hit_count::numeric / nullif(matches_count,0)) as diff_hit_rate
     from public.analytics_stage_user
     where stage_id = p_stage_id
       and matches_count > 0
@@ -559,6 +581,8 @@ begin
     mean_away_rate,  std_away_rate,
     mean_avg_total,  std_avg_total,
     mean_absdiff_avg, std_absdiff_avg,
+    mean_outcome_hit_rate, std_outcome_hit_rate,
+    mean_diff_hit_rate, std_diff_hit_rate,
     updated_at
   )
   select
@@ -583,14 +607,18 @@ begin
     coalesce(avg(absdiff_avg),0),
     coalesce(stddev_samp(absdiff_avg),0),
 
+    coalesce(avg(outcome_hit_rate),0),
+    coalesce(stddev_samp(outcome_hit_rate),0),
+
+    coalesce(avg(diff_hit_rate),0),
+    coalesce(stddev_samp(diff_hit_rate),0),
+
     now()
   from u;
 
-  -- 3) архетипы + русские пояснения
+  -- архетипы: стиль отдельно, а точность пойдёт в “показатели” на UI
   with base as (
-    select *
-    from public.analytics_stage_baseline
-    where stage_id = p_stage_id
+    select * from public.analytics_stage_baseline where stage_id = p_stage_id
   ),
   u as (
     select
@@ -609,7 +637,6 @@ begin
     select
       u.*,
       b.users_count,
-
       case when b.std_exact_rate > 0 then (u.exact_rate - b.mean_exact_rate)/b.std_exact_rate else 0 end as z_exact,
       case when b.std_draw_rate  > 0 then (u.draw_rate  - b.mean_draw_rate )/b.std_draw_rate  else 0 end as z_draw,
       case when b.std_home_rate  > 0 then (u.home_rate  - b.mean_home_rate )/b.std_home_rate  else 0 end as z_home,
@@ -624,7 +651,6 @@ begin
   classified as (
     select
       s.*,
-
       case
         when s.matches_count < 8 then 'forming'
         when s.matches_count < 13 then 'preliminary'
@@ -662,7 +688,6 @@ begin
   select
     p_stage_id,
     p.user_id,
-
     p.archetype_key,
 
     case p.archetype_key
@@ -693,43 +718,34 @@ begin
         'Архетип появится, когда будет достаточно завершённых матчей.'
       )
       when 'sniper' then jsonb_build_array(
-        format('Точные счета: %s%% (среднее по этапу: %s%%).',
-          round(p.exact_rate*100), round(p.mean_exact_rate*100)),
+        format('Точные счета: %s%% (среднее: %s%%).', round(p.exact_rate*100), round(p.mean_exact_rate*100)),
         format('Матчей учтено: %s.', p.matches_count)
       )
       when 'peacekeeper' then jsonb_build_array(
-        format('Ничьи в прогнозах: %s%% (среднее: %s%%).',
-          round(p.draw_rate*100), round(p.mean_draw_rate*100)),
+        format('Ничьи в прогнозах: %s%% (среднее: %s%%).', round(p.draw_rate*100), round(p.mean_draw_rate*100)),
         format('Матчей учтено: %s.', p.matches_count)
       )
       when 'risky' then jsonb_build_array(
-        format('Средняя разница в прогнозах: %s (среднее: %s).',
-          round(p.absdiff_avg::numeric, 2), round(p.mean_absdiff_avg::numeric, 2)),
+        format('Средняя разница: %s (среднее: %s).', round(p.absdiff_avg::numeric,2), round(p.mean_absdiff_avg::numeric,2)),
         format('Крупные разницы (2+): %s%%.', round(p.bigdiff_rate*100)),
         format('Матчей учтено: %s.', p.matches_count)
       )
       when 'rational' then jsonb_build_array(
-        format('Средний тотал прогноза: %s (среднее: %s).',
-          round(p.avg_total::numeric, 2), round(p.mean_avg_total::numeric, 2)),
-        format('Средняя разница: %s (среднее: %s).',
-          round(p.absdiff_avg::numeric, 2), round(p.mean_absdiff_avg::numeric, 2)),
+        format('Средний тотал: %s (среднее: %s).', round(p.avg_total::numeric,2), round(p.mean_avg_total::numeric,2)),
+        format('Средняя разница: %s (среднее: %s).', round(p.absdiff_avg::numeric,2), round(p.mean_absdiff_avg::numeric,2)),
         format('Матчей учтено: %s.', p.matches_count)
       )
       when 'home' then jsonb_build_array(
-        format('На хозяев: %s%% (среднее: %s%%).',
-          round(p.home_rate*100), round(p.mean_home_rate*100)),
+        format('На хозяев: %s%% (среднее: %s%%).', round(p.home_rate*100), round(p.mean_home_rate*100)),
         format('Матчей учтено: %s.', p.matches_count)
       )
       when 'away' then jsonb_build_array(
-        format('На гостей: %s%% (среднее: %s%%).',
-          round(p.away_rate*100), round(p.mean_away_rate*100)),
+        format('На гостей: %s%% (среднее: %s%%).', round(p.away_rate*100), round(p.mean_away_rate*100)),
         format('Матчей учтено: %s.', p.matches_count)
       )
       else jsonb_build_array(
-        format('Точные счета: %s%% (среднее: %s%%).',
-          round(p.exact_rate*100), round(p.mean_exact_rate*100)),
-        format('Ничьи: %s%% (среднее: %s%%).',
-          round(p.draw_rate*100), round(p.mean_draw_rate*100)),
+        format('Точные счета: %s%% (среднее: %s%%).', round(p.exact_rate*100), round(p.mean_exact_rate*100)),
+        format('Ничьи: %s%% (среднее: %s%%).', round(p.draw_rate*100), round(p.mean_draw_rate*100)),
         format('Матчей учтено: %s.', p.matches_count)
       )
     end as reasons_ru,
@@ -975,7 +991,11 @@ CREATE TABLE IF NOT EXISTS "public"."analytics_stage_baseline" (
     "std_avg_total" numeric DEFAULT 0 NOT NULL,
     "mean_absdiff_avg" numeric DEFAULT 0 NOT NULL,
     "std_absdiff_avg" numeric DEFAULT 0 NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "mean_outcome_hit_rate" numeric DEFAULT 0 NOT NULL,
+    "std_outcome_hit_rate" numeric DEFAULT 0 NOT NULL,
+    "mean_diff_hit_rate" numeric DEFAULT 0 NOT NULL,
+    "std_diff_hit_rate" numeric DEFAULT 0 NOT NULL
 );
 
 
@@ -993,7 +1013,9 @@ CREATE TABLE IF NOT EXISTS "public"."analytics_stage_user" (
     "pred_total_sum" numeric DEFAULT 0 NOT NULL,
     "pred_absdiff_sum" numeric DEFAULT 0 NOT NULL,
     "pred_bigdiff_count" integer DEFAULT 0 NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "outcome_hit_count" integer DEFAULT 0 NOT NULL,
+    "diff_hit_count" integer DEFAULT 0 NOT NULL
 );
 
 
