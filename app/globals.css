@@ -488,6 +488,7 @@ p{ margin: 0; color: var(--muted); }
   color: #991b1b;
   font-weight: 900;
 }
+
 /* =========================================================
    Admin Results (pretty)
 ========================================================= */
@@ -632,6 +633,7 @@ p{ margin: 0; color: var(--muted); }
   .resultActions{ flex-direction: row; }
   .btnSave{ min-width: 110px; }
 }
+
 /* ===== Admin Results (compact table) ===== */
 .resultsTable .colScore { width: 140px; }
 
@@ -671,4 +673,425 @@ p{ margin: 0; color: var(--muted); }
   border-color: rgba(16,185,129,.35);
   background: rgba(16,185,129,.12);
   color: #065f46;
+}
+
+/* =========================================================
+   Analytics — Help (accordion)
+========================================================= */
+.helpBox{
+  margin-top: 12px;
+  border: 1px solid rgba(17,24,39,.12);
+  border-radius: var(--r);
+  background: rgba(255,255,255,.82);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.helpSummary{
+  cursor: pointer;
+  padding: 12px 14px;
+  font-weight: 950;
+  color: rgba(17,24,39,.80);
+  list-style: none;
+}
+.helpSummary::-webkit-details-marker{ display:none; }
+
+.helpBody{
+  padding: 0 14px 14px;
+  color: rgba(17,24,39,.72);
+  font-weight: 800;
+}
+
+.helpList{
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+.helpList li{ margin-top: 6px; }
+
+.helpNote{
+  margin-top: 10px;
+  opacity: .85;
+}
+
+/* =========================================================
+   Analytics — Momentum
+========================================================= */
+.momentumBox{
+  margin-top: 10px;
+  border: 1px solid rgba(17,24,39,.10);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.78);
+}
+
+.momentumTop{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.momentumLabel{
+  font-weight: 950;
+  color: rgba(17,24,39,.78);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.momentumInfo{ opacity: .6; font-size: 13px; }
+
+.momentumValue{
+  font-weight: 950;
+  letter-spacing: -0.01em;
+}
+
+.momentumValue.isUp{ color: #1d4ed8; }
+.momentumValue.isDown{ color: #b45309; }
+.momentumValue.isFlat{ color: rgba(17,24,39,.70); }
+
+.momentumChart{
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.momentumSmall{
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(17,24,39,.58);
+}
+
+/* =========================================================
+   Analytics UI (premium)
+========================================================= */
+
+.analyticsHead{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.analyticsControls{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* кнопки/ссылки в контролах уже .navLink, но тут чуть улучшаем плотность */
+.analyticsControls .navLink{
+  padding: 8px 12px;
+}
+
+/* select */
+.select{
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  padding: 10px 12px;
+  padding-right: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(17,24,39,.14);
+  background: rgba(255,255,255,.92);
+  font-weight: 900;
+  color: rgba(17,24,39,.85);
+  outline: none;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(17,24,39,.06);
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(17,24,39,.55) 50%),
+    linear-gradient(135deg, rgba(17,24,39,.55) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 12px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.select:focus{
+  border-color: rgba(37,99,235,.45);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12), 0 8px 20px rgba(17,24,39,.06);
+}
+
+.select option{
+  font-weight: 800;
+}
+
+/* Summary cards */
+.analyticsSummary{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analyticsSummaryCard{
+  border-radius: var(--r);
+}
+
+.analyticsSummaryInner{
+  padding: 14px 14px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.analyticsSummaryLabel{
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(17,24,39,.55);
+}
+
+.analyticsSummaryValue{
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  color: #111827;
+}
+
+.analyticsSummaryMuted{
+  font-size: 14px;
+  font-weight: 900;
+  color: rgba(17,24,39,.55);
+  margin-left: 6px;
+}
+
+/* Section title + hints */
+.analyticsSectionTitle{
+  margin-top: 6px;
+  font-weight: 950;
+  font-size: 14px;
+  letter-spacing: .02em;
+  color: rgba(17,24,39,.78);
+  text-transform: uppercase;
+}
+
+.analyticsHint{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(17,24,39,.10);
+  background: rgba(255,255,255,.78);
+  font-weight: 900;
+  color: rgba(17,24,39,.70);
+}
+
+.analyticsHintSmall{
+  margin-top: 10px;
+  font-weight: 800;
+  font-size: 12px;
+  color: rgba(17,24,39,.62);
+  line-height: 1.35;
+}
+
+/* TOP grid */
+.analyticsTopGrid{
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analyticsTopCard{
+  border-radius: var(--r);
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+
+.analyticsTopCard:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(17,24,39,.10);
+  border-color: rgba(37,99,235,.18);
+}
+
+.analyticsTopCardInner{
+  padding: 14px 14px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.analyticsTopTitle{
+  font-weight: 950;
+  color: rgba(17,24,39,.70);
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.analyticsTopName{
+  font-size: 18px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  color: #111827;
+}
+
+.analyticsTopSub{
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(17,24,39,.60);
+}
+
+.analyticsTopBottom{
+  margin-top: 4px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.analyticsTopValue{
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  color: #111827;
+}
+
+.analyticsTopMeta{
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(17,24,39,.58);
+  white-space: nowrap;
+}
+
+/* Participants grid */
+.analyticsGrid{
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analyticsCard{
+  padding: 14px 14px 12px;
+  border-radius: var(--r);
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+
+.analyticsCard:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px rgba(17,24,39,.10);
+  border-color: rgba(37,99,235,.16);
+}
+
+.analyticsNameRow{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.analyticsMiniMeta{
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(17,24,39,.55);
+}
+
+/* badges */
+.badge{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-weight: 950;
+  font-size: 12px;
+  border: 1px solid rgba(17,24,39,.12);
+  background: rgba(17,24,39,.03);
+  color: rgba(17,24,39,.80);
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.badge.isOk{
+  border-color: rgba(16,185,129,.26);
+  background: rgba(16,185,129,.12);
+  color: #065f46;
+}
+
+.badge.isWarn{
+  border-color: rgba(245,158,11,.28);
+  background: rgba(245,158,11,.12);
+  color: #92400e;
+}
+
+.badge.isInfo{
+  border-color: rgba(37,99,235,.22);
+  background: rgba(37,99,235,.10);
+  color: #1d4ed8;
+}
+
+.badge.isNeutral{
+  border-color: rgba(17,24,39,.10);
+  background: rgba(17,24,39,.03);
+  color: rgba(17,24,39,.78);
+}
+
+/* chips */
+.analyticsChips{
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(17,24,39,.10);
+  background: rgba(255,255,255,.78);
+  font-weight: 900;
+  font-size: 12px;
+  color: rgba(17,24,39,.78);
+}
+
+.chip b{
+  color: #111827;
+  font-weight: 950;
+}
+
+/* outcome bar block */
+.outcomeBar{
+  margin-top: 10px;
+  border: 1px solid rgba(17,24,39,.10);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.72);
+}
+
+.outcomeBarTop{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.outcomeLegend{
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(17,24,39,.62);
+  white-space: nowrap;
+}
+
+/* Responsive */
+@media (max-width: 980px){
+  .analyticsSummary{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analyticsTopGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analyticsGrid{ grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px){
+  .analyticsTopGrid{ grid-template-columns: 1fr; }
+  .analyticsSummaryValue{ font-size: 20px; }
+  .analyticsTopValue{ font-size: 20px; }
 }

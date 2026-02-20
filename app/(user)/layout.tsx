@@ -28,7 +28,11 @@ function service() {
   );
 }
 
-export default async function UserLayout({ children }: { children: ReactNode }) {
+export default async function UserLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
   const login = decodeMaybe(rawLogin).trim().toUpperCase();
@@ -36,6 +40,7 @@ export default async function UserLayout({ children }: { children: ReactNode }) 
   if (!login) redirect("/");
 
   const sb = service();
+
   const { data: stage } = await sb
     .from("stages")
     .select("name,status")
@@ -43,11 +48,11 @@ export default async function UserLayout({ children }: { children: ReactNode }) 
     .maybeSingle();
 
   const nav = [
-    { href: "/dashboard", label: "Мои прогнозы" },
-    { href: "/dashboard/current", label: "Текущая таблица" },
-    { href: "/golden-boot", label: "Бутса" },
-    // ✅ лидерборд убрали
-    { href: "/logout", label: "Выйти" },
+    { href: "/dashboard", label: "Мои прогнозы", icon: "✍️" },
+    { href: "/dashboard/current", label: "Текущая таблица", icon: "📊" },
+    { href: "/analytics", label: "Аналитика", icon: "📈" },
+    { href: "/golden-boot", label: "Бутса", icon: "🥇" },
+    { href: "/logout", label: "Выйти", icon: "🚪" },
   ];
 
   return (

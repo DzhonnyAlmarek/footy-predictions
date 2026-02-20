@@ -10,7 +10,17 @@ function mustEnv(name: string): string {
   return v;
 }
 
-function service() {
+function serviceAnon() {
+  // Для чтения логинов достаточно anon (если RLS разрешает),
+  // но если RLS запрещает — переключишь на service ниже.
+  return createClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+}
+
+function serviceRole() {
   return createClient(
     mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
     mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
@@ -20,12 +30,23 @@ function service() {
 
 export async function GET() {
   try {
-    const sb = service();
-
-    const { data, error } = await sb
+    // 1) пробуем anon
+    let sb = serviceAnon();
+    let { data, error } = await sb
       .from("login_accounts")
-      .select("login,must_change_password")
+      .select("login,must_change_password,temp_password")
       .order("login", { ascending: true });
+
+    // 2) если RLS не пустила — пробуем service-role
+    if (error) {
+      sb = serviceRole();
+      const r2 = await sb
+        .from("login_accounts")
+        .select("login,must_change_password,temp_password")
+        .order("login", { ascending: true });
+      data = r2.data;
+      error = r2.error;
+    }
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -33,15 +54,14 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
-      logins: (data ?? []).map((x) => ({
+      logins: (data ?? []).map((x: any) => ({
         login: x.login,
         must_change_password: !!x.must_change_password,
+        temp_password: x.temp_password ?? null,
       })),
     });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e?.message ?? "unknown_error" },
-      { status: 500 }
-    );
+    // Это как раз выведет Missing env или fetch failed
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }

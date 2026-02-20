@@ -90,7 +90,7 @@ function computeBreakdown(params: {
   const outOk = signOutcome(predH, predA) === signOutcome(resH, resA);
   if (outOk) outcome = round2(2 * outcome_mult);
 
-  const diffOk = (predH - predA) === (resH - resA);
+  const diffOk = predH - predA === resH - resA;
   if (diffOk) diff = round2(1 * diff_mult);
 
   const dist = Math.abs(predH - resH) + Math.abs(predA - resA);
@@ -140,9 +140,7 @@ async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId
 
   if (pErr) throw new Error(pErr.message);
 
-  const predRows = (preds ?? []).filter(
-    (p: any) => p.home_pred != null && p.away_pred != null
-  );
+  const predRows = (preds ?? []).filter((p: any) => p.home_pred != null && p.away_pred != null);
 
   // 3) считаем, сколько угадали исход и разницу (среди заполненных прогнозов)
   let outcomeGuessed = 0;
@@ -153,7 +151,7 @@ async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId
     const pa = Number(p.away_pred);
 
     if (signOutcome(ph, pa) === signOutcome(resH, resA)) outcomeGuessed++;
-    if ((ph - pa) === (resH - resA)) diffGuessed++;
+    if (ph - pa === resH - resA) diffGuessed++;
   }
 
   // 4) готовим UPSERT-массив
@@ -219,10 +217,7 @@ export async function GET(req: Request) {
 
   const sb = service();
 
-  let q = sb
-    .from("matches")
-    .select(
-      `
+  let q = sb.from("matches").select(`
       id,
       stage_id,
       stage_match_no,
@@ -233,8 +228,7 @@ export async function GET(req: Request) {
       away_score,
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
-    `
-    );
+    `);
 
   if (stageIdRaw) q = q.eq("stage_id", Number(stageIdRaw));
 
@@ -278,7 +272,7 @@ export async function PATCH(req: Request) {
     .from("matches")
     .update(upd)
     .eq("id", body.id)
-    .select("id,home_score,away_score,status")
+    .select("id,stage_id,home_score,away_score,status")
     .maybeSingle();
 
   if (error) {
@@ -294,6 +288,18 @@ export async function PATCH(req: Request) {
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: "score_recompute_failed", detail: String(e?.message ?? e) },
+      { status: 500 }
+    );
+  }
+
+  // ✅ пересчёт аналитики по этапу (rebuild)
+  try {
+    const stageId = Number((data as any).stage_id);
+    const { error: aErr } = await sb.rpc("recalculate_stage_analytics", { p_stage_id: stageId });
+    if (aErr) throw new Error(aErr.message);
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, error: "analytics_recompute_failed", detail: String(e?.message ?? e) },
       { status: 500 }
     );
   }

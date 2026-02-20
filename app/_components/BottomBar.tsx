@@ -13,6 +13,7 @@ type Item = {
 const userItems: Item[] = [
   { href: "/dashboard", label: "Мои", icon: "✍️" },
   { href: "/dashboard/current", label: "Текущая", icon: "📊" },
+  { href: "/analytics", label: "Аналитика", icon: "📈" }, // ✅ добавили
   { href: "/golden-boot", label: "Бутса", icon: "🥇" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
@@ -33,9 +34,7 @@ export default function BottomBar({ variant = "user" }: { variant?: "user" | "ad
     <nav className="bottomBar" aria-label="Нижнее меню">
       <div className="bottomBarInner">
         {items.map((i) => {
-          const active =
-            !i.isLogout && (pathname === i.href || pathname.startsWith(i.href + "/"));
-
+          const active = !i.isLogout && (pathname === i.href || pathname.startsWith(i.href + "/"));
           const cls = `bbItem ${active ? "bbActive" : ""}`;
 
           if (i.isLogout) {

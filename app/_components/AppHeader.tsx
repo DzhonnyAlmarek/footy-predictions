@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type NavItem = { href: string; label: string };
+type NavItem = { href: string; label: string; icon?: string };
 
 function isActive(pathname: string, href: string) {
   if (!href) return false;
   if (href === "/") return pathname === "/";
-  // активен если точное совпадение или вложенный роут
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -54,13 +53,15 @@ export default function AppHeader(props: {
         <nav className="appNav" aria-label="Навигация">
           {nav.map((i) => {
             const active = isActive(pathname, i.href);
+
             return (
               <Link
                 key={i.href}
                 href={i.href}
-                className={`navLink ${active ? "navActive" : ""}`}
+                className={`appNavLink ${active ? "navActive" : ""}`}
               >
-                {i.label}
+                {i.icon ? <span className="appNavIcon" aria-hidden="true">{i.icon}</span> : null}
+                <span>{i.label}</span>
               </Link>
             );
           })}
