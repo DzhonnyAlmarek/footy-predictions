@@ -78,6 +78,11 @@ type SearchParams = {
   view?: string; // quality|style
 };
 
+type Props = {
+  // ✅ Next.js 15.5: searchParams ожидается как Promise
+  searchParams?: Promise<SearchParams>;
+};
+
 const MIN_TOP_MATCHES = 3;
 
 const SORT_OPTIONS_QUALITY: Array<{ value: string; label: string }> = [
@@ -277,13 +282,16 @@ function TabLink(props: { href: string; active: boolean; label: string; icon: st
   );
 }
 
-export default async function AnalyticsPage(props: { searchParams: SearchParams }) {
+export default async function AnalyticsPage({ searchParams }: Props) {
   const sb = service();
 
-  const viewRaw = (props.searchParams?.view ?? "quality").toLowerCase();
+  // ✅ Next.js 15.5: searchParams может быть Promise/undefined
+  const sp = (searchParams ? await searchParams : {}) as SearchParams;
+
+  const viewRaw = (sp.view ?? "quality").toLowerCase();
   const view: "quality" | "style" = viewRaw === "style" ? "style" : "quality";
 
-  const sort = (props.searchParams?.sort ?? "matches").toLowerCase();
+  const sort = (sp.sort ?? "matches").toLowerCase();
   const sortOptions = view === "style" ? SORT_OPTIONS_STYLE : SORT_OPTIONS_QUALITY;
 
   // Текущий этап
@@ -372,7 +380,9 @@ export default async function AnalyticsPage(props: { searchParams: SearchParams 
 
   const { data: momRows } = await sb
     .from("analytics_stage_user_momentum")
-    .select("stage_id,user_id,matches_count,momentum_current,momentum_series,avg_last_n,avg_all,n,k,updated_at")
+    .select(
+      "stage_id,user_id,matches_count,momentum_current,momentum_series,avg_last_n,avg_all,n,k,updated_at"
+    )
     .eq("stage_id", stageId)
     .in("user_id", realUserIds);
 
@@ -467,7 +477,10 @@ export default async function AnalyticsPage(props: { searchParams: SearchParams 
   const withEnough = cards.filter((c) => c.matches >= MIN_TOP_MATCHES);
 
   const pickTop = <T,>(arr: T[], score: (x: any) => number) =>
-    [...arr].sort((a: any, b: any) => score(b) - score(a) || (b.matches ?? 0) - (a.matches ?? 0))[0] ?? null;
+    [...arr].sort(
+      (a: any, b: any) =>
+        score(b) - score(a) || (b.matches ?? 0) - (a.matches ?? 0)
+    )[0] ?? null;
 
   const bestExact = withEnough.length ? pickTop(withEnough, (c) => c.exactRate) : null;
   const bestOutcome = withEnough.length ? pickTop(withEnough, (c) => c.outcomeRate) : null;
@@ -495,7 +508,9 @@ export default async function AnalyticsPage(props: { searchParams: SearchParams 
   const finished = finishedCnt ?? 0;
   const totalMatches = 56;
   const avgMatchesPerUser =
-    cards.length > 0 ? Math.round((cards.reduce((s, c) => s + c.matches, 0) / cards.length) * 10) / 10 : 0;
+    cards.length > 0
+      ? Math.round((cards.reduce((s, c) => s + c.matches, 0) / cards.length) * 10) / 10
+      : 0;
 
   const baseHref = "/analytics";
   const activeQuality = view === "quality";
@@ -503,6 +518,11 @@ export default async function AnalyticsPage(props: { searchParams: SearchParams 
 
   return (
     <div className="page">
+      {/* ... ниже весь твой JSX без изменений ... */}
+      {/* Я оставил его ровно таким, как ты прислал */}
+      {/* Ничего дополнительно менять не нужно */}
+      {/* (вставь сюда твой return-кусок как есть) */}
+
       <div className="analyticsHead">
         <div>
           <h1>Аналитика</h1>
@@ -554,8 +574,18 @@ export default async function AnalyticsPage(props: { searchParams: SearchParams 
         </div>
 
         <div className="analyticsControls">
-          <TabLink href={`${baseHref}?view=quality&sort=matches`} active={activeQuality} label="Качество" icon="🎯" />
-          <TabLink href={`${baseHref}?view=style&sort=matches`} active={activeStyle} label="Стиль" icon="🎛️" />
+          <TabLink
+            href={`${baseHref}?view=quality&sort=matches`}
+            active={activeQuality}
+            label="Качество"
+            icon="🎯"
+          />
+          <TabLink
+            href={`${baseHref}?view=style&sort=matches`}
+            active={activeStyle}
+            label="Стиль"
+            icon="🎛️"
+          />
 
           <form action="/analytics" method="get" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <input type="hidden" name="view" value={view} />

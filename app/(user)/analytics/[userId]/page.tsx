@@ -18,11 +18,14 @@ function service() {
   );
 }
 
-type Props = { params: { userId: string } };
+// ✅ ВАЖНО: params теперь Promise, чтобы удовлетворить PageProps в Next.js
+type Props = { params: Promise<{ userId: string }> };
 
 export default async function AnalyticsUserPage({ params }: Props) {
   const sb = service();
-  const userId = params.userId;
+
+  // ✅ ВАЖНО: получаем userId через await
+  const { userId } = await params;
 
   const { data: account } = await sb
     .from("login_accounts")
