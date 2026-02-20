@@ -19,20 +19,16 @@ function service() {
 }
 
 function getSiteUrl(): string {
-  // Рекомендуется задать SITE_URL в Vercel Production
   const explicit = process.env.SITE_URL?.trim();
   if (explicit) return explicit.replace(/\/+$/, "");
 
-  // Vercel системная (если SITE_URL не задан)
   const vercel = process.env.VERCEL_URL?.trim();
   if (vercel) return `https://${vercel.replace(/\/+$/, "")}`;
 
-  // fallback
   return "https://footy-predictions.vercel.app";
 }
 
-// ---- formatting helpers ----
-
+// ---------- formatting helpers ----------
 function escapeHtml(s: string): string {
   return String(s ?? "")
     .replaceAll("&", "&amp;")
@@ -44,7 +40,6 @@ function escapeHtml(s: string): string {
 function fmtRuDateTime(iso?: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  // timezone можно поменять на Europe/Moscow, если нужно
   return d.toLocaleString("ru-RU", {
     timeZone: "Europe/Amsterdam",
     day: "2-digit",
@@ -59,18 +54,19 @@ function fmtRemain(ms: number): string {
   if (ms <= 0) return "0м";
 
   const totalMin = Math.floor(ms / 60000);
-  const d = Math.floor(totalMin / (60 * 24));
-  const h = Math.floor((totalMin % (60 * 24)) / 60);
-  const m = totalMin % 60;
+  const dd = Math.floor(totalMin / (60 * 24));
+  const hh = Math.floor((totalMin % (60 * 24)) / 60);
+  const mm = totalMin % 60;
 
   const parts: string[] = [];
-  if (d) parts.push(`${d}д`);
-  if (h) parts.push(`${h}ч`);
-  if (m || parts.length === 0) parts.push(`${m}м`);
+  if (dd) parts.push(`${dd}д`);
+  if (hh) parts.push(`${hh}ч`);
+  if (mm || parts.length === 0) parts.push(`${mm}м`);
   return parts.join(" ");
 }
 
 type TeamObj = { name: string } | { name: string }[] | null;
+
 function teamName(t: TeamObj): string {
   if (!t) return "?";
   const anyT: any = t as any;
@@ -78,8 +74,7 @@ function teamName(t: TeamObj): string {
   return String(anyT?.name ?? "?");
 }
 
-// ---- telegram ----
-
+// ---------- telegram ----------
 async function tgSendMessage(params: {
   text: string;
   buttonUrl: string;
@@ -120,18 +115,12 @@ async function tgSendMessage(params: {
   }
 }
 
-// ---- business logic ----
-
+// ---------- business logic ----------
 const HOURS_24_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Берём ближайший матч по дедлайну (это логичнее для "внести прогнозы").
- * Если дедлайна нет — fallback к kickoff_at.
- */
 async function getNearestMatch(sb: ReturnType<typeof service>) {
   const nowIso = new Date().toISOString();
 
-  // текущий этап (если есть)
   const { data: stage, error: sErr } = await sb
     .from("stages")
     .select("id")
@@ -140,6 +129,7 @@ async function getNearestMatch(sb: ReturnType<typeof service>) {
 
   if (sErr) throw new Error(`stage_failed: ${sErr.message}`);
 
+  // ближайший по deadline_at (логично для напоминаний)
   let q = sb
     .from("matches")
     .select(
@@ -154,8 +144,6 @@ async function getNearestMatch(sb: ReturnType<typeof service>) {
       away_team:teams!matches_away_team_id_fkey ( name )
     `
     )
-    // ближайшее событие после "сейчас"
-    // сначала пробуем по deadline_at
     .gt("deadline_at", nowIso)
     .order("deadline_at", { ascending: true })
     .limit(1);
@@ -168,7 +156,7 @@ async function getNearestMatch(sb: ReturnType<typeof service>) {
   const m: any = (data ?? [])[0];
   if (m?.id) return m;
 
-  // fallback: если в базе нет deadline_at у будущих матчей — ищем по kickoff_at
+  // fallback — если deadline_at не используется
   let q2 = sb
     .from("matches")
     .select(
@@ -192,13 +180,12 @@ async function getNearestMatch(sb: ReturnType<typeof service>) {
   const { data: data2, error: err2 } = await q2;
   if (err2) throw new Error(`nearest_match_fallback_failed: ${err2.message}`);
 
-  const m2: any = (data2 ?? [])[0];
-  return m2 ?? null;
+  return (data2 ?? [])[0] ?? null;
 }
 
 /**
- * Реальные участники (исключаем ADMIN).
- * Берём display_name если есть, иначе login.
+ * Берём участников из login_accounts (исключаем ADMIN).
+ * Имя = login.
  */
 async function getParticipants(sb: ReturnType<typeof service>) {
   const { data: accounts, error: aErr } = await sb
@@ -214,35 +201,19 @@ async function getParticipants(sb: ReturnType<typeof service>) {
 
   const userIds = Array.from(new Set(real.map((a: any) => String(a.user_id))));
 
-  if (userIds.length === 0) return { userIds: [], nameById: new Map<string, string>() };
-
-  const { data: profiles, error: pErr } = await sb
-    .from("profiles")
-    .select("id,display_name")
-    .in("id", userIds);
-
-  if (pErr) throw new Error(`profiles_failed: ${pErr.message}`);
-
-  const profMap = new Map<string, any>();
-  for (const p of profiles ?? []) profMap.set(String(p.id), p);
-
   const nameById = new Map<string, string>();
-  for (const uid of userIds) {
-    const acc = real.find((x: any) => String(x.user_id) === uid);
-    const prof = profMap.get(uid);
-    const name =
-      String(prof?.display_name ?? "").trim() ||
-      String(acc?.login ?? "").trim() ||
-      uid.slice(0, 8);
-    nameById.set(uid, name);
+  for (const a of real) {
+    const uid = String(a.user_id);
+    const name = String(a.login ?? "").trim() || uid.slice(0, 8);
+    if (uid) nameById.set(uid, name);
   }
 
   return { userIds, nameById };
 }
 
 /**
- * Кто НЕ поставил прогноз на конкретный матч.
- * Считаем "поставил", если есть prediction и оба поля home_pred/away_pred не null.
+ * Кто НЕ поставил прогноз на матч:
+ * нет строки в predictions или home_pred/away_pred null.
  */
 async function getMissingUsersForMatch(
   sb: ReturnType<typeof service>,
@@ -268,14 +239,12 @@ async function getMissingUsersForMatch(
   }
 
   const missing = new Set<string>();
-  for (const uid of userIds) {
-    if (!done.has(uid)) missing.add(uid);
-  }
+  for (const uid of userIds) if (!done.has(uid)) missing.add(uid);
+
   return missing;
 }
 
 export async function POST(req: Request) {
-  // простая защита для cron
   const auth = req.headers.get("authorization") ?? "";
   const secret = mustEnv("CRON_SECRET");
   if (auth !== `Bearer ${secret}`) {
@@ -290,7 +259,6 @@ export async function POST(req: Request) {
 
     const match = await getNearestMatch(sb);
     if (!match?.id) {
-      // Нечего напоминать
       return NextResponse.json({ ok: true, skipped: true, reason: "no_upcoming_matches" });
     }
 
@@ -308,21 +276,19 @@ export async function POST(req: Request) {
     const { userIds, nameById } = await getParticipants(sb);
     const missing = await getMissingUsersForMatch(sb, matchId, userIds);
 
-    // ---- (1) умная отправка ----
     const isUrgent = Number.isFinite(remainMs) ? remainMs <= HOURS_24_MS : true;
     const hasMissing = missing.size > 0;
 
-    // Если не срочно и все уже поставили — можно не спамить
+    // умная отправка: если не срочно и все уже поставили — пропускаем
     if (!isUrgent && !hasMissing) {
       return NextResponse.json({ ok: true, skipped: true, reason: "not_urgent_and_all_done" });
     }
 
-    // ---- (2) красивое сообщение ----
-    const titleLine =
+    const title =
       `⚽ <b>Напоминание</b>\n` +
       `Проверьте прогнозы на ближайшие матчи.`;
 
-    const matchLine =
+    const matchBlock =
       `\n\n<b>Ближайший матч:</b>\n` +
       `${escapeHtml(home)} — ${escapeHtml(away)}\n` +
       `Начало: <b>${escapeHtml(fmtRuDateTime(kickoffAt))}</b>\n` +
@@ -332,13 +298,12 @@ export async function POST(req: Request) {
       ? `\nДо дедлайна: <b>${escapeHtml(fmtRemain(remainMs))}</b>`
       : "";
 
-    // список должников (ограничим, чтобы не было полотна)
     const MAX_NAMES = 12;
     const missingNames = Array.from(missing)
       .map((uid) => nameById.get(uid) ?? uid.slice(0, 8))
       .slice(0, MAX_NAMES);
 
-    const missingLine = hasMissing
+    const missingBlock = hasMissing
       ? `\n\n<b>Не поставили прогноз:</b>\n` +
         `${missingNames.map((n) => `• ${escapeHtml(n)}`).join("\n")}` +
         (missing.size > MAX_NAMES ? `\n…и ещё ${missing.size - MAX_NAMES}` : "")
@@ -346,10 +311,8 @@ export async function POST(req: Request) {
 
     const footer = `\n\nОткрыть: ${escapeHtml(dashUrl)}`;
 
-    const text = `${titleLine}${matchLine}${remainLine}${missingLine}${footer}`;
+    const text = `${title}${matchBlock}${remainLine}${missingBlock}${footer}`;
 
-    // ---- (3) inline кнопка ----
-    // если хочешь кнопку на конкретный матч — можно сделать /match/<id>
     const matchUrl = `${site}/match/${matchId}`;
 
     await tgSendMessage({
