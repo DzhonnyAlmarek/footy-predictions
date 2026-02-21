@@ -38,7 +38,7 @@ async function requireAdmin(): Promise<{ ok: true } | { ok: false; res: NextResp
   return { ok: true };
 }
 
-/* ================= scoring helpers (оставляем как было) ================= */
+/* ================= scoring helpers (без изменений) ================= */
 
 function signOutcome(h: number, a: number): -1 | 0 | 1 {
   if (h === a) return 0;
@@ -210,7 +210,6 @@ export async function GET(req: Request) {
   let q = sb.from("matches").select(`
       id,
       stage_id,
-      tour_id,
       stage_match_no,
       kickoff_at,
       deadline_at,
@@ -229,15 +228,12 @@ export async function GET(req: Request) {
     .order("stage_match_no", { ascending: true, nullsFirst: false })
     .order("kickoff_at", { ascending: true });
 
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true, matches: data ?? [] });
 }
 
 type PatchBody = {
-  // ✅ принимаем оба варианта, чтобы не ловить bad_request
   id?: number;
   match_id?: number;
 
@@ -252,19 +248,19 @@ type PatchBody = {
   away_team_id?: number;
 };
 
-/** PATCH /api/admin/matches */
 export async function PATCH(req: Request) {
   const adm = await requireAdmin();
   if (!adm.ok) return adm.res;
 
   const body = (await req.json().catch(() => null)) as PatchBody | null;
+  const id = Number(body?.id ?? body?.match_id);
 
-  const matchId = Number(body?.id ?? body?.match_id);
-  if (!Number.isFinite(matchId) || matchId <= 0) {
+  if (!Number.isFinite(id) || id <= 0) {
     return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
   }
 
   const sb = service();
+
   const upd: any = {};
 
   if ("home_score" in (body ?? {})) upd.home_score = body?.home_score ?? null;
@@ -284,23 +280,18 @@ export async function PATCH(req: Request) {
   const { data, error } = await sb
     .from("matches")
     .update(upd)
-    .eq("id", matchId)
+    .eq("id", id)
     .select("id,stage_id,home_score,away_score,status,kickoff_at,deadline_at,home_team_id,away_team_id")
     .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  }
-  if (!data?.id) {
-    return NextResponse.json({ ok: false, error: "not_updated" }, { status: 400 });
-  }
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (!data?.id) return NextResponse.json({ ok: false, error: "not_updated" }, { status: 400 });
 
-  // ✅ пересчёты — только если менялся счёт
   const scoresTouched = ("home_score" in (body ?? {})) || ("away_score" in (body ?? {}));
 
   if (scoresTouched) {
     try {
-      await recomputePredictionScores(sb, matchId);
+      await recomputePredictionScores(sb, id);
     } catch (e: any) {
       return NextResponse.json(
         { ok: false, error: "score_recompute_failed", detail: String(e?.message ?? e) },
@@ -329,34 +320,12 @@ export async function POST(req: Request) {
   if (!adm.ok) return adm.res;
 
   const payload = await req.json().catch(() => null);
-  if (!payload) {
-    return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
-  }
+  if (!payload) return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
 
   const sb = service();
 
   const { data, error } = await sb.from("matches").insert(payload).select("*").maybeSingle();
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true, data });
-}
-
-/** DELETE /api/admin/matches */
-export async function DELETE(req: Request) {
-  const adm = await requireAdmin();
-  if (!adm.ok) return adm.res;
-
-  const body = (await req.json().catch(() => null)) as { id?: number; match_id?: number } | null;
-  const matchId = Number(body?.id ?? body?.match_id);
-  if (!Number.isFinite(matchId) || matchId <= 0) {
-    return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
-  }
-
-  const sb = service();
-  const { error } = await sb.from("matches").delete().eq("id", matchId);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, data });
 }

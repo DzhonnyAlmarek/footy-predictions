@@ -9,52 +9,42 @@ type Team = { id: number; name: string };
 type Props = {
   matchId: number;
   kickoffAt?: string | null;
-  deadlineAt?: string | null;
+
   homeTeamId: number;
   awayTeamId: number;
 };
 
-function isoToLocalInputValue(iso?: string | null) {
+function isoToDateValue(iso?: string | null) {
   if (!iso) return "";
+  return String(iso).slice(0, 10);
+}
+
+function isoToTimeValue(iso?: string | null) {
+  if (!iso) return "12:00";
+  // iso вида 2026-02-22T18:30:00+00:00 или Z — берём HH:MM
   const s = String(iso);
-  if (s.startsWith("2099-01-01")) return "";
-
-  const d = new Date(s);
-  if (!Number.isFinite(d.getTime())) return "";
-
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const mm = pad(d.getMonth() + 1);
-  const dd = pad(d.getDate());
-  const hh = pad(d.getHours());
-  const mi = pad(d.getMinutes());
-
-  // datetime-local: YYYY-MM-DDTHH:MM
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  const t = s.slice(11, 16);
+  return /^\d\d:\d\d$/.test(t) ? t : "12:00";
 }
 
-function localInputValueToISO(v: string): string | null {
-  const t = (v ?? "").trim();
-  if (!t) return null;
-  const d = new Date(t); // интерпретирует как local time
-  if (!Number.isFinite(d.getTime())) return null;
-  return d.toISOString(); // перевод в UTC ISO (момент времени сохраняется корректно)
+// ВАЖНО: мы формируем timestamptz через UTC (Z).
+// Если хочешь фиксировать “локальное время Амстердама”, скажи — сделаем через offset.
+function buildKickoffAt(date: string, time: string): string | null {
+  const d = (date ?? "").trim();
+  if (!d) return null;
+  const t = (time ?? "").trim() || "12:00";
+  return `${d}T${t}:00Z`;
 }
 
-export default function MatchRowActions({
-  matchId,
-  kickoffAt,
-  deadlineAt,
-  homeTeamId,
-  awayTeamId,
-}: Props) {
+export default function MatchRowActions({ matchId, kickoffAt, homeTeamId, awayTeamId }: Props) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
   const [teams, setTeams] = useState<Team[] | null>(null);
 
-  // ✅ дата+время
-  const [kickoffLocal, setKickoffLocal] = useState<string>(() => isoToLocalInputValue(kickoffAt));
+  const [date, setDate] = useState<string>(() => isoToDateValue(kickoffAt));
+  const [time, setTime] = useState<string>(() => isoToTimeValue(kickoffAt));
+
   const [homeId, setHomeId] = useState<string>(String(homeTeamId));
   const [awayId, setAwayId] = useState<string>(String(awayTeamId));
 
@@ -67,7 +57,7 @@ export default function MatchRowActions({
     const res = await fetch("/api/admin/matches", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ match_id: matchId, ...body }),
+      body: JSON.stringify({ id: matchId, ...body }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json?.error ?? `Ошибка (${res.status})`);
@@ -85,7 +75,7 @@ export default function MatchRowActions({
     setTeams(data ?? []);
   }
 
-  // ✅ Автосохранение kickoff_at (дата+время)
+  // ✅ Автосохранение kickoff_at при изменении даты/времени
   useEffect(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
@@ -94,18 +84,11 @@ export default function MatchRowActions({
 
     setMsg("сохраняю дату/время…");
 
-    const t = setTimeout(async () => {
+    const tmr = setTimeout(async () => {
       try {
         setLoading(true);
-        const kickoffISO = localInputValueToISO(kickoffLocal);
-
-        await patch({
-          kickoff_at: kickoffISO,
-          // deadline_at можно оставить равным kickoff_at или null — как тебе удобнее
-          // (сейчас: если kickoff пустой — чистим оба)
-          deadline_at: kickoffISO,
-        });
-
+        const kickoff_at = buildKickoffAt(date, time);
+        await patch({ kickoff_at });
         setMsg("дата/время сохранены ✅");
         router.refresh();
       } catch (e: any) {
@@ -115,9 +98,9 @@ export default function MatchRowActions({
       }
     }, 450);
 
-    return () => clearTimeout(t);
+    return () => clearTimeout(tmr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kickoffLocal, matchId]);
+  }, [date, time, matchId]);
 
   async function saveTeams() {
     setMsg(null);
@@ -150,7 +133,7 @@ export default function MatchRowActions({
       const res = await fetch("/api/admin/matches", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ match_id: matchId }),
+        body: JSON.stringify({ id: matchId }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error ?? `Ошибка (${res.status})`);
@@ -166,15 +149,22 @@ export default function MatchRowActions({
 
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-      {/* ✅ дата + время */}
       <input
-        type="datetime-local"
-        value={kickoffLocal}
-        onChange={(e) => setKickoffLocal(e.target.value)}
-        onInput={(e) => setKickoffLocal((e.target as HTMLInputElement).value)}
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
         disabled={loading}
         style={{ padding: 8, borderRadius: 10, border: "1px solid #ddd" }}
-        title="Дата и время начала матча (сохраняется автоматически)"
+        title="Дата матча (сохраняется автоматически)"
+      />
+
+      <input
+        type="time"
+        value={time}
+        onChange={(e) => setTime(e.target.value)}
+        disabled={loading}
+        style={{ padding: 8, borderRadius: 10, border: "1px solid #ddd", width: 120 }}
+        title="Время начала матча (сохраняется автоматически)"
       />
 
       <select
@@ -231,14 +221,18 @@ export default function MatchRowActions({
         type="button"
         onClick={remove}
         disabled={loading}
-        style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #111", background: "#fff", fontWeight: 900 }}
+        style={{
+          padding: "8px 10px",
+          borderRadius: 10,
+          border: "1px solid #111",
+          background: "#fff",
+          fontWeight: 900,
+        }}
       >
         Удалить
       </button>
 
-      {msg ? (
-        <span style={{ fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</span>
-      ) : null}
+      {msg ? <span style={{ fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</span> : null}
     </div>
   );
 }

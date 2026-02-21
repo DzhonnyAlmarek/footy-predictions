@@ -73,14 +73,12 @@ export default async function AdminTourMatchesPage({
             </div>
 
             <div style={{ marginTop: 10 }}>
-              <MatchRowActions
-                matchId={m.id}
-                kickoffAt={m.kickoff_at}
-                homeScore={m.home_score}
-                awayScore={m.away_score}
-                homeTeamId={m.home_team_id}
-                awayTeamId={m.away_team_id}
-              />
+<MatchRowActions
+  matchId={m.id}
+  kickoffAt={m.kickoff_at}
+  homeTeamId={m.home_team_id}
+  awayTeamId={m.away_team_id}
+/>
             </div>
           </div>
         ))}
