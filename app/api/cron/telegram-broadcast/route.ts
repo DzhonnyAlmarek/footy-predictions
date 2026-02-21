@@ -41,7 +41,6 @@ function escapeHtml(s: string): string {
 function fmtRuDateTime(iso?: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  // твой TZ = Europe/Amsterdam
   return d.toLocaleString("ru-RU", {
     timeZone: "Europe/Amsterdam",
     day: "2-digit",
@@ -110,7 +109,7 @@ async function getNearestMatch(sb: ReturnType<typeof service>) {
     .eq("is_current", true)
     .maybeSingle();
 
-  // ближайший по kickoff_at
+  // ближайший матч: kickoff > now, и НЕ finished
   let q = sb
     .from("matches")
     .select(
@@ -125,6 +124,7 @@ async function getNearestMatch(sb: ReturnType<typeof service>) {
     `
     )
     .gt("kickoff_at", nowIso)
+    .neq("status", "finished")
     .order("kickoff_at", { ascending: true })
     .limit(1);
 
@@ -196,14 +196,12 @@ async function getMissingUsersForMatch(
 
 /* ---------------- bucket logic ---------------- */
 
-// без 4 часов — только 24/12/1
 const BUCKETS = [
   { key: "24h", hours: 24 },
   { key: "12h", hours: 12 },
   { key: "1h", hours: 1 },
 ] as const;
 
-// cron каждые 10 минут => окно +/- 10 минут
 const WINDOW_MINUTES = 10;
 const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
 
@@ -216,7 +214,6 @@ function pickBucket(msToKickoff: number): (typeof BUCKETS)[number] | null {
 }
 
 async function tryLogSend(sb: ReturnType<typeof service>, matchId: number, bucketKey: string) {
-  // В таблице telegram_broadcast_log должен быть уникальный (match_id, bucket)
   const { error } = await sb
     .from("telegram_broadcast_log")
     .insert({ match_id: matchId, bucket: bucketKey });
@@ -240,9 +237,15 @@ export async function POST(req: Request) {
   }
 
   try {
+    const url = new URL(req.url);
+
+    // force=1 -> отправить прямо сейчас (для ручной проверки), bucket можно задать: bucket=24h|12h|1h
+    const force = url.searchParams.get("force") === "1";
+    const forcedBucketKey = (url.searchParams.get("bucket") ?? "").trim();
+
     const sb = service();
     const site = getSiteUrl();
-    const entryUrl = `${site}/`; // вход/титульная
+    const entryUrl = `${site}/`;
 
     const match = await getNearestMatch(sb);
     if (!match?.id || !match?.kickoff_at) {
@@ -259,15 +262,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, skipped: true, reason: "match_started" });
     }
 
-    const bucket = pickBucket(msToKickoff);
-    if (!bucket) {
-      return NextResponse.json({ ok: true, skipped: true, reason: "outside_windows" });
+    let bucket = pickBucket(msToKickoff);
+
+    if (force) {
+      bucket =
+        (BUCKETS as readonly any[]).find((b) => b.key === forcedBucketKey) ??
+        { key: "force", hours: Math.round(msToKickoff / 3600000) } as any;
+    } else {
+      if (!bucket) {
+        return NextResponse.json({ ok: true, skipped: true, reason: "outside_windows" });
+      }
     }
 
     const { userIds, nameById } = await getParticipants(sb);
     const missing = await getMissingUsersForMatch(sb, matchId, userIds);
 
-    // ✅ отправляем только если есть “должники”
+    // отправляем только если есть должники
     if (missing.size === 0) {
       return NextResponse.json({
         ok: true,
@@ -277,8 +287,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // ✅ анти-дубли
-    const shouldSend = await tryLogSend(sb, matchId, bucket.key);
+    // анти-дубли (в force-режиме тоже будет анти-дубль по bucket.key)
+    const shouldSend = await tryLogSend(sb, matchId, String(bucket.key));
     if (!shouldSend) {
       return NextResponse.json({
         ok: true,
@@ -296,7 +306,12 @@ export async function POST(req: Request) {
       .map((uid) => nameById.get(uid) ?? uid.slice(0, 8))
       .slice(0, MAX_NAMES);
 
-    const title = `⚽ <b>Напоминание за ${bucket.hours}ч</b>\nПора внести прогноз.`;
+    const titleHours = typeof (bucket as any).hours === "number" ? (bucket as any).hours : 0;
+
+    const title =
+      titleHours >= 1
+        ? `⚽ <b>Напоминание за ${titleHours}ч</b>\nПора внести прогноз.`
+        : `⚽ <b>Напоминание</b>\nПора внести прогноз.`;
 
     const matchBlock =
       `\n\n<b>Ближайший матч:</b>\n` +
@@ -309,9 +324,7 @@ export async function POST(req: Request) {
       `${missingNames.map((n) => `• ${escapeHtml(n)}`).join("\n")}` +
       (missing.size > MAX_NAMES ? `\n…и ещё ${missing.size - MAX_NAMES}` : "");
 
-    const footer = `\n\nПерейти на сайт: ${escapeHtml(entryUrl)}`;
-
-    const text = `${title}${matchBlock}${missingBlock}${footer}`;
+    const text = `${title}${matchBlock}${missingBlock}`;
 
     await tgSendMessage({
       text,
@@ -324,6 +337,7 @@ export async function POST(req: Request) {
       bucket: bucket.key,
       match_id: matchId,
       missing_count: missing.size,
+      force,
     });
   } catch (e: any) {
     return NextResponse.json(
