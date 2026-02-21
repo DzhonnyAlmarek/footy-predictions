@@ -38,13 +38,15 @@ function escapeHtml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function fmtRuDateTime(iso?: string | null): string {
+/** ✅ Московское время */
+function fmtRuDateTimeMsk(iso?: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   return d.toLocaleString("ru-RU", {
-    timeZone: "Europe/Amsterdam",
+    timeZone: "Europe/Moscow",
     day: "2-digit",
     month: "long",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -158,6 +160,11 @@ async function getParticipants(sb: ReturnType<typeof service>) {
   return { userIds, nameById };
 }
 
+/**
+ * Кто НЕ поставил прогноз на матч:
+ * - нет строки в predictions
+ * - или home_pred/away_pred = null
+ */
 async function getMissingUsersForMatch(
   sb: ReturnType<typeof service>,
   matchId: number,
@@ -189,12 +196,14 @@ async function getMissingUsersForMatch(
 
 /* ---------------- bucket logic ---------------- */
 
+// без 4 часов — только 24/12/1
 const BUCKETS = [
   { key: "24h", hours: 24 },
   { key: "12h", hours: 12 },
   { key: "1h", hours: 1 },
 ] as const;
 
+// cron каждые 10 минут => окно +/- 10 минут
 const WINDOW_MINUTES = 10;
 const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
 
@@ -207,6 +216,7 @@ function pickBucket(msToKickoff: number): (typeof BUCKETS)[number] | null {
 }
 
 async function tryLogSend(sb: ReturnType<typeof service>, matchId: number, bucketKey: string) {
+  // В таблице telegram_broadcast_log должен быть уникальный (match_id, bucket)
   const { error } = await sb
     .from("telegram_broadcast_log")
     .insert({ match_id: matchId, bucket: bucketKey });
@@ -232,7 +242,7 @@ export async function POST(req: Request) {
   try {
     const sb = service();
     const site = getSiteUrl();
-    const entryUrl = `${site}/`;
+    const entryUrl = `${site}/`; // вход/титульная
 
     const match = await getNearestMatch(sb);
     if (!match?.id || !match?.kickoff_at) {
@@ -249,18 +259,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, skipped: true, reason: "match_started" });
     }
 
-    const bucketPicked = pickBucket(msToKickoff);
-    if (!bucketPicked) {
+    const picked = pickBucket(msToKickoff);
+    if (!picked) {
       return NextResponse.json({ ok: true, skipped: true, reason: "outside_windows" });
     }
 
-    // ✅ фикс TS: сохраняем сразу после null-check
-    const bucketKey = bucketPicked.key;
-    const bucketHours = bucketPicked.hours;
+    // ✅ фикс для TS: дальше работаем только со строкой bucketKey
+    const bucketKey = picked.key;
+    const bucketHours = picked.hours;
 
     const { userIds, nameById } = await getParticipants(sb);
     const missing = await getMissingUsersForMatch(sb, matchId, userIds);
 
+    // отправляем только если есть “должники”
     if (missing.size === 0) {
       return NextResponse.json({
         ok: true,
@@ -270,6 +281,7 @@ export async function POST(req: Request) {
       });
     }
 
+    // анти-дубли
     const shouldSend = await tryLogSend(sb, matchId, bucketKey);
     if (!shouldSend) {
       return NextResponse.json({
@@ -293,7 +305,7 @@ export async function POST(req: Request) {
     const matchBlock =
       `\n\n<b>Ближайший матч:</b>\n` +
       `${escapeHtml(home)} — ${escapeHtml(away)}\n` +
-      `Начало: <b>${escapeHtml(fmtRuDateTime(kickoffAt))}</b>\n` +
+      `Начало (МСК): <b>${escapeHtml(fmtRuDateTimeMsk(kickoffAt))}</b>\n` +
       `До начала: <b>${escapeHtml(fmtRemain(msToKickoff))}</b>`;
 
     const missingBlock =
@@ -301,7 +313,7 @@ export async function POST(req: Request) {
       `${missingNames.map((n) => `• ${escapeHtml(n)}`).join("\n")}` +
       (missing.size > MAX_NAMES ? `\n…и ещё ${missing.size - MAX_NAMES}` : "");
 
-    const footer = `\n\nПерейти на сайт: ${escapeHtml(entryUrl)}`;
+    const footer = `\n\nНажмите кнопку ниже, чтобы зайти и внести прогноз.`;
 
     const text = `${title}${matchBlock}${missingBlock}${footer}`;
 
