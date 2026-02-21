@@ -7,6 +7,8 @@ import PredCellEditable from "../pred-cell";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const TZ_MSK = "Europe/Moscow";
+
 function mustEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
@@ -38,6 +40,26 @@ function deadlineFlag(d: Date) {
     isPast: ms < 0,
     isSoon: ms >= 0 && ms <= 2 * oneDay,
   };
+}
+
+function fmtKickoffMsk(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleString("ru-RU", {
+    timeZone: TZ_MSK,
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function fmtDeadlineMsk(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  // Дедлайн ты показываешь как дату — оставим так, но строго МСК
+  return d.toLocaleDateString("ru-RU", {
+    timeZone: TZ_MSK,
+    dateStyle: "medium",
+  });
 }
 
 type MatchRow = {
@@ -118,6 +140,7 @@ export default async function DashboardMatchesPage() {
           <div style={{ marginTop: 6, opacity: 0.85 }}>
             Этап: <b>{stage.name ?? `#${stage.id}`}</b>
             <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>{fpLogin}</span>
+            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>МСК</span>
           </div>
         </div>
 
@@ -136,24 +159,21 @@ export default async function DashboardMatchesPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th style={{ width: 160 }}>Дата</th>
+                  <th style={{ width: 170 }}>Дата (МСК)</th>
                   <th>Матч</th>
-                  <th style={{ width: 180 }}>Дедлайн</th>
+                  <th style={{ width: 180 }}>Дедлайн (МСК)</th>
                   <th style={{ width: 170 }}>Прогноз</th>
                 </tr>
               </thead>
 
               <tbody>
                 {(matches as any[]).map((m: MatchRow) => {
-                  const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
                   const deadline = m.deadline_at ? new Date(m.deadline_at) : null;
                   const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
                   return (
                     <tr key={m.id}>
-                      <td style={{ whiteSpace: "nowrap" }}>
-                        {kickoff ? kickoff.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" }) : "—"}
-                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>{fmtKickoffMsk(m.kickoff_at)}</td>
 
                       <td>
                         <div style={{ fontWeight: 900 }}>
@@ -165,11 +185,7 @@ export default async function DashboardMatchesPage() {
                         {deadline ? (() => {
                           const f = deadlineFlag(deadline);
                           const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
-                          return (
-                            <span className={`badge ${cls}`}>
-                              {deadline.toLocaleDateString("ru-RU", { dateStyle: "medium" })}
-                            </span>
-                          );
+                          return <span className={`badge ${cls}`}>{fmtDeadlineMsk(m.deadline_at)}</span>;
                         })() : "—"}
                       </td>
 

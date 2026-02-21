@@ -38,12 +38,14 @@ function escapeHtml(s: string): string {
     .replaceAll('"', "&quot;");
 }
 
-// ✅ Москва
+// ✅ Москва везде в уведомлениях
+const TZ = "Europe/Moscow";
+
 function fmtRuDateTime(iso?: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   return d.toLocaleString("ru-RU", {
-    timeZone: "Europe/Moscow",
+    timeZone: TZ,
     day: "2-digit",
     month: "long",
     hour: "2-digit",
@@ -196,10 +198,12 @@ const BUCKETS = [
   { key: "1h", hours: 1 },
 ] as const;
 
-const WINDOW_MINUTES = 30;
+const WINDOW_MINUTES = 10;
 const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
 
-function pickBucket(msToKickoff: number): (typeof BUCKETS)[number] | null {
+type Bucket = (typeof BUCKETS)[number];
+
+function pickBucket(msToKickoff: number): Bucket | null {
   for (const b of BUCKETS) {
     const target = b.hours * 60 * 60 * 1000;
     if (Math.abs(msToKickoff - target) <= WINDOW_MS) return b;
@@ -207,16 +211,28 @@ function pickBucket(msToKickoff: number): (typeof BUCKETS)[number] | null {
   return null;
 }
 
-async function tryLogSend(sb: ReturnType<typeof service>, matchId: number, bucketKey: string) {
+async function alreadyLogged(sb: ReturnType<typeof service>, matchId: number, bucketKey: string) {
+  const { data, error } = await sb
+    .from("telegram_broadcast_log")
+    .select("id")
+    .eq("match_id", matchId)
+    .eq("bucket", bucketKey)
+    .limit(1);
+
+  if (error) throw new Error(`log_check_failed: ${(error as any).message ?? error}`);
+  return (data ?? []).length > 0;
+}
+
+async function logSent(sb: ReturnType<typeof service>, matchId: number, bucketKey: string) {
   const { error } = await sb
     .from("telegram_broadcast_log")
     .insert({ match_id: matchId, bucket: bucketKey });
 
-  if (!error) return true;
+  if (!error) return;
 
   const msg = String((error as any).message ?? "");
   const low = msg.toLowerCase();
-  if (low.includes("duplicate") || low.includes("unique")) return false;
+  if (low.includes("duplicate") || low.includes("unique")) return;
 
   throw new Error(`log_failed: ${msg}`);
 }
@@ -255,9 +271,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, skipped: true, reason: "outside_windows" });
     }
 
-    // ✅ фикс TS: дальше используем не nullable
-    const bucketKey = bucket.key;
-    const bucketHours = bucket.hours;
+    // ✅ анти-дубли (проверка ДО отправки)
+    const wasSent = await alreadyLogged(sb, matchId, bucket.key);
+    if (wasSent) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "already_sent",
+        bucket: bucket.key,
+      });
+    }
 
     const { userIds, nameById } = await getParticipants(sb);
     const missing = await getMissingUsersForMatch(sb, matchId, userIds);
@@ -267,17 +290,7 @@ export async function POST(req: Request) {
         ok: true,
         skipped: true,
         reason: "no_missing_users",
-        bucket: bucketKey,
-      });
-    }
-
-    const shouldSend = await tryLogSend(sb, matchId, bucketKey);
-    if (!shouldSend) {
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: "already_sent",
-        bucket: bucketKey,
+        bucket: bucket.key,
       });
     }
 
@@ -289,7 +302,7 @@ export async function POST(req: Request) {
       .map((uid) => nameById.get(uid) ?? uid.slice(0, 8))
       .slice(0, MAX_NAMES);
 
-    const title = `⚽ <b>Напоминание за ${bucketHours}ч</b>\nПора внести прогноз.`;
+    const title = `⚽ <b>Напоминание за ${bucket.hours}ч</b>\nПора внести прогноз.`;
 
     const matchBlock =
       `\n\n<b>Ближайший матч:</b>\n` +
@@ -302,19 +315,21 @@ export async function POST(req: Request) {
       `${missingNames.map((n) => `• ${escapeHtml(n)}`).join("\n")}` +
       (missing.size > MAX_NAMES ? `\n…и ещё ${missing.size - MAX_NAMES}` : "");
 
-    const footer = `\n\nПерейти на сайт: ${escapeHtml(entryUrl)}`;
+    const text = `${title}${matchBlock}${missingBlock}`;
 
-    const text = `${title}${matchBlock}${missingBlock}${footer}`;
-
+    // ✅ сначала отправка
     await tgSendMessage({
       text,
       buttonUrl: entryUrl,
       buttonText: "Перейти на сайт для внесения прогноза",
     });
 
+    // ✅ потом лог (теперь “already_sent” означает реально отправлено)
+    await logSent(sb, matchId, bucket.key);
+
     return NextResponse.json({
       ok: true,
-      bucket: bucketKey,
+      bucket: bucket.key,
       match_id: matchId,
       missing_count: missing.size,
     });
