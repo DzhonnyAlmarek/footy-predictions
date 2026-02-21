@@ -44,6 +44,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     { href: "/admin/results", label: "Результаты" },
     { href: "/admin/stages", label: "Этапы" },
     { href: "/admin/users", label: "Участники" },
+
+    // ✅ Telegram тест
+    { href: "/admin/telegram-test", label: "Telegram тест" },
+
     { href: "/logout", label: "Выйти" },
   ];
 

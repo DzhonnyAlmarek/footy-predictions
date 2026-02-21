@@ -13,6 +13,10 @@ export default function AdminNav({ loginLabel }: { loginLabel: string }) {
           🏠 Админ-панель
         </Link>
 
+        <Link className="adminNavLink" href="/admin/telegram-test">
+          🧪 Telegram тест
+        </Link>
+
         <a className="adminNavLink" href="/logout">
           🚪 Выйти
         </a>
