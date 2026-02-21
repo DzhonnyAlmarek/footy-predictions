@@ -761,6 +761,108 @@ $$;
 ALTER FUNCTION "public"."recalculate_stage_analytics"("p_stage_id" bigint) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."recalculate_stage_momentum"("p_stage_id" bigint, "p_n" integer DEFAULT 5, "p_k" integer DEFAULT 10) RETURNS "void"
+    LANGUAGE "plpgsql"
+    AS $$
+begin
+  delete from analytics_stage_user_momentum
+  where stage_id = p_stage_id;
+
+  insert into analytics_stage_user_momentum (
+    stage_id, user_id, n, k,
+    matches_count,
+    points_series, momentum_series,
+    momentum_current, avg_last_n, avg_all,
+    updated_at
+  )
+  with stage_matches as (
+    select id, stage_match_no
+    from matches
+    where stage_id = p_stage_id
+      and home_score is not null
+      and away_score is not null
+      and stage_match_no is not null
+  ),
+  base as (
+    -- очки берём из prediction_scores.total
+    select
+      ps.user_id,
+      sm.stage_match_no,
+      ps.match_id,
+      coalesce(ps.total, 0)::numeric as points
+    from prediction_scores ps
+    join stage_matches sm on sm.id = ps.match_id
+  ),
+  ordered as (
+    select
+      user_id,
+      stage_match_no,
+      match_id,
+      points,
+      avg(points) over (
+        partition by user_id
+        order by stage_match_no
+        rows between (p_n - 1) preceding and current row
+      ) as avg_last_n,
+      avg(points) over (
+        partition by user_id
+        order by stage_match_no
+        rows between unbounded preceding and current row
+      ) as avg_all
+    from base
+  ),
+  with_mom as (
+    select
+      *,
+      (avg_last_n - avg_all) as momentum
+    from ordered
+  ),
+  lastk as (
+    select *
+    from (
+      select
+        *,
+        row_number() over (partition by user_id order by stage_match_no desc) as rdesc
+      from with_mom
+    ) t
+    where rdesc <= p_k
+  ),
+  agg as (
+    select
+      p_stage_id as stage_id,
+      user_id,
+      p_n as n,
+      p_k as k,
+      count(*)::int as matches_count,
+
+      jsonb_agg(points order by stage_match_no) as points_series,
+      jsonb_agg(round(momentum::numeric, 4) order by stage_match_no) as momentum_series,
+
+      (array_agg(round(momentum::numeric, 4) order by stage_match_no desc))[1] as momentum_current,
+      (array_agg(round(avg_last_n::numeric, 4) order by stage_match_no desc))[1] as avg_last_n,
+      (array_agg(round(avg_all::numeric, 4) order by stage_match_no desc))[1] as avg_all,
+
+      now() as updated_at
+    from lastk
+    group by user_id
+  )
+  select
+    stage_id, user_id, n, k,
+    matches_count,
+    points_series, momentum_series,
+    coalesce(momentum_current, 0),
+    coalesce(avg_last_n, 0),
+    coalesce(avg_all, 0),
+    updated_at
+  from agg;
+
+end;
+$$;
+
+
+ALTER FUNCTION "public"."recalculate_stage_momentum"("p_stage_id" bigint, "p_n" integer, "p_k" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."score_match"("p_match_id" bigint) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -1035,6 +1137,24 @@ CREATE TABLE IF NOT EXISTS "public"."analytics_stage_user_archetype" (
 
 
 ALTER TABLE "public"."analytics_stage_user_archetype" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."analytics_stage_user_momentum" (
+    "stage_id" bigint NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "n" integer DEFAULT 5 NOT NULL,
+    "k" integer DEFAULT 10 NOT NULL,
+    "matches_count" integer DEFAULT 0 NOT NULL,
+    "points_series" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "momentum_series" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "momentum_current" numeric DEFAULT 0 NOT NULL,
+    "avg_last_n" numeric DEFAULT 0 NOT NULL,
+    "avg_all" numeric DEFAULT 0 NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."analytics_stage_user_momentum" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."audit_log" (
@@ -1376,6 +1496,11 @@ ALTER TABLE ONLY "public"."analytics_stage_baseline"
 
 ALTER TABLE ONLY "public"."analytics_stage_user_archetype"
     ADD CONSTRAINT "analytics_stage_user_archetype_pk" PRIMARY KEY ("stage_id", "user_id");
+
+
+
+ALTER TABLE ONLY "public"."analytics_stage_user_momentum"
+    ADD CONSTRAINT "analytics_stage_user_momentum_pkey" PRIMARY KEY ("stage_id", "user_id");
 
 
 
@@ -2140,6 +2265,12 @@ GRANT ALL ON FUNCTION "public"."recalculate_stage_analytics"("p_stage_id" bigint
 
 
 
+GRANT ALL ON FUNCTION "public"."recalculate_stage_momentum"("p_stage_id" bigint, "p_n" integer, "p_k" integer) TO "anon";
+GRANT ALL ON FUNCTION "public"."recalculate_stage_momentum"("p_stage_id" bigint, "p_n" integer, "p_k" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recalculate_stage_momentum"("p_stage_id" bigint, "p_n" integer, "p_k" integer) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."score_match"("p_match_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."score_match"("p_match_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."score_match"("p_match_id" bigint) TO "service_role";
@@ -2200,6 +2331,12 @@ GRANT ALL ON TABLE "public"."analytics_stage_user" TO "service_role";
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_user_archetype" TO "anon";
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_user_archetype" TO "authenticated";
 GRANT ALL ON TABLE "public"."analytics_stage_user_archetype" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."analytics_stage_user_momentum" TO "anon";
+GRANT ALL ON TABLE "public"."analytics_stage_user_momentum" TO "authenticated";
+GRANT ALL ON TABLE "public"."analytics_stage_user_momentum" TO "service_role";
 
 
 
