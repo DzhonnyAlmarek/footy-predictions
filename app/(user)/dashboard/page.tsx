@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import PredCellEditable from "./pred-cell";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -29,198 +28,264 @@ function service() {
   );
 }
 
-type TeamMaybeArray = { name: string } | { name: string }[] | null;
-
 type MatchRow = {
-  id: string;
+  id: number;
+  stage_id: number;
   stage_match_no: number | null;
   kickoff_at: string | null;
-  home_team: TeamMaybeArray;
-  away_team: TeamMaybeArray;
+  deadline_at: string | null;
+  status: string | null;
+  home_team: { name: string } | null;
+  away_team: { name: string } | null;
+  home_score: number | null;
+  away_score: number | null;
 };
 
-function teamName(t: TeamMaybeArray): string {
-  if (!t) return "?";
-  if (Array.isArray(t)) return t[0]?.name ?? "?";
-  return t.name ?? "?";
+type PredRow = {
+  match_id: number;
+  home_pred: number | null;
+  away_pred: number | null;
+};
+
+type StageRow = { id: number; name: string };
+
+type LoginAccountRow = { user_id: string; login: string };
+
+function fmtDateTimeRu(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleString("ru-RU", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-function daysTo(kickoffIso: string | null): number | null {
-  if (!kickoffIso) return null;
-  const d = new Date(kickoffIso);
-  const now = new Date();
-  const ms = d.getTime() - now.getTime();
-  return ms / (1000 * 60 * 60 * 24);
+function hoursUntil(iso?: string | null) {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  const now = Date.now();
+  return (t - now) / 36e5;
 }
 
-function warnKind(days: number | null): "none" | "soon" | "urgent" {
-  if (days == null) return "none";
-  if (days > 5) return "none";
-  if (days > 2) return "soon";
-  if (days > 1) return "urgent";
-  return "urgent";
+function hasFullPrediction(p?: PredRow | null) {
+  return p?.home_pred != null && p?.away_pred != null;
 }
 
 export default async function DashboardPage() {
   const cs = await cookies();
   const rawLogin = cs.get("fp_login")?.value ?? "";
-  const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
-  if (!fpLogin) redirect("/");
+  const login = decodeMaybe(rawLogin).trim().toUpperCase();
+
+  if (!login) redirect("/");
 
   const sb = service();
 
-  const { data: acc } = await sb
+  // 1) Найдём user_id по логину
+  const { data: acc, error: aErr } = await sb
     .from("login_accounts")
-    .select("user_id")
-    .eq("login", fpLogin)
-    .maybeSingle();
+    .select("user_id,login")
+    .eq("login", login)
+    .maybeSingle<LoginAccountRow>();
 
-  if (!acc?.user_id) redirect("/");
-
-  const { data: stage } = await sb
-    .from("stages")
-    .select("id,name,status")
-    .eq("is_current", true)
-    .maybeSingle();
-
-  if (!stage) {
+  if (aErr) {
     return (
-      <main className="page hasBottomBar">
-        <h1>Мои прогнозы</h1>
-        <p className="pageMeta">Текущий этап не выбран.</p>
-        <div className="navRow">
-          <Link href="/">На главную</Link>
-        </div>
-      </main>
+      <div className="page">
+        <h1>Таблица</h1>
+        <p>Ошибка загрузки логина: {aErr.message}</p>
+      </div>
     );
   }
 
-  const { data: matchesRaw, error: matchesErr } = await sb
+  if (!acc?.user_id) {
+    redirect("/");
+  }
+
+  const userId = acc.user_id;
+
+  // 2) Текущий этап
+  const { data: stage, error: sErr } = await sb
+    .from("stages")
+    .select("id,name")
+    .eq("is_current", true)
+    .maybeSingle<StageRow>();
+
+  if (sErr) {
+    return (
+      <div className="page">
+        <h1>Таблица</h1>
+        <p>Ошибка загрузки этапа: {sErr.message}</p>
+      </div>
+    );
+  }
+
+  if (!stage?.id) {
+    return (
+      <div className="page">
+        <h1>Таблица</h1>
+        <p>Текущий этап не выбран.</p>
+      </div>
+    );
+  }
+
+  const stageId = Number(stage.id);
+
+  // 3) Матчи этапа (можешь ограничить ближайшими — тут выводим все по kickoff_at)
+  const { data: matches, error: mErr } = await sb
     .from("matches")
     .select(
       `
       id,
+      stage_id,
       stage_match_no,
       kickoff_at,
+      deadline_at,
+      status,
+      home_score,
+      away_score,
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `
     )
-    .eq("stage_id", stage.id)
-    .order("stage_match_no", { ascending: true, nullsFirst: false })
-    .order("kickoff_at", { ascending: true });
+    .eq("stage_id", stageId)
+    .order("kickoff_at", { ascending: true, nullsFirst: false })
+    .order("stage_match_no", { ascending: true, nullsFirst: false });
 
-  if (matchesErr) {
+  if (mErr) {
     return (
-      <main className="page hasBottomBar">
-        <h1>Мои прогнозы</h1>
-        <p style={{ color: "crimson", marginTop: 10, fontWeight: 800 }}>
-          Ошибка matches: {matchesErr.message}
-        </p>
-      </main>
+      <div className="page">
+        <h1>Таблица</h1>
+        <p>Ошибка загрузки матчей: {mErr.message}</p>
+      </div>
     );
   }
 
-  const matches = (matchesRaw ?? []) as unknown as MatchRow[];
-  const matchIds = matches.map((m) => m.id);
+  const matchRows = (matches ?? []) as MatchRow[];
+  const matchIds = matchRows.map((x) => Number(x.id)).filter((x) => Number.isFinite(x));
 
-  const { data: preds, error: predsErr } = await sb
+  // 4) Прогнозы пользователя по этим матчам
+  const { data: preds, error: pErr } = await sb
     .from("predictions")
     .select("match_id,home_pred,away_pred")
-    .eq("user_id", acc.user_id)
+    .eq("user_id", userId)
     .in("match_id", matchIds);
 
-  if (predsErr) {
+  if (pErr) {
     return (
-      <main className="page hasBottomBar">
-        <h1>Мои прогнозы</h1>
-        <p style={{ color: "crimson", marginTop: 10, fontWeight: 800 }}>
-          Ошибка predictions: {predsErr.message}
-        </p>
-      </main>
+      <div className="page">
+        <h1>Таблица</h1>
+        <p>Ошибка загрузки прогнозов: {pErr.message}</p>
+      </div>
     );
   }
 
-  const predByMatch = new Map<string, { h: number | null; a: number | null }>();
-  for (const p of preds ?? []) {
-    predByMatch.set(p.match_id, {
-      h: p.home_pred == null ? null : Number(p.home_pred),
-      a: p.away_pred == null ? null : Number(p.away_pred),
+  const predByMatch = new Map<number, PredRow>();
+  for (const p of (preds ?? []) as any[]) {
+    predByMatch.set(Number(p.match_id), {
+      match_id: Number(p.match_id),
+      home_pred: p.home_pred == null ? null : Number(p.home_pred),
+      away_pred: p.away_pred == null ? null : Number(p.away_pred),
     });
   }
 
   return (
-    <main className="page hasBottomBar">
-      <h1>Мои прогнозы</h1>
+    <div className="page">
+      <h1>Таблица</h1>
       <div className="pageMeta">
-        Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-        {stage.status ? <span> • {stage.status}</span> : null}
-        <span> • {fpLogin}</span>
+        Этап: <b>{stage.name}</b>
       </div>
 
-      {!matches || matches.length === 0 ? (
-        <div className="card" style={{ marginTop: 14, padding: 14 }}>
-          Матчей нет.
-        </div>
-      ) : (
-        <div className="tableWrap">
-          <table className="table userPredTable">
-            <thead>
-              <tr>
-                <th style={{ width: 54 }}>#</th>
-                <th className="colDate">Дата</th>
-                <th className="colMatch">Матч</th>
-                <th className="colPred">Прогноз</th>
-              </tr>
-            </thead>
+      <div className="tableWrap" style={{ marginTop: 14 }}>
+        <table className="table">
+          <thead>
+            <tr>
+              <th style={{ width: 70 }}>№</th>
+              <th style={{ width: 200 }}>Дата/время</th>
+              <th>Матч</th>
+              <th style={{ width: 140 }}>Мой прогноз</th>
+              <th style={{ width: 120 }}>Результат</th>
+            </tr>
+          </thead>
 
-            <tbody>
-              {matches.map((m) => {
-                const kickoffStr = m.kickoff_at
-                  ? new Date(m.kickoff_at).toLocaleDateString("ru-RU", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })
-                  : "—";
+          <tbody>
+            {matchRows.map((m) => {
+              const mid = Number(m.id);
+              const pred = predByMatch.get(mid) ?? null;
 
-                const d = daysTo(m.kickoff_at);
-                const kind = warnKind(d);
+              // ✅ (ПУНКТ 1) Предупреждение показываем ТОЛЬКО если прогноза нет/неполный
+              const predicted = hasFullPrediction(pred);
 
-                const pr = predByMatch.get(m.id) ?? { h: null, a: null };
+              // ориентируемся по deadline_at (если есть), иначе kickoff_at
+              const refIso = m.deadline_at ?? m.kickoff_at;
+              const h = hoursUntil(refIso);
 
-                return (
-                  <tr
-                    key={m.id}
-                    className={kind === "urgent" ? "rowUrgent" : kind === "soon" ? "rowSoon" : ""}
-                  >
-                    <td style={{ opacity: 0.9, fontWeight: 900 }}>{m.stage_match_no ?? "—"}</td>
+              const isFuture = h != null ? h > 0 : false;
+              const isSoon = isFuture && h != null && h <= 24;
+              const isUrgent = isFuture && h != null && h <= 6;
 
-                    <td style={{ whiteSpace: "nowrap" }}>{kickoffStr}</td>
+              const showWarn = !predicted && (isUrgent || isSoon);
 
-                    <td>
-                      <div style={{ fontWeight: 900 }}>
-                        {teamName(m.home_team)} — {teamName(m.away_team)}
+              const rowCls = isUrgent ? "rowUrgent" : isSoon ? "rowSoon" : "";
+
+              const predText = predicted
+                ? `${pred!.home_pred}:${pred!.away_pred}`
+                : pred?.home_pred != null && pred?.away_pred != null
+                ? `${pred.home_pred}:${pred.away_pred}`
+                : "—";
+
+              const resText =
+                m.home_score != null && m.away_score != null ? `${m.home_score}:${m.away_score}` : "—";
+
+              return (
+                <tr key={m.id} className={rowCls}>
+                  <td className="mono">{m.stage_match_no ?? m.id}</td>
+
+                  <td>
+                    <div className="mono">{fmtDateTimeRu(m.kickoff_at)}</div>
+                    {m.deadline_at ? (
+                      <div style={{ fontSize: 12, opacity: 0.75 }}>
+                        Дедлайн: {fmtDateTimeRu(m.deadline_at)}
                       </div>
+                    ) : null}
 
-                      {kind !== "none" ? <div className="rowWarn">⚠️ Скоро матч — сделай прогноз</div> : null}
-                    </td>
+                    {showWarn ? (
+                      <div className="rowWarn">Скоро матч — сделай прогноз</div>
+                    ) : null}
+                  </td>
 
-                    <td>
-                      <PredCellEditable
-                        matchId={Number(m.id)}
-                        homePred={pr.h}
-                        awayPred={pr.a}
-                        canEdit={true}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </main>
+                  <td style={{ fontWeight: 900 }}>
+                    {m.home_team?.name ?? "—"} <span style={{ opacity: 0.6 }}>—</span>{" "}
+                    {m.away_team?.name ?? "—"}
+                  </td>
+
+                  <td>
+                    <span className="mono" style={{ fontWeight: 900 }}>
+                      {predText}
+                    </span>
+                  </td>
+
+                  <td>
+                    <span className="mono" style={{ fontWeight: 900 }}>
+                      {resText}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="navRow">
+        <Link href="/dashboard/current" className="navLink">
+          Текущая таблица
+        </Link>
+        <Link href="/analytics" className="navLink">
+          Аналитика
+        </Link>
+      </div>
+    </div>
   );
 }
