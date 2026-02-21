@@ -11,9 +11,10 @@ type Item = {
 };
 
 const userItems: Item[] = [
-  { href: "/dashboard", label: "Мои", icon: "✍️" },
+  // ✅ “Мои” ведёт на /dashboard/matches
+  { href: "/dashboard/matches", label: "Мои", icon: "✍️" },
   { href: "/dashboard/current", label: "Текущая", icon: "📊" },
-  { href: "/analytics", label: "Аналитика", icon: "📈" }, // ✅ добавили
+  { href: "/analytics", label: "Аналитика", icon: "📈" },
   { href: "/golden-boot", label: "Бутса", icon: "🥇" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
