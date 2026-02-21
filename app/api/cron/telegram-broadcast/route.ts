@@ -109,7 +109,6 @@ async function getNearestMatch(sb: ReturnType<typeof service>) {
     .eq("is_current", true)
     .maybeSingle();
 
-  // ближайший матч: kickoff > now, и НЕ finished
   let q = sb
     .from("matches")
     .select(
@@ -124,7 +123,6 @@ async function getNearestMatch(sb: ReturnType<typeof service>) {
     `
     )
     .gt("kickoff_at", nowIso)
-    .neq("status", "finished")
     .order("kickoff_at", { ascending: true })
     .limit(1);
 
@@ -160,11 +158,6 @@ async function getParticipants(sb: ReturnType<typeof service>) {
   return { userIds, nameById };
 }
 
-/**
- * Кто НЕ поставил прогноз на матч:
- * - нет строки в predictions
- * - или home_pred/away_pred = null
- */
 async function getMissingUsersForMatch(
   sb: ReturnType<typeof service>,
   matchId: number,
@@ -237,12 +230,6 @@ export async function POST(req: Request) {
   }
 
   try {
-    const url = new URL(req.url);
-
-    // force=1 -> отправить прямо сейчас (для ручной проверки), bucket можно задать: bucket=24h|12h|1h
-    const force = url.searchParams.get("force") === "1";
-    const forcedBucketKey = (url.searchParams.get("bucket") ?? "").trim();
-
     const sb = service();
     const site = getSiteUrl();
     const entryUrl = `${site}/`;
@@ -262,39 +249,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, skipped: true, reason: "match_started" });
     }
 
-    let bucket = pickBucket(msToKickoff);
-
-    if (force) {
-      bucket =
-        (BUCKETS as readonly any[]).find((b) => b.key === forcedBucketKey) ??
-        { key: "force", hours: Math.round(msToKickoff / 3600000) } as any;
-    } else {
-      if (!bucket) {
-        return NextResponse.json({ ok: true, skipped: true, reason: "outside_windows" });
-      }
+    const bucketPicked = pickBucket(msToKickoff);
+    if (!bucketPicked) {
+      return NextResponse.json({ ok: true, skipped: true, reason: "outside_windows" });
     }
+
+    // ✅ фикс TS: сохраняем сразу после null-check
+    const bucketKey = bucketPicked.key;
+    const bucketHours = bucketPicked.hours;
 
     const { userIds, nameById } = await getParticipants(sb);
     const missing = await getMissingUsersForMatch(sb, matchId, userIds);
 
-    // отправляем только если есть должники
     if (missing.size === 0) {
       return NextResponse.json({
         ok: true,
         skipped: true,
         reason: "no_missing_users",
-        bucket: bucket.key,
+        bucket: bucketKey,
       });
     }
 
-    // анти-дубли (в force-режиме тоже будет анти-дубль по bucket.key)
-    const shouldSend = await tryLogSend(sb, matchId, String(bucket.key));
+    const shouldSend = await tryLogSend(sb, matchId, bucketKey);
     if (!shouldSend) {
       return NextResponse.json({
         ok: true,
         skipped: true,
         reason: "already_sent",
-        bucket: bucket.key,
+        bucket: bucketKey,
       });
     }
 
@@ -306,12 +288,7 @@ export async function POST(req: Request) {
       .map((uid) => nameById.get(uid) ?? uid.slice(0, 8))
       .slice(0, MAX_NAMES);
 
-    const titleHours = typeof (bucket as any).hours === "number" ? (bucket as any).hours : 0;
-
-    const title =
-      titleHours >= 1
-        ? `⚽ <b>Напоминание за ${titleHours}ч</b>\nПора внести прогноз.`
-        : `⚽ <b>Напоминание</b>\nПора внести прогноз.`;
+    const title = `⚽ <b>Напоминание за ${bucketHours}ч</b>\nПора внести прогноз.`;
 
     const matchBlock =
       `\n\n<b>Ближайший матч:</b>\n` +
@@ -324,7 +301,9 @@ export async function POST(req: Request) {
       `${missingNames.map((n) => `• ${escapeHtml(n)}`).join("\n")}` +
       (missing.size > MAX_NAMES ? `\n…и ещё ${missing.size - MAX_NAMES}` : "");
 
-    const text = `${title}${matchBlock}${missingBlock}`;
+    const footer = `\n\nПерейти на сайт: ${escapeHtml(entryUrl)}`;
+
+    const text = `${title}${matchBlock}${missingBlock}${footer}`;
 
     await tgSendMessage({
       text,
@@ -334,10 +313,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      bucket: bucket.key,
+      bucket: bucketKey,
       match_id: matchId,
       missing_count: missing.size,
-      force,
     });
   } catch (e: any) {
     return NextResponse.json(
