@@ -6,11 +6,18 @@ import { createClient } from "@/lib/supabase/client";
 
 type Team = { id: number; name: string };
 
-function buildKickoffAt(date: string, time: string): string | null {
-  const d = (date ?? "").trim();
-  if (!d) return null;
-  const t = (time ?? "").trim() || "12:00";
-  return `${d}T${t}:00Z`;
+const TZ_MSK = "Europe/Moscow";
+
+/** "YYYY-MM-DDTHH:mm" in MSK -> ISO UTC string */
+function mskLocalValueToIsoUtc(v: string) {
+  const s = String(v || "").trim();
+  if (!s) return null;
+
+  const withOffset = `${s}:00+03:00`; // MSK
+  const d = new Date(withOffset);
+  if (!Number.isFinite(d.getTime())) return null;
+
+  return d.toISOString();
 }
 
 export default function CreateMatchForm({ stageId, tourId }: { stageId: number; tourId: number }) {
@@ -21,9 +28,7 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
   const [homeTeamId, setHomeTeamId] = useState<string>("");
   const [awayTeamId, setAwayTeamId] = useState<string>("");
 
-  const [date, setDate] = useState<string>(""); // YYYY-MM-DD
-  const [time, setTime] = useState<string>("12:00"); // HH:MM
-
+  const [kickoffLocal, setKickoffLocal] = useState<string>(""); // datetime-local (МСК)
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -49,7 +54,8 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
     if (!Number.isFinite(a)) return setMsg("Выберите гостей");
     if (h === a) return setMsg("Команды должны быть разными");
 
-    const kickoff_at = buildKickoffAt(date, time);
+    const kickoffIso = mskLocalValueToIsoUtc(kickoffLocal);
+    if (!kickoffIso) return setMsg("Укажите дату и время начала (МСК)");
 
     setLoading(true);
     try {
@@ -61,8 +67,8 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
           tour_id: tourId,
           home_team_id: h,
           away_team_id: a,
-          kickoff_at, // ✅ теперь задаём дату+время
-          deadline_at: null,
+          kickoff_at: kickoffIso,
+          // deadline_at можно не задавать — уведомления/логика идут по kickoff_at
         }),
       });
 
@@ -71,8 +77,7 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
 
       setHomeTeamId("");
       setAwayTeamId("");
-      setDate("");
-      setTime("12:00");
+      setKickoffLocal("");
       setMsg("Матч создан ✅");
       router.refresh();
     } catch (e: any) {
@@ -119,23 +124,18 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
           ))}
         </select>
 
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          disabled={loading}
-          style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
-          title="Дата матча"
-        />
-
-        <input
-          type="time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          disabled={loading}
-          style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", width: 140 }}
-          title="Время начала"
-        />
+        <div style={{ display: "grid", gap: 4 }}>
+          <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 700 }}>Начало (МСК)</div>
+          <input
+            type="datetime-local"
+            value={kickoffLocal}
+            onChange={(e) => setKickoffLocal(e.target.value)}
+            onInput={(e) => setKickoffLocal((e.target as HTMLInputElement).value)}
+            disabled={loading}
+            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
+            title="Дата и время начала матча (МСК)"
+          />
+        </div>
 
         <button
           type="submit"
@@ -155,13 +155,11 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
       </div>
 
       {msg ? (
-        <div style={{ marginTop: 10, fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>
-          {msg}
-        </div>
+        <div style={{ marginTop: 10, fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</div>
       ) : null}
 
       <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
-        Теперь время задаётся админом. Храним как timestamptz (сейчас отправляем как UTC: <b>Z</b>).
+        Время вводится в <b>МСК</b> и сохраняется на сервер в UTC автоматически.
       </div>
     </form>
   );

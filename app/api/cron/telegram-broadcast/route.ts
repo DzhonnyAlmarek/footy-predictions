@@ -196,7 +196,7 @@ const BUCKETS = [
   { key: "1h", hours: 1 },
 ] as const;
 
-const WINDOW_MINUTES = 10;
+const WINDOW_MINUTES = 30;
 const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
 
 function pickBucket(msToKickoff: number): (typeof BUCKETS)[number] | null {
