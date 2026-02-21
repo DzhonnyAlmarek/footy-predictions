@@ -203,23 +203,29 @@ async function getMissingUsersForMatch(
 
 /* ---------------- bucket logic ---------------- */
 
-// без 4 часов — только 24/12/1
-const BUCKETS = [
-  { key: "24h", hours: 24 },
-  { key: "12h", hours: 12 },
-  { key: "1h", hours: 1 },
-] as const;
-
 // cron каждые 10 минут => окно +/- 10 минут
 const WINDOW_MINUTES = 10;
 const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
 
-function pickBucket(msToKickoff: number): (typeof BUCKETS)[number] | null {
+const BUCKETS = [
+  { key: "24h", minutes: 24 * 60 },
+  { key: "12h", minutes: 12 * 60 },
+  { key: "1h", minutes: 60 },
+  { key: "15m", minutes: 15 },
+] as const;
+
+type Bucket = (typeof BUCKETS)[number];
+
+function pickBucket(msToKickoff: number): Bucket | null {
   for (const b of BUCKETS) {
-    const target = b.hours * 60 * 60 * 1000;
+    const target = b.minutes * 60 * 1000;
     if (Math.abs(msToKickoff - target) <= WINDOW_MS) return b;
   }
   return null;
+}
+
+function bucketLabel(b: Bucket): string {
+  return b.minutes >= 60 ? `${Math.round(b.minutes / 60)}ч` : `${b.minutes}м`;
 }
 
 async function tryLogSend(sb: ReturnType<typeof service>, matchId: number, bucketKey: string) {
@@ -236,6 +242,48 @@ async function tryLogSend(sb: ReturnType<typeof service>, matchId: number, bucke
   throw new Error(`log_failed: ${msg}`);
 }
 
+/* ---------------- debug ---------------- */
+
+type DebugStats = {
+  horizonMatches: number;
+  processed: number;
+  skipped_no_kickoff: number;
+  skipped_already_started: number;
+  skipped_no_bucket: number;
+  skipped_no_missing: number;
+  skipped_duplicate: number;
+  skipped_send_limit: number;
+  sent: number;
+  buckets_hit: Record<string, number>;
+  skips: Array<{ match_id: number | null; reason: string }>;
+};
+
+function initStats(): DebugStats {
+  return {
+    horizonMatches: 0,
+    processed: 0,
+    skipped_no_kickoff: 0,
+    skipped_already_started: 0,
+    skipped_no_bucket: 0,
+    skipped_no_missing: 0,
+    skipped_duplicate: 0,
+    skipped_send_limit: 0,
+    sent: 0,
+    buckets_hit: {},
+    skips: [],
+  };
+}
+
+function bumpBucket(stats: DebugStats, key: string) {
+  stats.buckets_hit[key] = (stats.buckets_hit[key] ?? 0) + 1;
+}
+
+function addSkip(stats: DebugStats, matchId: number | null, reason: string) {
+  // чтобы не раздувать ответ
+  if (stats.skips.length >= 30) return;
+  stats.skips.push({ match_id: matchId, reason });
+}
+
 /* ---------------- handler ---------------- */
 
 export async function POST(req: Request) {
@@ -245,6 +293,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
+  const debug = req.headers.get("x-debug") === "1";
+  const stats = initStats();
+
   try {
     const sb = service();
     const site = getSiteUrl();
@@ -253,8 +304,19 @@ export async function POST(req: Request) {
     const stageId = await getCurrentStageId(sb);
     const matches = await getUpcomingMatches(sb, stageId);
 
+    stats.horizonMatches = matches.length;
+
+    if (debug) {
+      console.log("[cron:broadcast] stageId=", stageId, "matchesInHorizon=", matches.length);
+    }
+
     if (matches.length === 0) {
-      return NextResponse.json({ ok: true, skipped: true, reason: "no_matches_in_horizon" });
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "no_matches_in_horizon",
+        ...(debug ? { stats } : {}),
+      });
     }
 
     const { userIds, nameById } = await getParticipants(sb);
@@ -266,26 +328,54 @@ export async function POST(req: Request) {
     const MAX_SEND_PER_RUN = 3;
 
     for (const m of matches) {
-      if (sent >= MAX_SEND_PER_RUN) break;
+      if (sent >= MAX_SEND_PER_RUN) {
+        stats.skipped_send_limit++;
+        addSkip(stats, Number((m as any).id ?? 0) || null, "send_limit");
+        break;
+      }
+
+      stats.processed++;
 
       const matchId = Number((m as any).id);
       const kickoffAt = String((m as any).kickoff_at ?? "");
-      if (!matchId || !kickoffAt) continue;
+      if (!matchId || !kickoffAt) {
+        stats.skipped_no_kickoff++;
+        addSkip(stats, matchId || null, "no_kickoff");
+        continue;
+      }
 
       const kickoffMs = new Date(kickoffAt).getTime();
       const msToKickoff = kickoffMs - Date.now();
-      if (!Number.isFinite(msToKickoff) || msToKickoff <= 0) continue;
+
+      if (!Number.isFinite(msToKickoff) || msToKickoff <= 0) {
+        stats.skipped_already_started++;
+        addSkip(stats, matchId, "already_started");
+        continue;
+      }
 
       const bucket = pickBucket(msToKickoff);
-      if (!bucket) continue;
+      if (!bucket) {
+        stats.skipped_no_bucket++;
+        addSkip(stats, matchId, "no_bucket");
+        continue;
+      }
+      bumpBucket(stats, bucket.key);
 
       // кто без прогноза
       const missing = await getMissingUsersForMatch(sb, matchId, userIds);
-      if (missing.size === 0) continue;
+      if (missing.size === 0) {
+        stats.skipped_no_missing++;
+        addSkip(stats, matchId, "no_missing_users");
+        continue;
+      }
 
       // анти-дубли (один матч + один bucket)
       const shouldSend = await tryLogSend(sb, matchId, bucket.key);
-      if (!shouldSend) continue;
+      if (!shouldSend) {
+        stats.skipped_duplicate++;
+        addSkip(stats, matchId, "duplicate");
+        continue;
+      }
 
       const home = teamName((m as any).home_team);
       const away = teamName((m as any).away_team);
@@ -296,7 +386,7 @@ export async function POST(req: Request) {
         .slice(0, MAX_NAMES);
 
       const title =
-        `⚽ <b>Напоминание за ${bucket.hours}ч</b>\n` +
+        `⚽ <b>Напоминание за ${escapeHtml(bucketLabel(bucket))}</b>\n` +
         `Пора внести прогноз.`;
 
       const matchBlock =
@@ -312,6 +402,16 @@ export async function POST(req: Request) {
 
       const text = `${title}${matchBlock}${missingBlock}`;
 
+      if (debug) {
+        console.log("[cron:broadcast] send", {
+          matchId,
+          bucket: bucket.key,
+          msToKickoff,
+          missing: missing.size,
+          kickoffAt,
+        });
+      }
+
       await tgSendMessage({
         text,
         buttonUrl: entryUrl,
@@ -319,17 +419,31 @@ export async function POST(req: Request) {
       });
 
       sent++;
+      stats.sent++;
       sentItems.push({ match_id: matchId, bucket: bucket.key, missing: missing.size });
     }
 
     if (sent === 0) {
-      return NextResponse.json({ ok: true, skipped: true, reason: "nothing_to_send" });
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "nothing_to_send",
+        ...(debug ? { stats } : {}),
+      });
     }
 
-    return NextResponse.json({ ok: true, sent, items: sentItems });
+    return NextResponse.json({
+      ok: true,
+      sent,
+      items: sentItems,
+      ...(debug ? { stats } : {}),
+    });
   } catch (e: any) {
+    if (debug) {
+      console.error("[cron:broadcast] error", e);
+    }
     return NextResponse.json(
-      { ok: false, error: "broadcast_failed", message: String(e?.message ?? e) },
+      { ok: false, error: "broadcast_failed", message: String(e?.message ?? e), ...(debug ? { stats } : {}) },
       { status: 500 }
     );
   }
