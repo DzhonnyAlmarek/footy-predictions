@@ -31,7 +31,7 @@ function service() {
   );
 }
 
-function deadlineFlag(d: Date) {
+function kickoffFlag(d: Date) {
   const now = new Date();
   const ms = d.getTime() - now.getTime();
   const oneDay = 24 * 60 * 60 * 1000;
@@ -42,30 +42,28 @@ function deadlineFlag(d: Date) {
   };
 }
 
-function fmtKickoffMsk(iso?: string | null) {
+function fmtDateMsk(iso?: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleString("ru-RU", {
-    timeZone: TZ_MSK,
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
-
-function fmtDeadlineMsk(iso?: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  // Дедлайн ты показываешь как дату — оставим так, но строго МСК
   return d.toLocaleDateString("ru-RU", {
     timeZone: TZ_MSK,
     dateStyle: "medium",
   });
 }
 
+function fmtTimeMsk(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleTimeString("ru-RU", {
+    timeZone: TZ_MSK,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 type MatchRow = {
   id: string;
   kickoff_at: string | null;
-  deadline_at: string | null;
   home_team: { name: string; slug: string } | null;
   away_team: { name: string; slug: string } | null;
 };
@@ -100,7 +98,6 @@ export default async function DashboardMatchesPage() {
       `
       id,
       kickoff_at,
-      deadline_at,
       home_team:teams!matches_home_team_id_fkey ( name, slug ),
       away_team:teams!matches_away_team_id_fkey ( name, slug )
     `
@@ -110,7 +107,10 @@ export default async function DashboardMatchesPage() {
 
   if (matchesErr) {
     return (
-      <main className="hasBottomBar" style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
+      <main
+        className="hasBottomBar"
+        style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}
+      >
         Ошибка matches: {matchesErr.message}
       </main>
     );
@@ -159,34 +159,38 @@ export default async function DashboardMatchesPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th style={{ width: 170 }}>Дата (МСК)</th>
-                  <th>Матч</th>
-                  <th style={{ width: 180 }}>Дедлайн (МСК)</th>
-                  <th style={{ width: 170 }}>Прогноз</th>
+                  <th style={{ width: 170 }} className="text-center align-middle">Дата (МСК)</th>
+                  <th style={{ width: 120 }} className="text-center align-middle">Время (МСК)</th>
+                  <th className="text-center align-middle">Матч</th>
+                  <th style={{ width: 170 }} className="text-center align-middle">Прогноз</th>
                 </tr>
               </thead>
 
               <tbody>
                 {(matches as any[]).map((m: MatchRow) => {
-                  const deadline = m.deadline_at ? new Date(m.deadline_at) : null;
+                  const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
                   const pr = predByMatch.get(m.id) ?? { h: null, a: null };
+
+                  const timeCell = kickoff ? (() => {
+                    const f = kickoffFlag(kickoff);
+                    const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
+                    return <span className={`badge ${cls}`}>{fmtTimeMsk(m.kickoff_at)}</span>;
+                  })() : "—";
 
                   return (
                     <tr key={m.id}>
-                      <td style={{ whiteSpace: "nowrap" }}>{fmtKickoffMsk(m.kickoff_at)}</td>
+                      <td className="text-center" style={{ whiteSpace: "nowrap" }}>
+                        {fmtDateMsk(m.kickoff_at)}
+                      </td>
+
+                      <td className="text-center" style={{ whiteSpace: "nowrap" }}>
+                        {timeCell}
+                      </td>
 
                       <td>
                         <div style={{ fontWeight: 900 }}>
                           {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
                         </div>
-                      </td>
-
-                      <td style={{ whiteSpace: "nowrap" }}>
-                        {deadline ? (() => {
-                          const f = deadlineFlag(deadline);
-                          const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
-                          return <span className={`badge ${cls}`}>{fmtDeadlineMsk(m.deadline_at)}</span>;
-                        })() : "—"}
                       </td>
 
                       <td>
