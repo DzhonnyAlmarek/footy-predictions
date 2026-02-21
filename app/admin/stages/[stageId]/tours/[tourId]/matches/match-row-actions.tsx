@@ -9,6 +9,11 @@ type Team = { id: number; name: string };
 type Props = {
   matchId: number;
   kickoffAt?: string | null;
+
+  // оставляем, чтобы не ломать места, где их ещё передают
+  homeScore?: number | null;
+  awayScore?: number | null;
+
   homeTeamId: number;
   awayTeamId: number;
 };
@@ -21,23 +26,13 @@ function isoToDateValue(iso?: string | null) {
 
 function isoToTimeValue(iso?: string | null) {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
-}
-
-/**
- * Мы храним только дату (YYYY-MM-DD) в UI,
- * а на сервер отправляем kickoff_at как техническое время 12:00:00Z
- * (чтобы было валидное timestamptz).
- */
-function dateToKickoffIso(date: string): string | null {
-  const v = (date ?? "").trim();
-  if (!v) return null;
-  // ВАЖНО: фиксированное время.
-  return `${v}T12:00:00.000Z`;
+  const s = String(iso);
+  if (s.startsWith("2099-01-01")) return "";
+  // ожидаем ISO вида 2026-02-22T12:00:00.000Z
+  // берём HH:MM
+  const m = s.match(/T(\d{2}):(\d{2})/);
+  if (!m) return "";
+  return `${m[1]}:${m[2]}`;
 }
 
 export default function MatchRowActions({
@@ -52,6 +47,8 @@ export default function MatchRowActions({
   const [teams, setTeams] = useState<Team[] | null>(null);
 
   const [date, setDate] = useState<string>(() => isoToDateValue(kickoffAt));
+  const time = isoToTimeValue(kickoffAt);
+
   const [homeId, setHomeId] = useState<string>(String(homeTeamId));
   const [awayId, setAwayId] = useState<string>(String(awayTeamId));
 
@@ -64,7 +61,7 @@ export default function MatchRowActions({
     const res = await fetch("/api/admin/matches", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      // ✅ сервер ждёт id, а не match_id
+      // важно: API ждёт id (а не match_id)
       body: JSON.stringify({ id: matchId, ...body }),
     });
     const json = await res.json().catch(() => ({}));
@@ -78,6 +75,7 @@ export default function MatchRowActions({
       .from("teams")
       .select("id,name")
       .order("name", { ascending: true });
+
     if (error) {
       setMsg(error.message);
       setTeams([]);
@@ -86,7 +84,7 @@ export default function MatchRowActions({
     setTeams(data ?? []);
   }
 
-  // ✅ Автосохранение даты (kickoff_at)
+  // ✅ Автосохранение даты
   useEffect(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
@@ -99,12 +97,15 @@ export default function MatchRowActions({
       try {
         setLoading(true);
 
-        const kickoff_iso = dateToKickoffIso(date);
-        await patch({
-          kickoff_at: kickoff_iso,
-          // deadline_at можно тоже держать рядом, но ты просил без дедлайна в напоминаниях.
-          // Если хочешь — можем отдельно задать deadline_at = kickoff_at.
-        });
+        // если дата пустая — очищаем kickoff_at/deadline_at
+        if (!date) {
+          await patch({ kickoff_at: null, deadline_at: null });
+        } else {
+          // сервер у тебя ставит “техническое” время сам (или можно передать ISO)
+          // тут передаём только kickoff_at датой (если у тебя на сервере уже обрабатывается date-поле — ок)
+          // но в текущем API PATCH у тебя ожидает kickoff_at/deadline_at, поэтому передадим kickoff_at
+          await patch({ kickoff_at: `${date}T12:00:00.000Z` });
+        }
 
         setMsg("дата сохранена ✅");
         router.refresh();
@@ -150,7 +151,7 @@ export default function MatchRowActions({
       const res = await fetch("/api/admin/matches", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ match_id: matchId }),
+        body: JSON.stringify({ id: matchId }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error ?? `Ошибка (${res.status})`);
@@ -164,11 +165,9 @@ export default function MatchRowActions({
     }
   }
 
-  const timeLabel = isoToTimeValue(kickoffAt) || "—";
-
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-      <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+      <div style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
         <input
           type="date"
           value={date}
@@ -179,18 +178,11 @@ export default function MatchRowActions({
           title="Дата матча (сохраняется автоматически)"
         />
 
-        {/* ✅ время рядом с датой (только отображение) */}
         <span
-          style={{
-            fontWeight: 900,
-            padding: "8px 10px",
-            borderRadius: 10,
-            border: "1px solid rgba(17,24,39,.12)",
-            background: "rgba(255,255,255,.8)",
-          }}
-          title="Время начала матча (из kickoff_at)"
+          style={{ fontWeight: 900, opacity: 0.75 }}
+          title="Время старта (берётся из kickoff_at)"
         >
-          🕒 {timeLabel}
+          {time ? `🕒 ${time}` : "🕒 —"}
         </span>
       </div>
 
@@ -243,8 +235,6 @@ export default function MatchRowActions({
       >
         {loading ? "..." : "Сохранить пару"}
       </button>
-
-      {/* ✅ УБРАЛИ блок счёта и кнопку “Сохранить счёт” */}
 
       <button
         type="button"
