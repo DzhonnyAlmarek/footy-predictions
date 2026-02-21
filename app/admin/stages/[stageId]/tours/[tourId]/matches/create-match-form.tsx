@@ -6,10 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 
 type Team = { id: number; name: string };
 
-function toKickoffIso(date: string, time: string) {
-  if (!date) return null;
-  const t = time && time.trim() ? time.trim() : "12:00";
-  const d = new Date(`${date}T${t}:00`);
+function localInputValueToISO(v: string): string | null {
+  const t = (v ?? "").trim();
+  if (!t) return null;
+  const d = new Date(t); // local
   if (!Number.isFinite(d.getTime())) return null;
   return d.toISOString();
 }
@@ -22,19 +22,15 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
   const [homeTeamId, setHomeTeamId] = useState<string>("");
   const [awayTeamId, setAwayTeamId] = useState<string>("");
 
-  const [date, setDate] = useState<string>(""); // YYYY-MM-DD
-  const [time, setTime] = useState<string>(""); // HH:MM
-
+  // ✅ дата+время
+  const [kickoffLocal, setKickoffLocal] = useState<string>(""); // datetime-local
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   async function ensureTeams() {
     if (teams) return;
     setMsg(null);
-    const { data, error } = await supabase
-      .from("teams")
-      .select("id,name")
-      .order("name", { ascending: true });
+    const { data, error } = await supabase.from("teams").select("id,name").order("name", { ascending: true });
     if (error) {
       setMsg(error.message);
       setTeams([]);
@@ -53,9 +49,8 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
     if (!Number.isFinite(a)) return setMsg("Выберите гостей");
     if (h === a) return setMsg("Команды должны быть разными");
 
-    const kickoff_at = toKickoffIso(date, time);
-    // можно разрешить без даты/времени, но раз ты хочешь задавать — сделаем обязательным:
-    if (!kickoff_at) return setMsg("Укажите дату и время начала");
+    const kickoffISO = localInputValueToISO(kickoffLocal);
+    if (!kickoffISO) return setMsg("Укажите дату и время матча");
 
     setLoading(true);
     try {
@@ -67,8 +62,8 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
           tour_id: tourId,
           home_team_id: h,
           away_team_id: a,
-          kickoff_at,
-          deadline_at: kickoff_at, // можешь убрать, если deadline не используешь
+          kickoff_at: kickoffISO,
+          deadline_at: kickoffISO,
         }),
       });
 
@@ -77,8 +72,7 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
 
       setHomeTeamId("");
       setAwayTeamId("");
-      setDate("");
-      setTime("");
+      setKickoffLocal("");
       setMsg("Матч создан ✅");
       router.refresh();
     } catch (e: any) {
@@ -126,23 +120,13 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
         </select>
 
         <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          onInput={(e) => setDate((e.target as HTMLInputElement).value)}
+          type="datetime-local"
+          value={kickoffLocal}
+          onChange={(e) => setKickoffLocal(e.target.value)}
+          onInput={(e) => setKickoffLocal((e.target as HTMLInputElement).value)}
           disabled={loading}
           style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
-          title="Дата матча"
-        />
-
-        <input
-          type="time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          onInput={(e) => setTime((e.target as HTMLInputElement).value)}
-          disabled={loading || !date}
-          style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", width: 130 }}
-          title="Время начала"
+          title="Дата и время начала матча"
         />
 
         <button
@@ -169,7 +153,7 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
       ) : null}
 
       <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
-        Дата/время сохраняются в <b>kickoff_at</b> (timestamptz). Время берётся из вашего часового пояса браузера.
+        Время задаётся админом. Сохраняется как точный момент времени (UTC) через ISO.
       </div>
     </form>
   );
