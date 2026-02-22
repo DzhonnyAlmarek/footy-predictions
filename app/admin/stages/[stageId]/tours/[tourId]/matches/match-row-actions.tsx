@@ -170,7 +170,6 @@ export default function MatchRowActions({
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
       <div style={{ display: "grid", gap: 4 }}>
-        <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 700 }}>Начало (МСК)</div>
         <input
           type="datetime-local"
           value={kickoffLocal}

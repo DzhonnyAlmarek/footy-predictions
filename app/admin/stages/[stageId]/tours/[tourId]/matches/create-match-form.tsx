@@ -125,7 +125,6 @@ export default function CreateMatchForm({ stageId, tourId }: { stageId: number; 
         </select>
 
         <div style={{ display: "grid", gap: 4 }}>
-          <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 700 }}>Начало (МСК)</div>
           <input
             type="datetime-local"
             value={kickoffLocal}
