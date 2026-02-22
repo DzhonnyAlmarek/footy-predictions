@@ -106,10 +106,7 @@ export default async function DashboardMatchesPage() {
 
   if (matchesErr) {
     return (
-      <main
-        className="hasBottomBar"
-        style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}
-      >
+      <main className="hasBottomBar" style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
         Ошибка matches: {matchesErr.message}
       </main>
     );
@@ -142,8 +139,7 @@ export default async function DashboardMatchesPage() {
             <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>МСК</span>
           </div>
         </div>
-
-        {/* ❌ topNav удалён — навигация только в AppHeader/BottomBar */}
+        {/* ✅ больше никаких topNav / mobileBottomBar — навигация только в AppHeader + BottomBar */}
       </header>
 
       <section style={{ marginTop: 18 }}>
@@ -154,10 +150,10 @@ export default async function DashboardMatchesPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th className="thCenter" style={{ width: 170 }}>Дата (МСК)</th>
-                  <th className="thCenter" style={{ width: 120 }}>Время (МСК)</th>
-                  <th className="thLeft">Матч</th>
-                  <th className="thCenter" style={{ width: 170 }}>Прогноз</th>
+                  <th style={{ width: 170, textAlign: "center" as const, verticalAlign: "middle" as const }}>Дата (МСК)</th>
+                  <th style={{ width: 120, textAlign: "center" as const, verticalAlign: "middle" as const }}>Время (МСК)</th>
+                  <th style={{ textAlign: "center" as const, verticalAlign: "middle" as const }}>Матч</th>
+                  <th style={{ width: 170, textAlign: "center" as const, verticalAlign: "middle" as const }}>Прогноз</th>
                 </tr>
               </thead>
 
@@ -174,21 +170,21 @@ export default async function DashboardMatchesPage() {
 
                   return (
                     <tr key={m.id}>
-                      <td className="tdCenter" style={{ whiteSpace: "nowrap" }}>
+                      <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                         {fmtDateMsk(m.kickoff_at)}
                       </td>
 
-                      <td className="tdCenter" style={{ whiteSpace: "nowrap" }}>
+                      <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                         {timeCell}
                       </td>
 
-                      <td className="tdLeft">
+                      <td>
                         <div style={{ fontWeight: 900 }}>
                           {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
                         </div>
                       </td>
 
-                      <td className="tdCenter">
+                      <td style={{ textAlign: "center" }}>
                         <PredCellEditable
                           matchId={Number(m.id)}
                           homePred={pr.h}
