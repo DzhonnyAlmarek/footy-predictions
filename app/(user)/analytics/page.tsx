@@ -79,6 +79,7 @@ type SearchParams = {
 };
 
 type Props = {
+  // ✅ Next.js 15.5: searchParams ожидается как Promise
   searchParams?: Promise<SearchParams>;
 };
 
@@ -160,6 +161,18 @@ function badgeClassByKey(key: string) {
   }
 }
 
+/* ---------- tiny UI helpers (tooltips) ---------- */
+
+function ThHelp(props: { label: string; tip: string }) {
+  return (
+    <span className="thHelp" title={props.tip}>
+      {props.label} <span className="thHelpIcon" aria-hidden="true">ℹ️</span>
+    </span>
+  );
+}
+
+/* ---------- charts (shown only in Details mode) ---------- */
+
 function Sparkline(props: { values: number[] }) {
   const W = 140;
   const H = 34;
@@ -231,7 +244,7 @@ function OutcomeBar(props: { home: number; draw: number; away: number }) {
       height={H}
       viewBox={`0 0 ${W} ${H}`}
       role="img"
-      aria-label="Распределение исходов"
+      aria-label="Распределение исходов 1/X/2"
     >
       <rect x="0" y="0" width={W} height={H} rx="5" fill="rgba(17,24,39,.08)" />
       <rect x="0" y="0" width={h} height={H} rx="5" fill="rgba(37,99,235,.60)" />
@@ -241,32 +254,43 @@ function OutcomeBar(props: { home: number; draw: number; away: number }) {
   );
 }
 
+/* ---------- navigation pills ---------- */
+
 function TabLink(props: { href: string; active: boolean; label: string; icon: string }) {
   return (
     <Link href={props.href} className={`appNavLink ${props.active ? "navActive" : ""}`}>
-      <span aria-hidden="true" className="appNavIcon">{props.icon}</span>
+      <span aria-hidden="true" className="appNavIcon">
+        {props.icon}
+      </span>
       <span>{props.label}</span>
     </Link>
   );
 }
 
-function ModePill(props: { href: string; active: boolean; label: string }) {
+function ModePill(props: { href: string; active: boolean; label: string; tip: string }) {
   return (
-    <Link href={props.href} className={`appNavLink ${props.active ? "navActive" : ""}`}>
+    <Link
+      href={props.href}
+      className={`appNavLink ${props.active ? "navActive" : ""}`}
+      title={props.tip}
+    >
       <span>{props.label}</span>
     </Link>
   );
 }
+
+/* ---------- top cards ---------- */
 
 function TopMiniCard(props: {
   title: string;
   name: string;
   value: string;
   meta: string;
+  tip: string;
   href?: string;
 }) {
   const body = (
-    <div className="card analyticsTopCard">
+    <div className="card analyticsTopCard" title={props.tip}>
       <div className="analyticsTopCardInner">
         <div className="analyticsTopTitle">{props.title}</div>
         <div className="analyticsTopName">{props.name}</div>
@@ -286,6 +310,33 @@ function TopMiniCard(props: {
     body
   );
 }
+
+/* ---------- tooltips text (single source of truth) ---------- */
+
+const TIP = {
+  matches:
+    "Матчей учтено — сколько завершённых матчей вошло в расчёт для этого участника. Чем больше, тем стабильнее статистика.",
+  exact:
+    "Точный счёт — % матчей, где прогноз полностью совпал с фактическим счётом (например 2:1 угадан ровно 2:1).",
+  outcome:
+    "Исход — % матчей, где угадан 1/X/2 (П1/Н/П2), независимо от точного счёта.",
+  diff:
+    "Разница — % матчей, где угадана разница мячей (например 2:1 и 3:2 обе дают разницу +1).",
+  risk:
+    "Риск — средняя разница голов в ваших прогнозах. Чем выше число, тем смелее прогнозы (условно: 3:0 рискованнее, чем 1:0).",
+  total:
+    "Тотал — средняя сумма голов в ваших прогнозах. Чем выше, тем чаще ставите результативные матчи (например 2:2/3:1).",
+  draw:
+    "Ничьи — доля прогнозов, где выбран исход X.",
+  form:
+    "Форма = (средние очки за последние 5 матчей) − (средние очки за весь этап). Плюс — вы набираете больше обычного. Появляется, когда есть достаточно матчей.",
+  archetype:
+    "Архетип — стиль прогнозов (про то, как вы ставите), а не качество. Подробное объяснение — внутри «Детали».",
+  outcomeBar:
+    "Распределение 1/X/2 — это стиль: как часто вы ставите победу хозяев (1), ничью (X) и победу гостей (2).",
+};
+
+/* ---------- main page ---------- */
 
 export default async function AnalyticsPage({ searchParams }: Props) {
   const sb = service();
@@ -513,7 +564,6 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const finished = finishedCnt ?? 0;
   const totalMatches = 56;
 
-  // простая “форма” для компактного отображения
   function fmtMomentum(m: number, matches: number) {
     if (matches < 3) return "н/д";
     const arrow = m > 0.02 ? "↗" : m < -0.02 ? "↘" : "→";
@@ -539,36 +589,54 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             Этап: <b>{stage.name}</b> · обновлено: <b>{updated}</b>
           </div>
 
-          <div className="analyticsHintSmall" style={{ marginTop: 10 }}>
-            По умолчанию показано <b>коротко</b>. Для деталей включи режим <b>Подробнее</b>.
-          </div>
+          <details className="helpBox" style={{ marginTop: 10 }}>
+            <summary className="helpSummary">Пояснения (как читать)</summary>
+            <div className="helpBody">
+              <ul className="helpList">
+                <li><b>Качество</b> — точность попаданий (точный счёт / исход / разница).</li>
+                <li><b>Стиль</b> — что вы чаще ставите (риск, тотал, ничьи, распределение 1/X/2).</li>
+                <li><b>Форма</b> — отклонение последних матчей от среднего по этапу (плюс — вы “на ходу”).</li>
+                <li><b>Архетип</b> — краткое описание вашей манеры прогнозов.</li>
+              </ul>
+            </div>
+          </details>
         </div>
 
         <div className="analyticsControls">
           <TabLink href={q({ view: "quality", sort: "matches" })} active={view === "quality"} label="Качество" icon="🎯" />
           <TabLink href={q({ view: "style", sort: "matches" })} active={view === "style"} label="Стиль" icon="🎛️" />
 
-          <ModePill href={q({ mode: "compact" })} active={mode === "compact"} label="Коротко" />
-          <ModePill href={q({ mode: "details" })} active={mode === "details"} label="Подробнее" />
+          <ModePill
+            href={q({ mode: "compact" })}
+            active={mode === "compact"}
+            label="Коротко"
+            tip="Показываем только главное: читабельная таблица + минимум деталей."
+          />
+          <ModePill
+            href={q({ mode: "details" })}
+            active={mode === "details"}
+            label="Подробнее"
+            tip="Добавляются детали: спарклайн формы, распределение 1/X/2 и описания архетипов."
+          />
 
           <form action="/analytics" method="get" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <input type="hidden" name="view" value={view} />
             <input type="hidden" name="mode" value={mode} />
-            <select className="select" name="sort" defaultValue={sort}>
+            <select className="select" name="sort" defaultValue={sort} title="Сортировка списка участников">
               {sortOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   Сортировка: {o.label}
                 </option>
               ))}
             </select>
-            <button className="appNavLink" type="submit">
+            <button className="appNavLink" type="submit" title="Применить сортировку">
               Применить
             </button>
           </form>
         </div>
       </div>
 
-      {/* Сводка (максимум 4 числа) */}
+      {/* Сводка */}
       <div className="analyticsSummary" style={{ marginTop: 14 }}>
         <div className="card analyticsSummaryCard">
           <div className="analyticsSummaryInner" title="Сколько матчей завершено (и попало в расчёт аналитики)">
@@ -606,7 +674,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      {/* TOP (сократил до 3 карточек) */}
+      {/* TOP */}
       <div style={{ marginTop: 14 }}>
         <div className="analyticsSectionTitle">TOP по этапу</div>
 
@@ -620,6 +688,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                   name={bestExact.name}
                   value={pct01(bestExact.exactRate)}
                   meta={`Матчей: ${bestExact.matches}`}
+                  tip={TIP.exact}
                 />
               ) : null}
 
@@ -630,6 +699,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                   name={bestOutcome.name}
                   value={pct01(bestOutcome.outcomeRate)}
                   meta={`Матчей: ${bestOutcome.matches}`}
+                  tip={TIP.outcome}
                 />
               ) : null}
 
@@ -640,6 +710,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                   name={bestDiff.name}
                   value={pct01(bestDiff.diffRate)}
                   meta={`Матчей: ${bestDiff.matches}`}
+                  tip={TIP.diff}
                 />
               ) : null}
             </>
@@ -652,6 +723,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                   name={mostRisky.name}
                   value={n2(mostRisky.avgAbsDiff)}
                   meta={`Матчей: ${mostRisky.matches}`}
+                  tip={TIP.risk}
                 />
               ) : null}
 
@@ -662,6 +734,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                   name={mostHighTotal.name}
                   value={n2(mostHighTotal.avgTotal)}
                   meta={`Матчей: ${mostHighTotal.matches}`}
+                  tip={TIP.total}
                 />
               ) : null}
 
@@ -672,18 +745,19 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                   name={mostPeace.name}
                   value={pct01(mostPeace.drawRate)}
                   meta={`Матчей: ${mostPeace.matches}`}
+                  tip={TIP.draw}
                 />
               ) : null}
             </>
           )}
         </div>
 
-        <div className="analyticsHint">
+        <div className="analyticsHint" title="Чтобы TOP был честным, требуется минимум матчей.">
           TOP считается только для участников, у кого учтено <b>{MIN_TOP_MATCHES}+</b> матча.
         </div>
       </div>
 
-      {/* Участники (компактная таблица) */}
+      {/* Участники */}
       <div style={{ marginTop: 16 }}>
         <div className="analyticsSectionTitle">Участники</div>
 
@@ -691,25 +765,47 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           <table className="table" style={{ minWidth: 900 }}>
             <thead>
               <tr>
-                <th className="thLeft">Участник</th>
-                <th className="thCenter" style={{ width: 110 }}>Матчи</th>
+                <th className="thLeft">
+                  <ThHelp label="Участник" tip="Кликни по имени, чтобы открыть персональную страницу аналитики (если она есть)." />
+                </th>
+
+                <th className="thCenter" style={{ width: 110 }}>
+                  <ThHelp label="Матчи" tip={TIP.matches} />
+                </th>
 
                 {view === "quality" ? (
                   <>
-                    <th className="thCenter" style={{ width: 140 }}>Точный</th>
-                    <th className="thCenter" style={{ width: 120 }}>Исход</th>
-                    <th className="thCenter" style={{ width: 120 }}>Разница</th>
+                    <th className="thCenter" style={{ width: 140 }}>
+                      <ThHelp label="Точный" tip={TIP.exact} />
+                    </th>
+                    <th className="thCenter" style={{ width: 120 }}>
+                      <ThHelp label="Исход" tip={TIP.outcome} />
+                    </th>
+                    <th className="thCenter" style={{ width: 120 }}>
+                      <ThHelp label="Разница" tip={TIP.diff} />
+                    </th>
                   </>
                 ) : (
                   <>
-                    <th className="thCenter" style={{ width: 120 }}>Риск</th>
-                    <th className="thCenter" style={{ width: 120 }}>Тотал</th>
-                    <th className="thCenter" style={{ width: 120 }}>Ничьи</th>
+                    <th className="thCenter" style={{ width: 120 }}>
+                      <ThHelp label="Риск" tip={TIP.risk} />
+                    </th>
+                    <th className="thCenter" style={{ width: 120 }}>
+                      <ThHelp label="Тотал" tip={TIP.total} />
+                    </th>
+                    <th className="thCenter" style={{ width: 120 }}>
+                      <ThHelp label="Ничьи" tip={TIP.draw} />
+                    </th>
                   </>
                 )}
 
-                <th className="thCenter" style={{ width: 140 }}>Форма</th>
-                <th className="thCenter" style={{ width: 220 }}>Архетип</th>
+                <th className="thCenter" style={{ width: 140 }}>
+                  <ThHelp label="Форма" tip={TIP.form} />
+                </th>
+
+                <th className="thCenter" style={{ width: 220 }}>
+                  <ThHelp label="Архетип" tip={TIP.archetype} />
+                </th>
               </tr>
             </thead>
 
@@ -726,7 +822,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                       </div>
 
                       {mode === "details" ? (
-                        <div style={{ marginTop: 6, opacity: 0.75, fontWeight: 800 }}>
+                        <div style={{ marginTop: 6, opacity: 0.75, fontWeight: 800 }} title={TIP.outcomeBar}>
                           1/X/2: {pct01(safeDiv(c.predHome, c.matches))} / {pct01(safeDiv(c.predDraw, c.matches))} /{" "}
                           {pct01(safeDiv(c.predAway, c.matches))}
                         </div>
@@ -734,26 +830,26 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                     </td>
 
                     <td className="tdCenter">
-                      <span className="badge isNeutral" title="Сколько завершённых матчей вошло в расчёт">
+                      <span className="badge isNeutral" title={TIP.matches}>
                         {c.matches}
                       </span>
                     </td>
 
                     {view === "quality" ? (
                       <>
-                        <td className="tdCenter"><b>{pct01(c.exactRate)}</b></td>
-                        <td className="tdCenter"><b>{pct01(c.outcomeRate)}</b></td>
-                        <td className="tdCenter"><b>{pct01(c.diffRate)}</b></td>
+                        <td className="tdCenter" title={TIP.exact}><b>{pct01(c.exactRate)}</b></td>
+                        <td className="tdCenter" title={TIP.outcome}><b>{pct01(c.outcomeRate)}</b></td>
+                        <td className="tdCenter" title={TIP.diff}><b>{pct01(c.diffRate)}</b></td>
                       </>
                     ) : (
                       <>
-                        <td className="tdCenter"><b>{n2(c.avgAbsDiff)}</b></td>
-                        <td className="tdCenter"><b>{n2(c.avgTotal)}</b></td>
-                        <td className="tdCenter"><b>{pct01(c.drawRate)}</b></td>
+                        <td className="tdCenter" title={TIP.risk}><b>{n2(c.avgAbsDiff)}</b></td>
+                        <td className="tdCenter" title={TIP.total}><b>{n2(c.avgTotal)}</b></td>
+                        <td className="tdCenter" title={TIP.draw}><b>{pct01(c.drawRate)}</b></td>
                       </>
                     )}
 
-                    <td className="tdCenter" title="Форма = (средние очки за последние 5 матчей) − (средние очки за весь этап)">
+                    <td className="tdCenter" title={TIP.form}>
                       <span className="badge isNeutral">{fmtMomentum(c.momentumCurrent, c.matches)}</span>
                     </td>
 
@@ -770,13 +866,19 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                         <details className="helpBox" style={{ marginTop: 10, textAlign: "left" }}>
                           <summary className="helpSummary">Детали</summary>
                           <div className="helpBody">
-                            <div style={{ fontWeight: 900, marginBottom: 8 }}>Архетип</div>
+                            <div style={{ fontWeight: 900, marginBottom: 8 }} title={TIP.archetype}>
+                              Архетип
+                            </div>
                             <div style={{ opacity: 0.85 }}>{c.summary_ru}</div>
 
-                            <div style={{ marginTop: 12, fontWeight: 900, marginBottom: 8 }}>Форма (последние значения)</div>
+                            <div style={{ marginTop: 12, fontWeight: 900, marginBottom: 8 }} title={TIP.form}>
+                              Форма (последние значения)
+                            </div>
                             <Sparkline values={c.momentumSeries ?? []} />
 
-                            <div style={{ marginTop: 12, fontWeight: 900, marginBottom: 8 }}>Распределение 1/X/2</div>
+                            <div style={{ marginTop: 12, fontWeight: 900, marginBottom: 8 }} title={TIP.outcomeBar}>
+                              Распределение 1/X/2
+                            </div>
                             <OutcomeBar home={c.predHome} draw={c.predDraw} away={c.predAway} />
                           </div>
                         </details>
