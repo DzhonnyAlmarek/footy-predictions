@@ -11,9 +11,8 @@ type Item = {
 };
 
 const userItems: Item[] = [
-  // ✅ “Мои” ведёт на /dashboard/matches
   { href: "/dashboard/matches", label: "Мои", icon: "✍️" },
-  { href: "/dashboard/current", label: "Текущая", icon: "📊" },
+  { href: "/dashboard", label: "Текущая", icon: "📊" },
   { href: "/analytics", label: "Аналитика", icon: "📈" },
   { href: "/golden-boot", label: "Бутса", icon: "🥇" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
@@ -27,6 +26,12 @@ const adminItems: Item[] = [
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
 
+function isActivePath(pathname: string, href: string) {
+  if (!href) return false;
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
 export default function BottomBar({ variant = "user" }: { variant?: "user" | "admin" }) {
   const pathname = usePathname() ?? "";
   const items = variant === "admin" ? adminItems : userItems;
@@ -35,13 +40,13 @@ export default function BottomBar({ variant = "user" }: { variant?: "user" | "ad
     <nav className="bottomBar" aria-label="Нижнее меню">
       <div className="bottomBarInner">
         {items.map((i) => {
-          const active = !i.isLogout && (pathname === i.href || pathname.startsWith(i.href + "/"));
+          const active = !i.isLogout && isActivePath(pathname, i.href);
           const cls = `bbItem ${active ? "bbActive" : ""}`;
 
           if (i.isLogout) {
             return (
               <a key={i.href} href={i.href} className={cls}>
-                <span className="bbIcon">{i.icon}</span>
+                <span className="bbIcon" aria-hidden="true">{i.icon}</span>
                 <span className="bbLabel">{i.label}</span>
               </a>
             );
@@ -49,7 +54,7 @@ export default function BottomBar({ variant = "user" }: { variant?: "user" | "ad
 
           return (
             <Link key={i.href} href={i.href} className={cls}>
-              <span className="bbIcon">{i.icon}</span>
+              <span className="bbIcon" aria-hidden="true">{i.icon}</span>
               <span className="bbLabel">{i.label}</span>
             </Link>
           );

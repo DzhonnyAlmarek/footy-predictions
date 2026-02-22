@@ -50,6 +50,7 @@ export default function AppHeader(props: {
           </div>
         </div>
 
+        {/* ✅ Навигация в шапке. На мобилке прячем через CSS (.appNav {display:none}) */}
         <nav className="appNav" aria-label="Навигация">
           {nav.map((i) => {
             const active = isActive(pathname, i.href);
@@ -60,7 +61,11 @@ export default function AppHeader(props: {
                 href={i.href}
                 className={`appNavLink ${active ? "navActive" : ""}`}
               >
-                {i.icon ? <span className="appNavIcon" aria-hidden="true">{i.icon}</span> : null}
+                {i.icon ? (
+                  <span className="appNavIcon" aria-hidden="true">
+                    {i.icon}
+                  </span>
+                ) : null}
                 <span>{i.label}</span>
               </Link>
             );
