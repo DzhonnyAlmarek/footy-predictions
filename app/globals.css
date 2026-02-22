@@ -400,3 +400,5 @@ p{ margin: 0; color: var(--muted); }
 }
 /* legacy bottom menu — скрываем, используем BottomBar */
 .mobileBottomBar{ display: none !important; }
+/* legacy inline nav blocks — no longer used */
+.navRow{ display: none !important; }

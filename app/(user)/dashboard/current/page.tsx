@@ -309,9 +309,6 @@ export default async function DashboardCurrentTablePage() {
         </table>
       </div>
 
-      <div className="navRow">
-        <Link href="/dashboard">← Мои прогнозы</Link>
-      </div>
     </main>
   );
 }

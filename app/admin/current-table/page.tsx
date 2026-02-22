@@ -255,11 +255,7 @@ export default async function AdminCurrentTablePage() {
         </table>
       </div>
 
-      <div className="navRow">
-        <Link href="/admin/results">Рез-ты</Link>
-        <Link href="/admin/users">Юзеры</Link>
-        <Link href="/logout">Выйти</Link>
-      </div>
+
     </main>
   );
 }
