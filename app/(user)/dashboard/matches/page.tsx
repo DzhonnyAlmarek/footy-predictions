@@ -139,8 +139,12 @@ export default async function DashboardMatchesPage() {
           <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Матчи</h1>
           <div style={{ marginTop: 6, opacity: 0.85 }}>
             Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>{fpLogin}</span>
-            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>МСК</span>
+            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>
+              {fpLogin}
+            </span>
+            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>
+              МСК
+            </span>
           </div>
         </div>
 
@@ -159,10 +163,10 @@ export default async function DashboardMatchesPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th style={{ width: 170 }} className="text-center align-middle">Дата (МСК)</th>
-                  <th style={{ width: 120 }} className="text-center align-middle">Время (МСК)</th>
-                  <th className="text-center align-middle">Матч</th>
-                  <th style={{ width: 170 }} className="text-center align-middle">Прогноз</th>
+                  <th className="thCenter" style={{ width: 170 }}>Дата (МСК)</th>
+                  <th className="thCenter" style={{ width: 120 }}>Время (МСК)</th>
+                  <th className="thLeft">Матч</th>
+                  <th className="thCenter" style={{ width: 170 }}>Прогноз</th>
                 </tr>
               </thead>
 
@@ -171,29 +175,31 @@ export default async function DashboardMatchesPage() {
                   const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
                   const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
-                  const timeCell = kickoff ? (() => {
-                    const f = kickoffFlag(kickoff);
-                    const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
-                    return <span className={`badge ${cls}`}>{fmtTimeMsk(m.kickoff_at)}</span>;
-                  })() : "—";
+                  const timeCell = kickoff
+                    ? (() => {
+                        const f = kickoffFlag(kickoff);
+                        const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
+                        return <span className={`badge ${cls}`}>{fmtTimeMsk(m.kickoff_at)}</span>;
+                      })()
+                    : "—";
 
                   return (
                     <tr key={m.id}>
-                      <td className="text-center" style={{ whiteSpace: "nowrap" }}>
+                      <td className="tdCenter" style={{ whiteSpace: "nowrap" }}>
                         {fmtDateMsk(m.kickoff_at)}
                       </td>
 
-                      <td className="text-center" style={{ whiteSpace: "nowrap" }}>
+                      <td className="tdCenter" style={{ whiteSpace: "nowrap" }}>
                         {timeCell}
                       </td>
 
-                      <td>
+                      <td className="tdLeft">
                         <div style={{ fontWeight: 900 }}>
                           {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
                         </div>
                       </td>
 
-                      <td>
+                      <td className="tdCenter">
                         <PredCellEditable
                           matchId={Number(m.id)}
                           homePred={pr.h}

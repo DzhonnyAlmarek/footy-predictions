@@ -215,6 +215,7 @@ p{ margin: 0; color: var(--muted); }
   min-width: 900px;
 }
 
+/* ✅ дефолт для заголовков — как у нормальных таблиц */
 .table thead th{
   position: sticky;
   top: 0;
@@ -226,16 +227,20 @@ p{ margin: 0; color: var(--muted); }
   color: rgba(17,24,39,.7);
   padding: 12px 10px;
   white-space: nowrap;
-
-  /* ✅ выровнять заголовки по центру ячеек под ними */
-  text-align: center;
+  text-align: left;
   vertical-align: middle;
 }
 
+/* ✅ утилиты выравнивания колонок */
+.thLeft, .tdLeft { text-align: left !important; }
+.thCenter, .tdCenter { text-align: center !important; }
+.thRight, .tdRight { text-align: right !important; }
+
+/* ✅ чтобы строки не выглядели отдельно от заголовков */
 .table tbody td{
   border-bottom: 1px solid rgba(17,24,39,.08);
   padding: 10px;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .table tbody tr:nth-child(odd) td{ background: rgba(17,24,39,.015); }
