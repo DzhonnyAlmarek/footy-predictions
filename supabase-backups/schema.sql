@@ -1404,6 +1404,32 @@ ALTER SEQUENCE "public"."teams_id_seq" OWNED BY "public"."teams"."id";
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."telegram_broadcast_log" (
+    "id" bigint NOT NULL,
+    "match_id" bigint NOT NULL,
+    "bucket" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."telegram_broadcast_log" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."telegram_broadcast_log_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."telegram_broadcast_log_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "public"."telegram_broadcast_log_id_seq" OWNED BY "public"."telegram_broadcast_log"."id";
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."tournaments" (
     "id" bigint NOT NULL,
     "name" "text" NOT NULL,
@@ -1478,6 +1504,10 @@ ALTER TABLE ONLY "public"."stages" ALTER COLUMN "id" SET DEFAULT "nextval"('"pub
 
 
 ALTER TABLE ONLY "public"."teams" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."teams_id_seq"'::"regclass");
+
+
+
+ALTER TABLE ONLY "public"."telegram_broadcast_log" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."telegram_broadcast_log_id_seq"'::"regclass");
 
 
 
@@ -1574,6 +1604,16 @@ ALTER TABLE ONLY "public"."teams"
 
 
 
+ALTER TABLE ONLY "public"."telegram_broadcast_log"
+    ADD CONSTRAINT "telegram_broadcast_log_match_bucket_key" UNIQUE ("match_id", "bucket");
+
+
+
+ALTER TABLE ONLY "public"."telegram_broadcast_log"
+    ADD CONSTRAINT "telegram_broadcast_log_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."tournaments"
     ADD CONSTRAINT "tournaments_pkey" PRIMARY KEY ("id");
 
@@ -1659,6 +1699,18 @@ CREATE INDEX "predictions_match_user_idx" ON "public"."predictions" USING "btree
 
 
 CREATE UNIQUE INDEX "predictions_user_match_uniq" ON "public"."predictions" USING "btree" ("user_id", "match_id");
+
+
+
+CREATE INDEX "telegram_broadcast_log_created_at_idx" ON "public"."telegram_broadcast_log" USING "btree" ("created_at" DESC);
+
+
+
+CREATE UNIQUE INDEX "telegram_broadcast_log_match_bucket_uq" ON "public"."telegram_broadcast_log" USING "btree" ("match_id", "bucket");
+
+
+
+CREATE INDEX "telegram_broadcast_log_match_id_idx" ON "public"."telegram_broadcast_log" USING "btree" ("match_id");
 
 
 
@@ -1799,6 +1851,11 @@ ALTER TABLE ONLY "public"."predictions"
 
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."telegram_broadcast_log"
+    ADD CONSTRAINT "telegram_broadcast_log_match_id_fkey" FOREIGN KEY ("match_id") REFERENCES "public"."matches"("id") ON DELETE CASCADE;
 
 
 
@@ -1977,6 +2034,9 @@ CREATE POLICY "teams_admin_write" ON "public"."teams" TO "authenticated" USING (
 
 CREATE POLICY "teams_select_all" ON "public"."teams" FOR SELECT TO "authenticated", "anon" USING (true);
 
+
+
+ALTER TABLE "public"."telegram_broadcast_log" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."tournaments" ENABLE ROW LEVEL SECURITY;
@@ -2433,6 +2493,18 @@ GRANT ALL ON TABLE "public"."teams" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."teams_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."teams_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."teams_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."telegram_broadcast_log" TO "anon";
+GRANT ALL ON TABLE "public"."telegram_broadcast_log" TO "authenticated";
+GRANT ALL ON TABLE "public"."telegram_broadcast_log" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."telegram_broadcast_log_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."telegram_broadcast_log_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."telegram_broadcast_log_id_seq" TO "service_role";
 
 
 
