@@ -42,14 +42,13 @@ export default async function UserLayout({ children }: { children: ReactNode }) 
     .eq("is_current", true)
     .maybeSingle();
 
-  const nav = [
-    // ✅ “Мои прогнозы” теперь ведёт на /dashboard/matches
-    { href: "/dashboard/matches", label: "Мои прогнозы" },
-   { href: "/dashboard", label: "Текущая таблица" },
-    { href: "/analytics", label: "Аналитика" },
-    { href: "/golden-boot", label: "Бутса" },
-    { href: "/logout", label: "Выйти" },
-  ];
+const nav = [
+  { href: "/dashboard/matches", label: "Мои", icon: "✍️" },
+  { href: "/dashboard/current", label: "Текущая таблица", icon: "📊" }, // ✅
+  { href: "/analytics", label: "Аналитика", icon: "📈" },
+  { href: "/golden-boot", label: "Бутса", icon: "🥇" },
+  { href: "/logout", label: "Выйти", icon: "🚪" },
+];
 
   return (
     <>

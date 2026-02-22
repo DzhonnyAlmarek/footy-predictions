@@ -12,7 +12,7 @@ type Item = {
 
 const userItems: Item[] = [
   { href: "/dashboard/matches", label: "Мои", icon: "✍️" },
-  { href: "/dashboard", label: "Текущая", icon: "📊" },
+  { href: "/dashboard/current", label: "Текущая", icon: "📊" },
   { href: "/analytics", label: "Аналитика", icon: "📈" },
   { href: "/golden-boot", label: "Бутса", icon: "🥇" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
