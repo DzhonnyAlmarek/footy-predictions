@@ -45,7 +45,7 @@ export default async function UserLayout({ children }: { children: ReactNode }) 
   const nav = [
     // ✅ “Мои прогнозы” теперь ведёт на /dashboard/matches
     { href: "/dashboard/matches", label: "Мои прогнозы" },
-    { href: "/dashboard/current", label: "Текущая таблица" },
+   { href: "/dashboard", label: "Текущая таблица" },
     { href: "/analytics", label: "Аналитика" },
     { href: "/golden-boot", label: "Бутса" },
     { href: "/logout", label: "Выйти" },

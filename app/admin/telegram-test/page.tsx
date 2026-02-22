@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 
 type MatchItem = {
   id: number;
@@ -30,7 +29,7 @@ type ApiTestResp =
 export default function AdminTelegramTestPage() {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<MatchItem[]>([]);
-  const [matchId, setMatchId] = useState<number | "">( "");
+  const [matchId, setMatchId] = useState<number | "">("");
   const [bucket, setBucket] = useState<"24h" | "12h" | "1h" | "15m">("15m");
   const [preview, setPreview] = useState<string>("");
   const [info, setInfo] = useState<string>("");
@@ -101,7 +100,7 @@ export default function AdminTelegramTestPage() {
   }
 
   return (
-    <main style={{ maxWidth: 1000, margin: "0 auto", padding: 24 }}>
+    <main className="hasBottomBar" style={{ maxWidth: 1000, margin: "0 auto", padding: 24 }}>
       <header style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Тест Telegram-напоминаний</h1>
@@ -110,10 +109,7 @@ export default function AdminTelegramTestPage() {
           </div>
         </div>
 
-        <nav className="topNav">
-          <Link href="/admin">Админка</Link>
-          <Link href="/dashboard">Пользовательская часть</Link>
-        </nav>
+        {/* ❌ topNav удалён — навигация только через AppHeader (десктоп) и BottomBar (мобилка) */}
       </header>
 
       <section style={{ marginTop: 18 }}>
@@ -136,6 +132,7 @@ export default function AdminTelegramTestPage() {
                   ))
                 )}
               </select>
+
               {selected ? (
                 <div style={{ marginTop: 8, opacity: 0.85 }}>
                   Статус: <b>{selected.status}</b>
@@ -158,25 +155,13 @@ export default function AdminTelegramTestPage() {
             </div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button
-                className="btn"
-                onClick={() => run(true)}
-                disabled={loading || matches.length === 0}
-              >
+              <button className="btn" onClick={() => run(true)} disabled={loading || matches.length === 0}>
                 🧾 Preview
               </button>
-              <button
-                className="btn btnPrimary"
-                onClick={() => run(false)}
-                disabled={loading || matches.length === 0}
-              >
+              <button className="btn btnPrimary" onClick={() => run(false)} disabled={loading || matches.length === 0}>
                 🚀 Отправить тест в Telegram
               </button>
-              <button
-                className="btn"
-                onClick={() => loadMatches()}
-                disabled={loading}
-              >
+              <button className="btn" onClick={() => loadMatches()} disabled={loading}>
                 🔄 Обновить матчи
               </button>
             </div>

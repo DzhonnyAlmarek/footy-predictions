@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
@@ -139,20 +138,12 @@ export default async function DashboardMatchesPage() {
           <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Матчи</h1>
           <div style={{ marginTop: 6, opacity: 0.85 }}>
             Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>
-              {fpLogin}
-            </span>
-            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>
-              МСК
-            </span>
+            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>{fpLogin}</span>
+            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>МСК</span>
           </div>
         </div>
 
-        <nav className="topNav">
-          <Link href="/dashboard">Текущая таблица</Link>
-          <Link href="/golden-boot">Золотая бутса</Link>
-          <a href="/logout">Выйти</a>
-        </nav>
+        {/* ❌ topNav удалён — навигация только в AppHeader/BottomBar */}
       </header>
 
       <section style={{ marginTop: 18 }}>
@@ -175,13 +166,11 @@ export default async function DashboardMatchesPage() {
                   const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
                   const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
-                  const timeCell = kickoff
-                    ? (() => {
-                        const f = kickoffFlag(kickoff);
-                        const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
-                        return <span className={`badge ${cls}`}>{fmtTimeMsk(m.kickoff_at)}</span>;
-                      })()
-                    : "—";
+                  const timeCell = kickoff ? (() => {
+                    const f = kickoffFlag(kickoff);
+                    const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
+                    return <span className={`badge ${cls}`}>{fmtTimeMsk(m.kickoff_at)}</span>;
+                  })() : "—";
 
                   return (
                     <tr key={m.id}>
@@ -215,13 +204,6 @@ export default async function DashboardMatchesPage() {
           </div>
         )}
       </section>
-
-      {/* ✅ Bottom bar (mobile only) */}
-      <div className="mobileBottomBar" role="navigation" aria-label="Навигация">
-        <Link href="/dashboard">🏠 Таблица</Link>
-        <Link href="/golden-boot">🥇 Бутса</Link>
-        <a href="/logout">🚪 Выйти</a>
-      </div>
     </main>
   );
 }
