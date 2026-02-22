@@ -65,7 +65,6 @@ type MomRow = {
   matches_count: number;
   momentum_current: number;
   momentum_series: any; // jsonb
-  points_series?: any; // jsonb
   avg_last_n: number;
   avg_all: number;
   n: number;
@@ -76,10 +75,10 @@ type MomRow = {
 type SearchParams = {
   sort?: string;
   view?: string; // quality|style
+  mode?: string; // compact|details
 };
 
 type Props = {
-  // ✅ Next.js 15.5: searchParams ожидается как Promise
   searchParams?: Promise<SearchParams>;
 };
 
@@ -161,30 +160,6 @@ function badgeClassByKey(key: string) {
   }
 }
 
-function OutcomeBar(props: { home: number; draw: number; away: number }) {
-  const W = 220;
-  const H = 10;
-  const total = props.home + props.draw + props.away;
-  const h = total ? (props.home / total) * W : 0;
-  const d = total ? (props.draw / total) * W : 0;
-  const a = total ? (props.away / total) * W : 0;
-
-  return (
-    <svg
-      width={W}
-      height={H}
-      viewBox={`0 0 ${W} ${H}`}
-      role="img"
-      aria-label="Распределение исходов"
-    >
-      <rect x="0" y="0" width={W} height={H} rx="5" fill="rgba(17,24,39,.08)" />
-      <rect x="0" y="0" width={h} height={H} rx="5" fill="rgba(37,99,235,.60)" />
-      <rect x={h} y="0" width={d} height={H} fill="rgba(16,185,129,.55)" />
-      <rect x={h + d} y="0" width={a} height={H} rx="5" fill="rgba(245,158,11,.60)" />
-    </svg>
-  );
-}
-
 function Sparkline(props: { values: number[] }) {
   const W = 140;
   const H = 34;
@@ -242,24 +217,62 @@ function Sparkline(props: { values: number[] }) {
   );
 }
 
-function TopCard(props: {
+function OutcomeBar(props: { home: number; draw: number; away: number }) {
+  const W = 220;
+  const H = 10;
+  const total = props.home + props.draw + props.away;
+  const h = total ? (props.home / total) * W : 0;
+  const d = total ? (props.draw / total) * W : 0;
+  const a = total ? (props.away / total) * W : 0;
+
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label="Распределение исходов"
+    >
+      <rect x="0" y="0" width={W} height={H} rx="5" fill="rgba(17,24,39,.08)" />
+      <rect x="0" y="0" width={h} height={H} rx="5" fill="rgba(37,99,235,.60)" />
+      <rect x={h} y="0" width={d} height={H} fill="rgba(16,185,129,.55)" />
+      <rect x={h + d} y="0" width={a} height={H} rx="5" fill="rgba(245,158,11,.60)" />
+    </svg>
+  );
+}
+
+function TabLink(props: { href: string; active: boolean; label: string; icon: string }) {
+  return (
+    <Link href={props.href} className={`appNavLink ${props.active ? "navActive" : ""}`}>
+      <span aria-hidden="true" className="appNavIcon">{props.icon}</span>
+      <span>{props.label}</span>
+    </Link>
+  );
+}
+
+function ModePill(props: { href: string; active: boolean; label: string }) {
+  return (
+    <Link href={props.href} className={`appNavLink ${props.active ? "navActive" : ""}`}>
+      <span>{props.label}</span>
+    </Link>
+  );
+}
+
+function TopMiniCard(props: {
   title: string;
-  subtitle: string;
-  href?: string;
   name: string;
   value: string;
-  meta?: string;
-  hint?: string;
+  meta: string;
+  href?: string;
 }) {
   const body = (
-    <div className="card analyticsTopCard" title={props.hint ?? props.subtitle}>
+    <div className="card analyticsTopCard">
       <div className="analyticsTopCardInner">
         <div className="analyticsTopTitle">{props.title}</div>
         <div className="analyticsTopName">{props.name}</div>
-        <div className="analyticsTopSub">{props.subtitle}</div>
         <div className="analyticsTopBottom">
           <div className="analyticsTopValue">{props.value}</div>
-          {props.meta ? <div className="analyticsTopMeta">{props.meta}</div> : null}
+          <div className="analyticsTopMeta">{props.meta}</div>
         </div>
       </div>
     </div>
@@ -274,22 +287,16 @@ function TopCard(props: {
   );
 }
 
-function TabLink(props: { href: string; active: boolean; label: string; icon: string }) {
-  return (
-    <Link href={props.href} className={`navLink ${props.active ? "navActive" : ""}`}>
-      <span aria-hidden="true">{props.icon}</span> {props.label}
-    </Link>
-  );
-}
-
 export default async function AnalyticsPage({ searchParams }: Props) {
   const sb = service();
 
-  // ✅ Next.js 15.5: searchParams может быть Promise/undefined
   const sp = (searchParams ? await searchParams : {}) as SearchParams;
 
   const viewRaw = (sp.view ?? "quality").toLowerCase();
   const view: "quality" | "style" = viewRaw === "style" ? "style" : "quality";
+
+  const modeRaw = (sp.mode ?? "compact").toLowerCase();
+  const mode: "compact" | "details" = modeRaw === "details" ? "details" : "compact";
 
   const sort = (sp.sort ?? "matches").toLowerCase();
   const sortOptions = view === "style" ? SORT_OPTIONS_STYLE : SORT_OPTIONS_QUALITY;
@@ -334,7 +341,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     .not("home_score", "is", null)
     .not("away_score", "is", null);
 
-  // Реальные пользователи, исключаем ADMIN
+  // Пользователи (без ADMIN)
   const { data: accounts, error: accErr } = await sb
     .from("login_accounts")
     .select("user_id,login")
@@ -380,9 +387,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   const { data: momRows } = await sb
     .from("analytics_stage_user_momentum")
-    .select(
-      "stage_id,user_id,matches_count,momentum_current,momentum_series,avg_last_n,avg_all,n,k,updated_at"
-    )
+    .select("stage_id,user_id,matches_count,momentum_current,momentum_series,avg_last_n,avg_all,n,k,updated_at")
     .eq("stage_id", stageId)
     .in("user_id", realUserIds);
 
@@ -473,7 +478,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     };
   });
 
-  // TOP только по тем, у кого достаточно матчей
+  // TOP — только если матчей достаточно
   const withEnough = cards.filter((c) => c.matches >= MIN_TOP_MATCHES);
 
   const pickTop = <T,>(arr: T[], score: (x: any) => number) =>
@@ -490,7 +495,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const mostPeace = withEnough.length ? pickTop(withEnough, (c) => c.drawRate) : null;
   const mostHighTotal = withEnough.length ? pickTop(withEnough, (c) => c.avgTotal) : null;
 
-  // сортировка списка (зависит от view)
+  // сортировка списка
   const sorted = [...cards].sort((a, b) => {
     if (sort === "name") return a.name.localeCompare(b.name, "ru");
     if (sort === "exact") return b.exactRate - a.exactRate;
@@ -507,22 +512,26 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   const finished = finishedCnt ?? 0;
   const totalMatches = 56;
-  const avgMatchesPerUser =
-    cards.length > 0
-      ? Math.round((cards.reduce((s, c) => s + c.matches, 0) / cards.length) * 10) / 10
-      : 0;
+
+  // простая “форма” для компактного отображения
+  function fmtMomentum(m: number, matches: number) {
+    if (matches < 3) return "н/д";
+    const arrow = m > 0.02 ? "↗" : m < -0.02 ? "↘" : "→";
+    const sign = m >= 0 ? "+" : "";
+    return `${sign}${n2(m)} ${arrow}`;
+  }
 
   const baseHref = "/analytics";
-  const activeQuality = view === "quality";
-  const activeStyle = view === "style";
+  const q = (next: Partial<SearchParams>) => {
+    const p = new URLSearchParams();
+    p.set("view", next.view ?? view);
+    p.set("sort", next.sort ?? sort);
+    p.set("mode", next.mode ?? mode);
+    return `${baseHref}?${p.toString()}`;
+  };
 
   return (
     <div className="page">
-      {/* ... ниже весь твой JSX без изменений ... */}
-      {/* Я оставил его ровно таким, как ты прислал */}
-      {/* Ничего дополнительно менять не нужно */}
-      {/* (вставь сюда твой return-кусок как есть) */}
-
       <div className="analyticsHead">
         <div>
           <h1>Аналитика</h1>
@@ -530,65 +539,21 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             Этап: <b>{stage.name}</b> · обновлено: <b>{updated}</b>
           </div>
 
-          <details className="helpBox">
-            <summary className="helpSummary">Что здесь показано и как читать?</summary>
-            <div className="helpBody">
-              <p>
-                <b>Качество</b> — насколько часто прогноз совпадает с фактом (точный счёт / исход / разница).
-                <br />
-                <b>Стиль</b> — какие прогнозы вы чаще ставите (ничьи, “верх”, риск и т.п.).
-              </p>
-
-              <ul className="helpList">
-                <li>
-                  <b>Точный счёт</b> — % матчей, где вы угадали счёт полностью.
-                </li>
-                <li>
-                  <b>Исход</b> — % матчей, где вы угадали 1/X/2 (победа/ничья/поражение).
-                </li>
-                <li>
-                  <b>Разница</b> — % матчей, где вы угадали разницу мячей (например 2:1 и 3:2 — обе дают разницу +1).
-                </li>
-                <li>
-                  <b>Риск</b> — средняя разница голов в ваших прогнозах (чем выше, тем “смелее” прогнозы).
-                </li>
-                <li>
-                  <b>Тотал</b> — средняя сумма голов в ваших прогнозах (чем выше, тем “верховее”).
-                </li>
-                <li>
-                  <b>Ничьи</b> — как часто вы ставите X.
-                </li>
-                <li>
-                  <b>Форма</b> — (средние очки за последние 5 матчей) − (средние очки за весь этап). Плюс — вы в “пике”.
-                </li>
-                <li>
-                  <b>Матчей учтено</b> — сколько завершённых матчей вошло в расчёт. Чем больше — тем стабильнее показатели.
-                </li>
-              </ul>
-
-              <p className="helpNote">
-                <b>Важно:</b> при малом числе учтённых матчей показатели могут сильно меняться — это нормально.
-              </p>
-            </div>
-          </details>
+          <div className="analyticsHintSmall" style={{ marginTop: 10 }}>
+            По умолчанию показано <b>коротко</b>. Для деталей включи режим <b>Подробнее</b>.
+          </div>
         </div>
 
         <div className="analyticsControls">
-          <TabLink
-            href={`${baseHref}?view=quality&sort=matches`}
-            active={activeQuality}
-            label="Качество"
-            icon="🎯"
-          />
-          <TabLink
-            href={`${baseHref}?view=style&sort=matches`}
-            active={activeStyle}
-            label="Стиль"
-            icon="🎛️"
-          />
+          <TabLink href={q({ view: "quality", sort: "matches" })} active={view === "quality"} label="Качество" icon="🎯" />
+          <TabLink href={q({ view: "style", sort: "matches" })} active={view === "style"} label="Стиль" icon="🎛️" />
+
+          <ModePill href={q({ mode: "compact" })} active={mode === "compact"} label="Коротко" />
+          <ModePill href={q({ mode: "details" })} active={mode === "details"} label="Подробнее" />
 
           <form action="/analytics" method="get" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <input type="hidden" name="view" value={view} />
+            <input type="hidden" name="mode" value={mode} />
             <select className="select" name="sort" defaultValue={sort}>
               {sortOptions.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -596,18 +561,18 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 </option>
               ))}
             </select>
-            <button className="navLink" type="submit">
+            <button className="appNavLink" type="submit">
               Применить
             </button>
           </form>
         </div>
       </div>
 
-      {/* Сводка */}
+      {/* Сводка (максимум 4 числа) */}
       <div className="analyticsSummary" style={{ marginTop: 14 }}>
         <div className="card analyticsSummaryCard">
-          <div className="analyticsSummaryInner" title="Сколько матчей уже завершено (и попало в расчёт аналитики)">
-            <div className="analyticsSummaryLabel">Завершено матчей</div>
+          <div className="analyticsSummaryInner" title="Сколько матчей завершено (и попало в расчёт аналитики)">
+            <div className="analyticsSummaryLabel">Завершено</div>
             <div className="analyticsSummaryValue">
               {finished} <span className="analyticsSummaryMuted">/ {totalMatches}</span>
             </div>
@@ -624,16 +589,6 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         <div className="card analyticsSummaryCard">
           <div
             className="analyticsSummaryInner"
-            title="Среднее число матчей, учтённых у каждого участника (чем больше — тем стабильнее статистика)"
-          >
-            <div className="analyticsSummaryLabel">Среднее матчей/участника</div>
-            <div className="analyticsSummaryValue">{avgMatchesPerUser}</div>
-          </div>
-        </div>
-
-        <div className="card analyticsSummaryCard">
-          <div
-            className="analyticsSummaryInner"
             title={`TOP считается только для участников, у кого учтено минимум ${MIN_TOP_MATCHES} матч(а/ей)`}
           >
             <div className="analyticsSummaryLabel">TOP-порог</div>
@@ -642,236 +597,203 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             </div>
           </div>
         </div>
+
+        <div className="card analyticsSummaryCard">
+          <div className="analyticsSummaryInner" title="Режим отображения страницы">
+            <div className="analyticsSummaryLabel">Режим</div>
+            <div className="analyticsSummaryValue">{mode === "compact" ? "Коротко" : "Подробнее"}</div>
+          </div>
+        </div>
       </div>
 
-      {/* TOP-6 */}
+      {/* TOP (сократил до 3 карточек) */}
       <div style={{ marginTop: 14 }}>
-        <div className="analyticsSectionTitle">TOP по текущему этапу</div>
+        <div className="analyticsSectionTitle">TOP по этапу</div>
 
-        <div className="analyticsTopGrid">
-          {bestExact ? (
-            <TopCard
-              title="🏹 Самый точный счёт"
-              subtitle="Доля точных счетов"
-              hint="Точный счёт = % матчей, где прогноз полностью совпал с фактическим счётом"
-              href={`/analytics/${bestExact.uid}`}
-              name={bestExact.name}
-              value={pct01(bestExact.exactRate)}
-              meta={`Матчей: ${bestExact.matches}`}
-            />
-          ) : null}
+        <div className="analyticsTopGrid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" as any }}>
+          {view === "quality" ? (
+            <>
+              {bestExact ? (
+                <TopMiniCard
+                  title="🏹 Точный счёт"
+                  href={`/analytics/${bestExact.uid}`}
+                  name={bestExact.name}
+                  value={pct01(bestExact.exactRate)}
+                  meta={`Матчей: ${bestExact.matches}`}
+                />
+              ) : null}
 
-          {bestOutcome ? (
-            <TopCard
-              title="🎯 Лучший по исходу"
-              subtitle="Угадал 1/X/2"
-              hint="Исход = % матчей, где угадан 1/X/2 (победа/ничья/поражение)"
-              href={`/analytics/${bestOutcome.uid}`}
-              name={bestOutcome.name}
-              value={pct01(bestOutcome.outcomeRate)}
-              meta={`Матчей: ${bestOutcome.matches}`}
-            />
-          ) : null}
+              {bestOutcome ? (
+                <TopMiniCard
+                  title="🎯 Исход"
+                  href={`/analytics/${bestOutcome.uid}`}
+                  name={bestOutcome.name}
+                  value={pct01(bestOutcome.outcomeRate)}
+                  meta={`Матчей: ${bestOutcome.matches}`}
+                />
+              ) : null}
 
-          {bestDiff ? (
-            <TopCard
-              title="📐 Лучший по разнице"
-              subtitle="Угадал разницу мячей"
-              hint="Разница = % матчей, где угадана разница голов (например +1, 0, -2)"
-              href={`/analytics/${bestDiff.uid}`}
-              name={bestDiff.name}
-              value={pct01(bestDiff.diffRate)}
-              meta={`Матчей: ${bestDiff.matches}`}
-            />
-          ) : null}
+              {bestDiff ? (
+                <TopMiniCard
+                  title="📐 Разница"
+                  href={`/analytics/${bestDiff.uid}`}
+                  name={bestDiff.name}
+                  value={pct01(bestDiff.diffRate)}
+                  meta={`Матчей: ${bestDiff.matches}`}
+                />
+              ) : null}
+            </>
+          ) : (
+            <>
+              {mostRisky ? (
+                <TopMiniCard
+                  title="🔥 Риск"
+                  href={`/analytics/${mostRisky.uid}`}
+                  name={mostRisky.name}
+                  value={n2(mostRisky.avgAbsDiff)}
+                  meta={`Матчей: ${mostRisky.matches}`}
+                />
+              ) : null}
 
-          {mostRisky ? (
-            <TopCard
-              title="🔥 Самый рискованный"
-              subtitle="Средняя разница в прогнозе"
-              hint="Риск = средняя разница голов в прогнозах. Чем выше — тем смелее прогнозы"
-              href={`/analytics/${mostRisky.uid}`}
-              name={mostRisky.name}
-              value={n2(mostRisky.avgAbsDiff)}
-              meta={`Матчей: ${mostRisky.matches}`}
-            />
-          ) : null}
+              {mostHighTotal ? (
+                <TopMiniCard
+                  title="⚽ Тотал"
+                  href={`/analytics/${mostHighTotal.uid}`}
+                  name={mostHighTotal.name}
+                  value={n2(mostHighTotal.avgTotal)}
+                  meta={`Матчей: ${mostHighTotal.matches}`}
+                />
+              ) : null}
 
-          {mostPeace ? (
-            <TopCard
-              title="🤝 Самый мирный"
-              subtitle="Чаще ставит ничьи"
-              hint="Ничьи = доля прогнозов, где выбран исход X"
-              href={`/analytics/${mostPeace.uid}`}
-              name={mostPeace.name}
-              value={pct01(mostPeace.drawRate)}
-              meta={`Матчей: ${mostPeace.matches}`}
-            />
-          ) : null}
-
-          {mostHighTotal ? (
-            <TopCard
-              title="⚽ Самый верховой"
-              subtitle="Средний тотал в прогнозах"
-              hint="Тотал = средняя сумма голов в прогнозах. Чем выше — тем чаще ставите результативные матчи"
-              href={`/analytics/${mostHighTotal.uid}`}
-              name={mostHighTotal.name}
-              value={n2(mostHighTotal.avgTotal)}
-              meta={`Матчей: ${mostHighTotal.matches}`}
-            />
-          ) : null}
+              {mostPeace ? (
+                <TopMiniCard
+                  title="🤝 Ничьи"
+                  href={`/analytics/${mostPeace.uid}`}
+                  name={mostPeace.name}
+                  value={pct01(mostPeace.drawRate)}
+                  meta={`Матчей: ${mostPeace.matches}`}
+                />
+              ) : null}
+            </>
+          )}
         </div>
 
-        {withEnough.length > 0 ? (
-          <div className="analyticsHint">
-            TOP считается только для участников, у кого учтено <b>{MIN_TOP_MATCHES}+</b> матча.
-          </div>
-        ) : (
-          <div className="analyticsHint">
-            TOP появится, когда у кого-то будет учтено <b>{MIN_TOP_MATCHES}+</b> матча.
-          </div>
-        )}
+        <div className="analyticsHint">
+          TOP считается только для участников, у кого учтено <b>{MIN_TOP_MATCHES}+</b> матча.
+        </div>
       </div>
 
-      {/* Участники */}
+      {/* Участники (компактная таблица) */}
       <div style={{ marginTop: 16 }}>
         <div className="analyticsSectionTitle">Участники</div>
 
-        <div className="analyticsGrid">
-          {sorted.map((c) => {
-            const icon = archetypeIcon(c.archetype_key);
-            const stateLabel = stageStateLabel(c.state);
-
-            const momHint =
-              "Форма = (средние очки за последние 5 матчей) − (средние очки за весь этап). " +
-              "Плюс — вы набираете больше обычного.";
-
-            const momTooFew = c.matches < 3;
-            const m = Number(c.momentumCurrent ?? 0);
-            const arrow = m > 0.02 ? "↗" : m < -0.02 ? "↘" : "→";
-            const mText = `${m >= 0 ? "+" : ""}${n2(m)} ${arrow}`;
-
-            return (
-              <div key={c.uid} className="card analyticsCard">
-                <div className="analyticsNameRow">
-                  <div style={{ fontWeight: 950, fontSize: 16 }}>
-                    <Link href={`/analytics/${c.uid}`}>{c.name}</Link>
-                    <div
-                      className="analyticsMiniMeta"
-                      title="Сколько завершённых матчей вошло в расчёт для этого участника"
-                    >
-                      Матчей учтено: {c.matches}
-                    </div>
-                  </div>
-
-                  <span
-                    className={badgeClassByKey(c.archetype_key)}
-                    title={`Архетип = стиль прогнозов.\n\n${c.summary_ru}`}
-                  >
-                    <span aria-hidden="true">{icon}</span> {c.title_ru}
-                    {stateLabel ? (
-                      <span style={{ opacity: 0.7, marginLeft: 6 }}>· {stateLabel}</span>
-                    ) : null}
-                  </span>
-                </div>
+        <div className="tableWrap" style={{ marginTop: 10 }}>
+          <table className="table" style={{ minWidth: 900 }}>
+            <thead>
+              <tr>
+                <th className="thLeft">Участник</th>
+                <th className="thCenter" style={{ width: 110 }}>Матчи</th>
 
                 {view === "quality" ? (
-                  <div className="analyticsChips">
-                    <span className="chip" title="Точный счёт = % матчей, где угадан счёт полностью">
-                      Точный: <b>{pct01(c.exactRate)}</b>
-                    </span>
-                    <span className="chip" title="Исход = % матчей, где угадан 1/X/2 (победа/ничья/поражение)">
-                      Исход: <b>{pct01(c.outcomeRate)}</b>
-                    </span>
-                    <span className="chip" title="Разница = % матчей, где угадана разница голов (например +1, 0, -2)">
-                      Разница: <b>{pct01(c.diffRate)}</b>
-                    </span>
-                    <span className="chip" title="Надёжность растёт с количеством учтённых матчей">
-                      Матчи: <b>{c.matches}</b>
-                    </span>
-                  </div>
+                  <>
+                    <th className="thCenter" style={{ width: 140 }}>Точный</th>
+                    <th className="thCenter" style={{ width: 120 }}>Исход</th>
+                    <th className="thCenter" style={{ width: 120 }}>Разница</th>
+                  </>
                 ) : (
-                  <div className="analyticsChips">
-                    <span
-                      className="chip"
-                      title="Риск = средняя разница голов в прогнозах. Чем выше — тем смелее прогнозы"
-                    >
-                      Риск: <b>{n2(c.avgAbsDiff)}</b>
-                    </span>
-                    <span
-                      className="chip"
-                      title="Тотал = средняя сумма голов в прогнозах. Чем выше — тем чаще ставите результативные матчи"
-                    >
-                      Тотал: <b>{n2(c.avgTotal)}</b>
-                    </span>
-                    <span className="chip" title="Ничьи = доля прогнозов с исходом X">
-                      Ничьи: <b>{pct01(c.drawRate)}</b>
-                    </span>
-                    <span className="chip" title="Сколько матчей учтено у участника">
-                      Матчи: <b>{c.matches}</b>
-                    </span>
-                  </div>
+                  <>
+                    <th className="thCenter" style={{ width: 120 }}>Риск</th>
+                    <th className="thCenter" style={{ width: 120 }}>Тотал</th>
+                    <th className="thCenter" style={{ width: 120 }}>Ничьи</th>
+                  </>
                 )}
 
-                {/* ✅ Momentum */}
-                <div
-                  className="momentumBox"
-                  title={
-                    momTooFew
-                      ? "Форма появится после 3 завершённых матчей с учтёнными прогнозами."
-                      : momHint
-                  }
-                >
-                  <div className="momentumTop">
-                    <div className="momentumLabel">
-                      Форма <span className="momentumInfo" aria-hidden="true">ℹ️</span>
-                    </div>
-                    <div
-                      className={`momentumValue ${
-                        m > 0.02 ? "isUp" : m < -0.02 ? "isDown" : "isFlat"
-                      }`}
-                    >
-                      {momTooFew ? "н/д" : mText}
-                    </div>
-                  </div>
+                <th className="thCenter" style={{ width: 140 }}>Форма</th>
+                <th className="thCenter" style={{ width: 220 }}>Архетип</th>
+              </tr>
+            </thead>
 
-                  {momTooFew ? (
-                    <div className="momentumSmall">Появится после 3 матчей</div>
-                  ) : (
-                    <div className="momentumChart">
-                      <Sparkline values={c.momentumSeries ?? []} />
-                      {c.matches < 5 ? (
-                        <div className="momentumSmall">
-                          Пока учтено {c.matches} (для окна нужно 5)
+            <tbody>
+              {sorted.map((c) => {
+                const icon = archetypeIcon(c.archetype_key);
+                const stateLabel = stageStateLabel(c.state);
+
+                return (
+                  <tr key={c.uid}>
+                    <td className="tdLeft">
+                      <div style={{ fontWeight: 950 }}>
+                        <Link href={`/analytics/${c.uid}`}>{c.name}</Link>
+                      </div>
+
+                      {mode === "details" ? (
+                        <div style={{ marginTop: 6, opacity: 0.75, fontWeight: 800 }}>
+                          1/X/2: {pct01(safeDiv(c.predHome, c.matches))} / {pct01(safeDiv(c.predDraw, c.matches))} /{" "}
+                          {pct01(safeDiv(c.predAway, c.matches))}
                         </div>
-                      ) : (
-                        <div className="momentumSmall">Окно: последние 5 матчей</div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                      ) : null}
+                    </td>
 
-                <div
-                  className="outcomeBar"
-                  title="Полоса 1/X/2 — это распределение ваших прогнозов по исходам: 1 (П1), X (ничья), 2 (П2). Это про стиль, а не про качество."
-                >
-                  <div className="outcomeBarTop">
-                    <OutcomeBar home={c.predHome} draw={c.predDraw} away={c.predAway} />
-                    <div className="outcomeLegend">
-                      1: <b>{pct01(safeDiv(c.predHome, c.matches))}</b> · X:{" "}
-                      <b>{pct01(safeDiv(c.predDraw, c.matches))}</b> · 2:{" "}
-                      <b>{pct01(safeDiv(c.predAway, c.matches))}</b>
-                    </div>
-                  </div>
-                </div>
+                    <td className="tdCenter">
+                      <span className="badge isNeutral" title="Сколько завершённых матчей вошло в расчёт">
+                        {c.matches}
+                      </span>
+                    </td>
 
-                <div className="analyticsHintSmall">
-                  <b>Архетип</b> — это стиль прогнозов. {c.summary_ru}
-                </div>
-              </div>
-            );
-          })}
+                    {view === "quality" ? (
+                      <>
+                        <td className="tdCenter"><b>{pct01(c.exactRate)}</b></td>
+                        <td className="tdCenter"><b>{pct01(c.outcomeRate)}</b></td>
+                        <td className="tdCenter"><b>{pct01(c.diffRate)}</b></td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="tdCenter"><b>{n2(c.avgAbsDiff)}</b></td>
+                        <td className="tdCenter"><b>{n2(c.avgTotal)}</b></td>
+                        <td className="tdCenter"><b>{pct01(c.drawRate)}</b></td>
+                      </>
+                    )}
+
+                    <td className="tdCenter" title="Форма = (средние очки за последние 5 матчей) − (средние очки за весь этап)">
+                      <span className="badge isNeutral">{fmtMomentum(c.momentumCurrent, c.matches)}</span>
+                    </td>
+
+                    <td className="tdCenter">
+                      <span
+                        className={badgeClassByKey(c.archetype_key)}
+                        title={mode === "details" ? c.summary_ru : "Включи режим «Подробнее», чтобы читать описание"}
+                      >
+                        <span aria-hidden="true">{icon}</span> {c.title_ru}
+                        {stateLabel ? <span style={{ opacity: 0.7, marginLeft: 6 }}>· {stateLabel}</span> : null}
+                      </span>
+
+                      {mode === "details" ? (
+                        <details className="helpBox" style={{ marginTop: 10, textAlign: "left" }}>
+                          <summary className="helpSummary">Детали</summary>
+                          <div className="helpBody">
+                            <div style={{ fontWeight: 900, marginBottom: 8 }}>Архетип</div>
+                            <div style={{ opacity: 0.85 }}>{c.summary_ru}</div>
+
+                            <div style={{ marginTop: 12, fontWeight: 900, marginBottom: 8 }}>Форма (последние значения)</div>
+                            <Sparkline values={c.momentumSeries ?? []} />
+
+                            <div style={{ marginTop: 12, fontWeight: 900, marginBottom: 8 }}>Распределение 1/X/2</div>
+                            <OutcomeBar home={c.predHome} draw={c.predDraw} away={c.predAway} />
+                          </div>
+                        </details>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
+
+        {mode === "compact" ? (
+          <div className="analyticsHintSmall">
+            Подробности (описание архетипа, график формы, распределение 1/X/2) — включи режим <b>Подробнее</b>.
+          </div>
+        ) : null}
       </div>
     </div>
   );
