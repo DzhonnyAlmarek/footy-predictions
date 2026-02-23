@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function mustEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
@@ -24,18 +27,60 @@ function service() {
   );
 }
 
-async function requireAdmin(): Promise<{ ok: true } | { ok: false; res: NextResponse }> {
+async function readLogin() {
   const cs = await cookies();
-  const raw = cs.get("fp_login")?.value ?? "";
-  const fpLogin = decodeMaybe(raw).trim().toUpperCase();
+  const rawLogin = cs.get("fp_login")?.value ?? "";
+  const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
+  return { rawLogin, fpLogin };
+}
 
-  if (fpLogin !== "ADMIN") {
+async function requireAdmin(): Promise<{ ok: true; user_id: string } | { ok: false; res: NextResponse }> {
+  const { rawLogin, fpLogin } = await readLogin();
+
+  if (!fpLogin) {
     return {
       ok: false,
-      res: NextResponse.json({ ok: false, error: "not_auth" }, { status: 401 }),
+      res: NextResponse.json({ ok: false, error: "not_auth", where: "cookies", rawLogin, fpLogin }, { status: 401 }),
     };
   }
-  return { ok: true };
+
+  const sb = service();
+
+  const { data: acc, error: accErr } = await sb
+    .from("login_accounts")
+    .select("user_id")
+    .eq("login", fpLogin)
+    .maybeSingle();
+
+  if (accErr) {
+    return { ok: false, res: NextResponse.json({ ok: false, error: accErr.message }, { status: 500 }) };
+  }
+
+  if (!acc?.user_id) {
+    return {
+      ok: false,
+      res: NextResponse.json(
+        { ok: false, error: "not_auth", where: "login_accounts", rawLogin, fpLogin },
+        { status: 401 }
+      ),
+    };
+  }
+
+  const { data: profile, error: profErr } = await sb
+    .from("profiles")
+    .select("role")
+    .eq("id", acc.user_id)
+    .maybeSingle();
+
+  if (profErr) {
+    return { ok: false, res: NextResponse.json({ ok: false, error: profErr.message }, { status: 500 }) };
+  }
+
+  if (profile?.role !== "admin") {
+    return { ok: false, res: NextResponse.json({ ok: false, error: "admin_only" }, { status: 403 }) };
+  }
+
+  return { ok: true, user_id: acc.user_id };
 }
 
 /* ================= scoring helpers (без изменений) ================= */
@@ -181,7 +226,7 @@ async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId
       diff_mult: bd.diff_mult,
 
       pred_text: bd.pred_text,
-      res_text: bd.res_text,
+      res_text: `${resH}:${resA}`,
 
       rule_version: "v1",
       computed_at: new Date().toISOString(),
@@ -260,7 +305,6 @@ export async function PATCH(req: Request) {
   }
 
   const sb = service();
-
   const upd: any = {};
 
   if ("home_score" in (body ?? {})) upd.home_score = body?.home_score ?? null;
