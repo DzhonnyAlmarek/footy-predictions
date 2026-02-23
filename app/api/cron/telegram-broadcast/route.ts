@@ -32,6 +32,24 @@ function getSiteUrl(): string {
 
 const TZ = "Europe/Moscow";
 
+// дедлайн: kickoff - 1 мин
+const CUTOFF_MS = 60_000;
+
+// горизонт: чтобы поймать 24ч окно
+const HORIZON_HOURS = 26;
+
+// cron частота: под неё “окно”
+// если cron каждые 5 минут — оставь 6..7 мин, чтобы не промахнуться
+const WINDOW_MINUTES = 10;
+const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
+
+const BUCKETS = [
+  { key: "24h", ms: 24 * 60 * 60 * 1000 },
+  { key: "12h", ms: 12 * 60 * 60 * 1000 },
+  { key: "1h", ms: 1 * 60 * 60 * 1000 },
+  { key: "15m", ms: 15 * 60 * 1000 },
+] as const;
+
 function escapeHtml(s: string): string {
   return String(s ?? "")
     .replaceAll("&", "&amp;")
@@ -55,11 +73,9 @@ function fmtRuDateTime(iso?: string | null): string {
 function fmtRemain(ms: number): string {
   if (!Number.isFinite(ms)) return "—";
   if (ms <= 0) return "0м";
-
   const totalMin = Math.floor(ms / 60000);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-
   if (h <= 0) return `${m}м`;
   return `${h}ч ${m}м`;
 }
@@ -107,14 +123,10 @@ async function getCurrentStageId(sb: ReturnType<typeof service>): Promise<number
   return data?.id != null ? Number(data.id) : null;
 }
 
-/**
- * Берём матчи ближайших 26 часов (чтобы надёжно поймать окно 24ч)
- * Можно увеличить до 30ч если хочешь.
- */
 async function getUpcomingMatches(sb: ReturnType<typeof service>, stageId: number | null) {
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
-  const horizonIso = new Date(now + 26 * 60 * 60 * 1000).toISOString();
+  const horizonIso = new Date(now + HORIZON_HOURS * 60 * 60 * 1000).toISOString();
 
   let q = sb
     .from("matches")
@@ -131,10 +143,9 @@ async function getUpcomingMatches(sb: ReturnType<typeof service>, stageId: numbe
     )
     .gte("kickoff_at", nowIso)
     .lte("kickoff_at", horizonIso)
-    // если у тебя статусы другие — добавь сюда нужные:
     .in("status", ["scheduled", "created", "open"])
     .order("kickoff_at", { ascending: true })
-    .limit(50);
+    .limit(80);
 
   if (stageId != null) q = q.eq("stage_id", stageId);
 
@@ -155,7 +166,7 @@ async function getParticipants(sb: ReturnType<typeof service>) {
     (a: any) => String(a?.login ?? "").trim().toUpperCase() !== "ADMIN"
   );
 
-  const userIds = Array.from(new Set(real.map((a: any) => String(a.user_id))));
+  const userIds = Array.from(new Set(real.map((a: any) => String(a.user_id)).filter(Boolean)));
 
   const nameById = new Map<string, string>();
   for (const a of real) {
@@ -167,11 +178,6 @@ async function getParticipants(sb: ReturnType<typeof service>) {
   return { userIds, nameById };
 }
 
-/**
- * Кто НЕ поставил прогноз на матч:
- * - нет строки в predictions
- * - или home_pred/away_pred = null
- */
 async function getMissingUsersForMatch(
   sb: ReturnType<typeof service>,
   matchId: number,
@@ -201,31 +207,11 @@ async function getMissingUsersForMatch(
   return missing;
 }
 
-/* ---------------- bucket logic ---------------- */
-
-// cron каждые 10 минут => окно +/- 10 минут
-const WINDOW_MINUTES = 10;
-const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
-
-const BUCKETS = [
-  { key: "24h", minutes: 24 * 60 },
-  { key: "12h", minutes: 12 * 60 },
-  { key: "1h", minutes: 60 },
-  { key: "15m", minutes: 15 },
-] as const;
-
-type Bucket = (typeof BUCKETS)[number];
-
-function pickBucket(msToKickoff: number): Bucket | null {
+function pickBucket(msToKickoff: number): (typeof BUCKETS)[number] | null {
   for (const b of BUCKETS) {
-    const target = b.minutes * 60 * 1000;
-    if (Math.abs(msToKickoff - target) <= WINDOW_MS) return b;
+    if (Math.abs(msToKickoff - b.ms) <= WINDOW_MS) return b;
   }
   return null;
-}
-
-function bucketLabel(b: Bucket): string {
-  return b.minutes >= 60 ? `${Math.round(b.minutes / 60)}ч` : `${b.minutes}м`;
 }
 
 async function tryLogSend(sb: ReturnType<typeof service>, matchId: number, bucketKey: string) {
@@ -242,46 +228,32 @@ async function tryLogSend(sb: ReturnType<typeof service>, matchId: number, bucke
   throw new Error(`log_failed: ${msg}`);
 }
 
-/* ---------------- debug ---------------- */
+function buildText(params: {
+  bucketLabel: string;
+  kickoffAt: string;
+  home: string;
+  away: string;
+  msToKickoff: number;
+  missingNames: string[];
+  missingTotal: number;
+}) {
+  const MAX_NAMES = 12;
+  const names = params.missingNames.slice(0, MAX_NAMES);
 
-type DebugStats = {
-  horizonMatches: number;
-  processed: number;
-  skipped_no_kickoff: number;
-  skipped_already_started: number;
-  skipped_no_bucket: number;
-  skipped_no_missing: number;
-  skipped_duplicate: number;
-  skipped_send_limit: number;
-  sent: number;
-  buckets_hit: Record<string, number>;
-  skips: Array<{ match_id: number | null; reason: string }>;
-};
+  const title = `⚽ <b>Напоминание (${escapeHtml(params.bucketLabel)})</b>\nПора внести прогноз.`;
 
-function initStats(): DebugStats {
-  return {
-    horizonMatches: 0,
-    processed: 0,
-    skipped_no_kickoff: 0,
-    skipped_already_started: 0,
-    skipped_no_bucket: 0,
-    skipped_no_missing: 0,
-    skipped_duplicate: 0,
-    skipped_send_limit: 0,
-    sent: 0,
-    buckets_hit: {},
-    skips: [],
-  };
-}
+  const matchBlock =
+    `\n\n<b>Матч:</b>\n` +
+    `${escapeHtml(params.home)} — ${escapeHtml(params.away)}\n` +
+    `Начало (МСК): <b>${escapeHtml(fmtRuDateTime(params.kickoffAt))}</b>\n` +
+    `До дедлайна: <b>${escapeHtml(fmtRemain(params.msToKickoff - CUTOFF_MS))}</b>`;
 
-function bumpBucket(stats: DebugStats, key: string) {
-  stats.buckets_hit[key] = (stats.buckets_hit[key] ?? 0) + 1;
-}
+  const missingBlock =
+    `\n\n<b>Нет прогноза у:</b>\n` +
+    `${names.map((n) => `• ${escapeHtml(n)}`).join("\n")}` +
+    (params.missingTotal > MAX_NAMES ? `\n…и ещё ${params.missingTotal - MAX_NAMES}` : "");
 
-function addSkip(stats: DebugStats, matchId: number | null, reason: string) {
-  // чтобы не раздувать ответ
-  if (stats.skips.length >= 30) return;
-  stats.skips.push({ match_id: matchId, reason });
+  return `${title}${matchBlock}${missingBlock}`;
 }
 
 /* ---------------- handler ---------------- */
@@ -293,9 +265,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  const debug = req.headers.get("x-debug") === "1";
-  const stats = initStats();
-
   try {
     const sb = service();
     const site = getSiteUrl();
@@ -304,146 +273,72 @@ export async function POST(req: Request) {
     const stageId = await getCurrentStageId(sb);
     const matches = await getUpcomingMatches(sb, stageId);
 
-    stats.horizonMatches = matches.length;
-
-    if (debug) {
-      console.log("[cron:broadcast] stageId=", stageId, "matchesInHorizon=", matches.length);
-    }
-
     if (matches.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: "no_matches_in_horizon",
-        ...(debug ? { stats } : {}),
-      });
+      return NextResponse.json({ ok: true, skipped: true, reason: "no_matches_in_horizon" });
     }
 
     const { userIds, nameById } = await getParticipants(sb);
 
     let sent = 0;
-    const sentItems: Array<{ match_id: number; bucket: string; missing: number }> = [];
+    const items: Array<{ match_id: number; bucket: string; missing: number }> = [];
 
-    // чтобы не спамить, ограничим максимум 3 сообщений за 1 запуск
-    const MAX_SEND_PER_RUN = 3;
+    const MAX_SEND_PER_RUN = 5;
 
     for (const m of matches) {
-      if (sent >= MAX_SEND_PER_RUN) {
-        stats.skipped_send_limit++;
-        addSkip(stats, Number((m as any).id ?? 0) || null, "send_limit");
-        break;
-      }
-
-      stats.processed++;
+      if (sent >= MAX_SEND_PER_RUN) break;
 
       const matchId = Number((m as any).id);
       const kickoffAt = String((m as any).kickoff_at ?? "");
-      if (!matchId || !kickoffAt) {
-        stats.skipped_no_kickoff++;
-        addSkip(stats, matchId || null, "no_kickoff");
-        continue;
-      }
+      if (!matchId || !kickoffAt) continue;
 
       const kickoffMs = new Date(kickoffAt).getTime();
       const msToKickoff = kickoffMs - Date.now();
 
-      if (!Number.isFinite(msToKickoff) || msToKickoff <= 0) {
-        stats.skipped_already_started++;
-        addSkip(stats, matchId, "already_started");
-        continue;
-      }
+      // матч уже начался или слишком близко: после kickoff-1m НЕ шлём
+      if (!Number.isFinite(msToKickoff) || msToKickoff <= CUTOFF_MS) continue;
 
       const bucket = pickBucket(msToKickoff);
-      if (!bucket) {
-        stats.skipped_no_bucket++;
-        addSkip(stats, matchId, "no_bucket");
-        continue;
-      }
-      bumpBucket(stats, bucket.key);
+      if (!bucket) continue;
 
-      // кто без прогноза
       const missing = await getMissingUsersForMatch(sb, matchId, userIds);
-      if (missing.size === 0) {
-        stats.skipped_no_missing++;
-        addSkip(stats, matchId, "no_missing_users");
-        continue;
-      }
+      if (missing.size === 0) continue;
 
-      // анти-дубли (один матч + один bucket)
       const shouldSend = await tryLogSend(sb, matchId, bucket.key);
-      if (!shouldSend) {
-        stats.skipped_duplicate++;
-        addSkip(stats, matchId, "duplicate");
-        continue;
-      }
+      if (!shouldSend) continue;
 
       const home = teamName((m as any).home_team);
       const away = teamName((m as any).away_team);
 
-      const MAX_NAMES = 12;
-      const missingNames = Array.from(missing)
-        .map((uid) => nameById.get(uid) ?? uid.slice(0, 8))
-        .slice(0, MAX_NAMES);
+      const missingNames = Array.from(missing).map((uid) => nameById.get(uid) ?? uid.slice(0, 8));
 
-      const title =
-        `⚽ <b>Напоминание за ${escapeHtml(bucketLabel(bucket))}</b>\n` +
-        `Пора внести прогноз.`;
-
-      const matchBlock =
-        `\n\n<b>Матч:</b>\n` +
-        `${escapeHtml(home)} — ${escapeHtml(away)}\n` +
-        `Начало (МСК): <b>${escapeHtml(fmtRuDateTime(kickoffAt))}</b>\n` +
-        `До начала: <b>${escapeHtml(fmtRemain(msToKickoff))}</b>`;
-
-      const missingBlock =
-        `\n\n<b>Нет прогноза у:</b>\n` +
-        `${missingNames.map((n) => `• ${escapeHtml(n)}`).join("\n")}` +
-        (missing.size > MAX_NAMES ? `\n…и ещё ${missing.size - MAX_NAMES}` : "");
-
-      const text = `${title}${matchBlock}${missingBlock}`;
-
-      if (debug) {
-        console.log("[cron:broadcast] send", {
-          matchId,
-          bucket: bucket.key,
-          msToKickoff,
-          missing: missing.size,
-          kickoffAt,
-        });
-      }
+      const text = buildText({
+        bucketLabel: bucket.key === "15m" ? "за 15 минут" : `за ${bucket.key.replace("h", "")} час(а)`,
+        kickoffAt,
+        home,
+        away,
+        msToKickoff,
+        missingNames,
+        missingTotal: missing.size,
+      });
 
       await tgSendMessage({
         text,
         buttonUrl: entryUrl,
-        buttonText: "Перейти на сайт для внесения прогноза",
+        buttonText: "Перейти на сайт",
       });
 
       sent++;
-      stats.sent++;
-      sentItems.push({ match_id: matchId, bucket: bucket.key, missing: missing.size });
+      items.push({ match_id: matchId, bucket: bucket.key, missing: missing.size });
     }
 
     if (sent === 0) {
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: "nothing_to_send",
-        ...(debug ? { stats } : {}),
-      });
+      return NextResponse.json({ ok: true, skipped: true, reason: "nothing_to_send" });
     }
 
-    return NextResponse.json({
-      ok: true,
-      sent,
-      items: sentItems,
-      ...(debug ? { stats } : {}),
-    });
+    return NextResponse.json({ ok: true, sent, items });
   } catch (e: any) {
-    if (debug) {
-      console.error("[cron:broadcast] error", e);
-    }
     return NextResponse.json(
-      { ok: false, error: "broadcast_failed", message: String(e?.message ?? e), ...(debug ? { stats } : {}) },
+      { ok: false, error: "broadcast_failed", message: String(e?.message ?? e) },
       { status: 500 }
     );
   }
