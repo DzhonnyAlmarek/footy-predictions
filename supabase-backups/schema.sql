@@ -1186,6 +1186,20 @@ ALTER SEQUENCE "public"."audit_log_id_seq" OWNED BY "public"."audit_log"."id";
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."import_rpl_matches" (
+    "competition" "text",
+    "season" "text",
+    "tour" integer NOT NULL,
+    "kickoff_at_msk" timestamp with time zone,
+    "kickoff_at_utc" timestamp with time zone NOT NULL,
+    "home_team" "text" NOT NULL,
+    "away_team" "text" NOT NULL
+);
+
+
+ALTER TABLE "public"."import_rpl_matches" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."login_accounts" (
     "login" "text" NOT NULL,
     "user_id" "uuid" NOT NULL,
@@ -1679,6 +1693,10 @@ CREATE INDEX "idx_tours_stage" ON "public"."tours" USING "btree" ("stage_id");
 
 
 CREATE INDEX "matches_stage_tour_idx" ON "public"."matches" USING "btree" ("stage_id", "tour_id");
+
+
+
+CREATE UNIQUE INDEX "matches_unique_stage_pair_kickoff" ON "public"."matches" USING "btree" ("stage_id", "home_team_id", "away_team_id", "kickoff_at");
 
 
 
@@ -2409,6 +2427,12 @@ GRANT ALL ON TABLE "public"."audit_log" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."audit_log_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."audit_log_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."audit_log_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."import_rpl_matches" TO "anon";
+GRANT ALL ON TABLE "public"."import_rpl_matches" TO "authenticated";
+GRANT ALL ON TABLE "public"."import_rpl_matches" TO "service_role";
 
 
 
