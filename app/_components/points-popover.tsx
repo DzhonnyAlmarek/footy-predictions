@@ -5,17 +5,17 @@ import { useEffect, useId, useRef, useState } from "react";
 export type PointsBreakdown = {
   total: number;
 
-  // Компоненты
-  teamGoals: number; // 0..1 (0.5 + 0.5)
-  outcome: number; // 0..(2 * mult)
-  diff: number; // 0..(1 * mult)
-  nearBonus: number; // 0 или 0.5
+  // Компоненты (могут быть 0, если модель их не хранит)
+  teamGoals?: number; // 0..1 (0.5 + 0.5)
+  outcome?: number; // 0..(2 * mult) или просто 2
+  diff?: number; // 0..(1 * mult) или просто 1
+  nearBonus?: number; // 0 или 0.5 или сумма бонусов
 
-  // Множители + причины
-  outcomeGuessed: number; // сколько участников угадали исход
-  outcomeMult: number; // 1 / 1.25 / 1.5 / 1.75
-  diffGuessed: number; // сколько участников угадали разницу
-  diffMult: number;
+  // Множители + причины (опционально; в points_ledger их нет)
+  outcomeGuessed?: number;
+  outcomeMult?: number; // 1 / 1.25 / 1.5 / 1.75
+  diffGuessed?: number;
+  diffMult?: number;
 
   // Для текста
   predText: string; // "2:1"
@@ -24,7 +24,6 @@ export type PointsBreakdown = {
 
 function fmt(n: number) {
   const v = Math.round(n * 100) / 100;
-  // чтобы 1.0 выглядел как "1", а 0.5 как "0.5"
   return Number.isInteger(v) ? String(v) : String(v);
 }
 
@@ -35,10 +34,19 @@ function multLabel(mult: number, guessed: number) {
   return `x1 (угадали ${guessed} участников)`;
 }
 
-export default function PointsPopover(props: {
-  pts: number;
-  breakdown: PointsBreakdown;
-}) {
+function hasMultInfo(b: PointsBreakdown) {
+  // считаем, что “информация есть”, только если mult задан и guessed задан
+  const om = b.outcomeMult;
+  const og = b.outcomeGuessed;
+  const dm = b.diffMult;
+  const dg = b.diffGuessed;
+
+  const outcomeOk = typeof om === "number" && typeof og === "number";
+  const diffOk = typeof dm === "number" && typeof dg === "number";
+  return outcomeOk || diffOk;
+}
+
+export default function PointsPopover(props: { pts: number; breakdown: PointsBreakdown }) {
   const { pts, breakdown } = props;
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -64,6 +72,17 @@ export default function PointsPopover(props: {
       document.removeEventListener("keydown", onEsc);
     };
   }, [open]);
+
+  const teamGoals = Number(breakdown.teamGoals ?? 0);
+  const outcome = Number(breakdown.outcome ?? 0);
+  const diff = Number(breakdown.diff ?? 0);
+  const nearBonus = Number(breakdown.nearBonus ?? 0);
+
+  const showMult = hasMultInfo(breakdown);
+
+  // чтобы не показывать “пустые” строки, если компонент = 0 и он не релевантен
+  const showTeamGoals = teamGoals !== 0;
+  const showNearBonus = nearBonus !== 0;
 
   return (
     <span className="ppWrap">
@@ -104,46 +123,56 @@ export default function PointsPopover(props: {
 
           <div className="ppHr" />
 
-          <div className="ppLine">
-            <span className="ppKey">Голы команд</span>
-            <span className="ppVal">{fmt(breakdown.teamGoals)}</span>
-          </div>
+          {showTeamGoals && (
+            <div className="ppLine">
+              <span className="ppKey">Голы команд</span>
+              <span className="ppVal">{fmt(teamGoals)}</span>
+            </div>
+          )}
 
           <div className="ppLine">
             <span className="ppKey">Исход</span>
             <span className="ppVal">
-              {fmt(breakdown.outcome)}{" "}
-              <span className="ppHint">
-                ({multLabel(breakdown.outcomeMult, breakdown.outcomeGuessed)})
-              </span>
+              {fmt(outcome)}{" "}
+              {showMult && typeof breakdown.outcomeMult === "number" && typeof breakdown.outcomeGuessed === "number" ? (
+                <span className="ppHint">
+                  ({multLabel(breakdown.outcomeMult, breakdown.outcomeGuessed)})
+                </span>
+              ) : null}
             </span>
           </div>
 
           <div className="ppLine">
             <span className="ppKey">Разница</span>
             <span className="ppVal">
-              {fmt(breakdown.diff)}{" "}
-              <span className="ppHint">
-                ({multLabel(breakdown.diffMult, breakdown.diffGuessed)})
-              </span>
+              {fmt(diff)}{" "}
+              {showMult && typeof breakdown.diffMult === "number" && typeof breakdown.diffGuessed === "number" ? (
+                <span className="ppHint">
+                  ({multLabel(breakdown.diffMult, breakdown.diffGuessed)})
+                </span>
+              ) : null}
             </span>
           </div>
 
-          <div className="ppLine">
-            <span className="ppKey">Промах на 1 мяч</span>
-            <span className="ppVal">{fmt(breakdown.nearBonus)}</span>
-          </div>
+          {showNearBonus && (
+            <div className="ppLine">
+              <span className="ppKey">Бонусы</span>
+              <span className="ppVal">{fmt(nearBonus)}</span>
+            </div>
+          )}
 
           <div className="ppHr" />
 
           <div className="ppTotal">
-            Итого: <b>{fmt(breakdown.total)}</b>
+            Итого: <b>{fmt(Number(breakdown.total ?? pts))}</b>
           </div>
 
-          <div className="ppMini">
-            Угадали исход: <b>{breakdown.outcomeGuessed}</b>, разницу:{" "}
-            <b>{breakdown.diffGuessed}</b>
-          </div>
+          {showMult && (
+            <div className="ppMini">
+              Угадали исход: <b>{Number(breakdown.outcomeGuessed ?? 0)}</b>, разницу:{" "}
+              <b>{Number(breakdown.diffGuessed ?? 0)}</b>
+            </div>
+          )}
         </div>
       )}
     </span>

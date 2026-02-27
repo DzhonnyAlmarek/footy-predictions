@@ -45,25 +45,17 @@ type MatchRow = {
 type UserRow = { login: string; user_id: string };
 type Pred = { h: number | null; a: number | null };
 
-type ScoreRow = {
-  prediction_id: number;
+type LedgerScoreRow = {
   match_id: number;
   user_id: string;
 
-  total: number;
+  points: number;
 
-  team_goals: number;
-  outcome: number;
-  diff: number;
-  near_bonus: number;
-
-  outcome_guessed: number;
-  outcome_mult: number;
-  diff_guessed: number;
-  diff_mult: number;
-
-  pred_text: string;
-  res_text: string;
+  points_outcome: number;
+  points_diff: number;
+  points_h1: number;
+  points_h2: number;
+  points_bonus: number;
 };
 
 function teamName(t: TeamMaybeArray): string {
@@ -82,21 +74,46 @@ function formatPts(n: number | null): string {
   return Number.isInteger(x) ? String(x) : String(x);
 }
 
-function toPtsBD(s: ScoreRow): PtsBD {
+/**
+ * Мы больше НЕ используем prediction_scores (там были guessed/mult/pred_text/res_text).
+ * Для поповера собираем breakdown из points_ledger.
+ * Поля guessed/mult заполняем 0, тексты — из прогноза и результата матча.
+ */
+function toPtsBDFromLedger(
+  l: LedgerScoreRow,
+  predText: string,
+  resText: string
+): PtsBD {
+  const total = Number(l.points ?? 0);
+
+  const outcome = Number(l.points_outcome ?? 0);
+  const diff = Number(l.points_diff ?? 0);
+  const h1 = Number(l.points_h1 ?? 0);
+  const h2 = Number(l.points_h2 ?? 0);
+  const bonus = Number(l.points_bonus ?? 0);
+
   return {
-    total: Number(s.total),
-    teamGoals: Number(s.team_goals),
-    outcome: Number(s.outcome),
-    diff: Number(s.diff),
-    nearBonus: Number(s.near_bonus),
+    total,
 
-    outcomeGuessed: Number(s.outcome_guessed),
-    outcomeMult: Number(s.outcome_mult),
-    diffGuessed: Number(s.diff_guessed),
-    diffMult: Number(s.diff_mult),
+    // В твоём UI это отдельное поле; в ledger его нет.
+    // Оставляем 0, чтобы не ломать типы/компонент.
+    teamGoals: 0,
 
-    predText: s.pred_text,
-    resText: s.res_text,
+    outcome,
+    diff,
+
+    // nearBonus в старой модели = "приблизительный бонус"
+    // В ledger у тебя есть h1/h2/bonus — суммируем их.
+    nearBonus: round2(h1 + h2 + bonus),
+
+    // guessed/mult в ledger не хранятся
+    outcomeGuessed: 0,
+    outcomeMult: 0,
+    diffGuessed: 0,
+    diffMult: 0,
+
+    predText,
+    resText,
   };
 }
 
@@ -158,29 +175,40 @@ export default async function AdminCurrentTablePage() {
 
   const predByMatchUser = new Map<number, Map<string, Pred>>();
   for (const p of predsRaw ?? []) {
-    const mid = Number(p.match_id);
+    const mid = Number((p as any).match_id);
     if (!predByMatchUser.has(mid)) predByMatchUser.set(mid, new Map());
-    predByMatchUser.get(mid)!.set(p.user_id, {
-      h: p.home_pred == null ? null : Number(p.home_pred),
-      a: p.away_pred == null ? null : Number(p.away_pred),
+    predByMatchUser.get(mid)!.set((p as any).user_id, {
+      h: (p as any).home_pred == null ? null : Number((p as any).home_pred),
+      a: (p as any).away_pred == null ? null : Number((p as any).away_pred),
     });
   }
 
-  const { data: scoresRaw } = await sb
-    .from("prediction_scores")
-    .select(
-      "prediction_id,match_id,user_id,total,team_goals,outcome,diff,near_bonus,outcome_guessed,outcome_mult,diff_guessed,diff_mult,pred_text,res_text"
-    )
+  // ✅ ВМЕСТО prediction_scores читаем points_ledger
+  const { data: ledgerRaw } = await sb
+    .from("points_ledger")
+    .select("match_id,user_id,points,points_outcome,points_diff,points_h1,points_h2,points_bonus")
     .in("match_id", matchIds)
     .in("user_id", userIds);
 
-  const scoreByMatchUser = new Map<number, Map<string, ScoreRow>>();
-  for (const s of (scoresRaw ?? []) as any[]) {
-    const mid = Number(s.match_id);
+  const scoreByMatchUser = new Map<number, Map<string, LedgerScoreRow>>();
+  for (const r of (ledgerRaw ?? []) as any[]) {
+    const mid = Number(r.match_id);
     if (!scoreByMatchUser.has(mid)) scoreByMatchUser.set(mid, new Map());
-    scoreByMatchUser.get(mid)!.set(s.user_id, s as ScoreRow);
+    scoreByMatchUser.get(mid)!.set(String(r.user_id), {
+      match_id: Number(r.match_id),
+      user_id: String(r.user_id),
+
+      points: Number(r.points ?? 0),
+
+      points_outcome: Number(r.points_outcome ?? 0),
+      points_diff: Number(r.points_diff ?? 0),
+      points_h1: Number(r.points_h1 ?? 0),
+      points_h2: Number(r.points_h2 ?? 0),
+      points_bonus: Number(r.points_bonus ?? 0),
+    });
   }
 
+  // totals из ledger
   const totalByUser = new Map<string, number>();
   for (const u of users) totalByUser.set(u.user_id, 0);
 
@@ -188,16 +216,17 @@ export default async function AdminCurrentTablePage() {
     const mid = Number(m.id);
     for (const u of users) {
       const s = scoreByMatchUser.get(mid)?.get(u.user_id);
-      if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.total)));
+      if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.points)));
     }
   }
 
   return (
     <main className="page">
       <h1>Текущая таблица (админ)</h1>
+
       <div className="pageMeta">
-        Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-        {stage.status ? <span> • {stage.status}</span> : null}
+        Этап: <b>{(stage as any).name ?? `#${(stage as any).id}`}</b>
+        {(stage as any).status ? <span> • {(stage as any).status}</span> : null}
       </div>
 
       <div className="tableWrap">
@@ -220,7 +249,7 @@ export default async function AdminCurrentTablePage() {
           <tbody>
             {matches.map((m, idx) => {
               const no = m.stage_match_no ?? idx + 1;
-              const res =
+              const resText =
                 m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
               const mid = Number(m.id);
 
@@ -234,7 +263,7 @@ export default async function AdminCurrentTablePage() {
                     </div>
                   </td>
 
-                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{res}</td>
+                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{resText}</td>
 
                   {users.map((u) => {
                     const pr = predByMatchUser.get(mid)?.get(u.user_id) ?? { h: null, a: null };
@@ -244,7 +273,13 @@ export default async function AdminCurrentTablePage() {
                     return (
                       <td key={u.user_id} className="ctCell">
                         <span className="predText">{predText}</span>
-                        {s ? <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} /> : null}
+
+                        {s ? (
+                          <PointsPopover
+                            pts={Number(s.points)}
+                            breakdown={toPtsBDFromLedger(s, predText, resText)}
+                          />
+                        ) : null}
                       </td>
                     );
                   })}
@@ -254,8 +289,6 @@ export default async function AdminCurrentTablePage() {
           </tbody>
         </table>
       </div>
-
-
     </main>
   );
 }
