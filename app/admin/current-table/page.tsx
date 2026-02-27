@@ -78,28 +78,17 @@ function formatPts(n: number | null): string {
   return Number.isInteger(x) ? String(x) : String(x);
 }
 
-function toPtsBDFromLedger(l: LedgerScoreRow, predText: string, resText: string): PtsBD {
-  return {
-    total: Number(l.points ?? 0),
-    predText,
-    resText,
+function sign(n: number) {
+  if (n > 0) return 1;
+  if (n < 0) return -1;
+  return 0;
+}
 
-    // legacy поля (оставим для совместимости)
-    teamGoals: 0,
-    outcome: Number(l.points_outcome ?? 0),
-    diff: Number(l.points_diff ?? 0),
-    nearBonus: round2(Number(l.points_h1 ?? 0) + Number(l.points_h2 ?? 0) + Number(l.points_bonus ?? 0)),
-
-    // ✅ новые поля для понятной расшифровки
-    outcomeBase: Number(l.points_outcome_base ?? 0),
-    outcomeMultBonus: Number(l.points_outcome_bonus ?? 0),
-    diffBase: Number(l.points_diff_base ?? 0),
-    diffMultBonus: Number(l.points_diff_bonus ?? 0),
-
-    h1: Number(l.points_h1 ?? 0),
-    h2: Number(l.points_h2 ?? 0),
-    bonus: Number(l.points_bonus ?? 0),
-  };
+function deriveMult(totalPart: number, base: number): number | null {
+  if (!base || base <= 0) return null;
+  const m = totalPart / base;
+  const r = Math.round(m * 100) / 100;
+  return Number.isFinite(r) ? r : null;
 }
 
 export default async function AdminCurrentTablePage() {
@@ -168,7 +157,7 @@ export default async function AdminCurrentTablePage() {
     });
   }
 
-  // ✅ ВМЕСТО prediction_scores читаем points_ledger (+ base/bonus)
+  // ✅ ledger (+ base/bonus)
   const { data: ledgerRaw } = await sb
     .from("points_ledger")
     .select(
@@ -200,6 +189,48 @@ export default async function AdminCurrentTablePage() {
     });
   }
 
+  // ===== guessed counts (исход/разница) по матчу =====
+  const outcomeGuessedByMatch = new Map<number, number>();
+  const diffGuessedByMatch = new Map<number, number>();
+  const totalPredsByMatch = new Map<number, number>();
+
+  for (const m of matches) {
+    const mid = Number(m.id);
+
+    // учитываем только матчи с известным результатом
+    if (m.home_score == null || m.away_score == null) {
+      outcomeGuessedByMatch.set(mid, 0);
+      diffGuessedByMatch.set(mid, 0);
+      totalPredsByMatch.set(mid, 0);
+      continue;
+    }
+
+    const resSign = sign(Number(m.home_score) - Number(m.away_score));
+    const resDiff = Number(m.home_score) - Number(m.away_score);
+
+    let totalPreds = 0;
+    let outcomeGuessed = 0;
+    let diffGuessed = 0;
+
+    const mp = predByMatchUser.get(mid);
+    for (const u of users) {
+      const pr = mp?.get(u.user_id);
+      if (!pr || pr.h == null || pr.a == null) continue;
+
+      totalPreds++;
+      const prSign = sign(pr.h - pr.a);
+      const prDiff = pr.h - pr.a;
+
+      if (prSign === resSign) outcomeGuessed++;
+      if (prDiff === resDiff) diffGuessed++;
+    }
+
+    outcomeGuessedByMatch.set(mid, outcomeGuessed);
+    diffGuessedByMatch.set(mid, diffGuessed);
+    totalPredsByMatch.set(mid, totalPreds);
+  }
+
+  // totals по пользователю из ledger
   const totalByUser = new Map<string, number>();
   for (const u of users) totalByUser.set(u.user_id, 0);
 
@@ -209,6 +240,68 @@ export default async function AdminCurrentTablePage() {
       const s = scoreByMatchUser.get(mid)?.get(u.user_id);
       if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.points)));
     }
+  }
+
+  function toPtsBDVariant1(
+    m: MatchRow,
+    u: UserRow,
+    predText: string,
+    resText: string,
+    s: LedgerScoreRow,
+    pr: Pred
+  ): PtsBD {
+    const homeRes = m.home_score;
+    const awayRes = m.away_score;
+
+    // Голы команд: 0.5 + 0.5 (если угадал точные голы по каждой команде)
+    const homeGoalsPts =
+      pr.h != null && homeRes != null && pr.h === Number(homeRes) ? 0.5 : 0;
+    const awayGoalsPts =
+      pr.a != null && awayRes != null && pr.a === Number(awayRes) ? 0.5 : 0;
+
+    const outcomeTotal = Number(s.points_outcome ?? 0);
+    const outcomeBase = Number(s.points_outcome_base ?? 0);
+    const outcomeMultBonus = Number(s.points_outcome_bonus ?? 0);
+    const outcomeMult = deriveMult(outcomeTotal, outcomeBase);
+
+    const diffTotal = Number(s.points_diff ?? 0);
+    const diffBase = Number(s.points_diff_base ?? 0);
+    const diffMultBonus = Number(s.points_diff_bonus ?? 0);
+    const diffMult = deriveMult(diffTotal, diffBase);
+
+    const mid = Number(m.id);
+    const totalPreds = totalPredsByMatch.get(mid) ?? 0;
+
+    return {
+      total: Number(s.points ?? 0),
+      predText,
+      resText,
+
+      homeGoalsPts,
+      awayGoalsPts,
+      homeGoalsPred: pr.h,
+      awayGoalsPred: pr.a,
+      homeGoalsRes: homeRes,
+      awayGoalsRes: awayRes,
+
+      outcomeBase,
+      outcomeTotal,
+      outcomeMultBonus,
+      outcomeMult,
+      outcomeGuessed: outcomeGuessedByMatch.get(mid) ?? 0,
+      outcomeTotalPreds: totalPreds,
+
+      diffBase,
+      diffTotal,
+      diffMultBonus,
+      diffMult,
+      diffGuessed: diffGuessedByMatch.get(mid) ?? 0,
+      diffTotalPreds: totalPreds,
+
+      h1: Number(s.points_h1 ?? 0),
+      h2: Number(s.points_h2 ?? 0),
+      bonus: Number(s.points_bonus ?? 0),
+    };
   }
 
   return (
@@ -264,10 +357,11 @@ export default async function AdminCurrentTablePage() {
                     return (
                       <td key={u.user_id} className="ctCell">
                         <span className="predText">{predText}</span>
+
                         {s ? (
                           <PointsPopover
                             pts={Number(s.points)}
-                            breakdown={toPtsBDFromLedger(s, predText, resText)}
+                            breakdown={toPtsBDVariant1(m, u, predText, resText, s, pr)}
                           />
                         ) : null}
                       </td>
