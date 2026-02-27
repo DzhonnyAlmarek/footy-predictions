@@ -52,8 +52,12 @@ type LedgerScoreRow = {
 
   points_outcome: number;
   points_diff: number;
-  points_h1: number;
-  points_h2: number;
+
+  // ✅ важно: это НЕ "промах", это баллы за голы каждой команды
+  points_h1: number; // голы хозяев
+  points_h2: number; // голы гостей
+
+  // ✅ это "промах на 1 мяч"
   points_bonus: number;
 
   points_outcome_base: number;
@@ -141,6 +145,7 @@ export default async function AdminCurrentTablePage() {
   const matches = (matchesRaw ?? []) as MatchRow[];
   const matchIds = matches.map((m) => Number(m.id));
 
+  // прогнозы (для отображения и для подсчёта "угадали X из Y")
   const { data: predsRaw } = await sb
     .from("predictions")
     .select("match_id,user_id,home_pred,away_pred")
@@ -157,6 +162,7 @@ export default async function AdminCurrentTablePage() {
     });
   }
 
+  // ledger (источник истины для очков)
   const { data: ledgerRaw } = await sb
     .from("points_ledger")
     .select(
@@ -177,8 +183,10 @@ export default async function AdminCurrentTablePage() {
 
       points_outcome: Number(r.points_outcome ?? 0),
       points_diff: Number(r.points_diff ?? 0),
+
       points_h1: Number(r.points_h1 ?? 0),
       points_h2: Number(r.points_h2 ?? 0),
+
       points_bonus: Number(r.points_bonus ?? 0),
 
       points_outcome_base: Number(r.points_outcome_base ?? 0),
@@ -188,6 +196,7 @@ export default async function AdminCurrentTablePage() {
     });
   }
 
+  // "угадали X из Y" — считаем по прогнозам на матч (только заполненные прогнозы)
   const outcomeGuessedByMatch = new Map<number, number>();
   const diffGuessedByMatch = new Map<number, number>();
   const totalPredsByMatch = new Map<number, number>();
@@ -227,6 +236,7 @@ export default async function AdminCurrentTablePage() {
     totalPredsByMatch.set(mid, totalPreds);
   }
 
+  // totals по пользователю из ledger
   const totalByUser = new Map<string, number>();
   for (const u of users) totalByUser.set(u.user_id, 0);
 
@@ -235,30 +245,12 @@ export default async function AdminCurrentTablePage() {
     for (const u of users) {
       const s = scoreByMatchUser.get(mid)?.get(u.user_id);
       if (s) {
-        totalByUser.set(
-          u.user_id,
-          round2((totalByUser.get(u.user_id) ?? 0) + Number(s.points))
-        );
+        totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.points)));
       }
     }
   }
 
-  function toPtsBDVariant1(
-    m: MatchRow,
-    predText: string,
-    resText: string,
-    s: LedgerScoreRow,
-    pr: Pred
-  ): PtsBD {
-    const homeRes = m.home_score;
-    const awayRes = m.away_score;
-
-    const homeGoalsPts =
-      pr.h != null && homeRes != null && pr.h === Number(homeRes) ? 0.5 : 0;
-
-    const awayGoalsPts =
-      pr.a != null && awayRes != null && pr.a === Number(awayRes) ? 0.5 : 0;
-
+  function toPtsBDVariant1(m: MatchRow, predText: string, resText: string, s: LedgerScoreRow, pr: Pred): PtsBD {
     const outcomeTotal = Number(s.points_outcome ?? 0);
     const outcomeBase = Number(s.points_outcome_base ?? 0);
     const outcomeMultBonus = Number(s.points_outcome_bonus ?? 0);
@@ -272,18 +264,27 @@ export default async function AdminCurrentTablePage() {
     const mid = Number(m.id);
     const totalPreds = totalPredsByMatch.get(mid) ?? 0;
 
+    // ✅ голы команд берём из ledger
+    const homeGoalsPts = Number(s.points_h1 ?? 0);
+    const awayGoalsPts = Number(s.points_h2 ?? 0);
+
+    // ✅ промах на 1 мяч — отдельным полем (из ledger)
+    const nearMissPts = Number(s.points_bonus ?? 0);
+
     return {
       total: Number(s.points ?? 0),
       predText,
       resText,
 
+      // голы команд (баллы)
       homeGoalsPts,
       awayGoalsPts,
       homeGoalsPred: pr.h,
       awayGoalsPred: pr.a,
-      homeGoalsRes: homeRes,
-      awayGoalsRes: awayRes,
+      homeGoalsRes: m.home_score,
+      awayGoalsRes: m.away_score,
 
+      // исход
       outcomeBase,
       outcomeTotal,
       outcomeMultBonus,
@@ -291,6 +292,7 @@ export default async function AdminCurrentTablePage() {
       outcomeGuessed: outcomeGuessedByMatch.get(mid) ?? 0,
       outcomeTotalPreds: totalPreds,
 
+      // разница
       diffBase,
       diffTotal,
       diffMultBonus,
@@ -298,9 +300,8 @@ export default async function AdminCurrentTablePage() {
       diffGuessed: diffGuessedByMatch.get(mid) ?? 0,
       diffTotalPreds: totalPreds,
 
-      h1: Number(s.points_h1 ?? 0),
-      h2: Number(s.points_h2 ?? 0),
-      bonus: Number(s.points_bonus ?? 0),
+      // промах на 1 мяч
+      nearMissPts,
     };
   }
 
@@ -320,12 +321,11 @@ export default async function AdminCurrentTablePage() {
               <th style={{ width: 54 }}>№</th>
               <th style={{ width: 320 }}>Матч</th>
               <th style={{ width: 70 }}>Рез.</th>
+
               {users.map((u) => (
                 <th key={u.user_id} className="ctUserHead">
                   {u.login}
-                  <span className="ctTotal">
-                    ({formatPts(totalByUser.get(u.user_id) ?? 0)})
-                  </span>
+                  <span className="ctTotal">({formatPts(totalByUser.get(u.user_id) ?? 0)})</span>
                 </th>
               ))}
             </tr>
@@ -335,33 +335,24 @@ export default async function AdminCurrentTablePage() {
             {matches.map((m, idx) => {
               const no = m.stage_match_no ?? idx + 1;
               const resText =
-                m.home_score == null || m.away_score == null
-                  ? "—"
-                  : `${m.home_score}:${m.away_score}`;
+                m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
               const mid = Number(m.id);
 
               return (
                 <tr key={m.id}>
-                  <td style={{ fontWeight: 900 }}>{no}</td>
+                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{no}</td>
+
                   <td>
                     <div style={{ fontWeight: 900 }}>
                       {teamName(m.home_team)} — {teamName(m.away_team)}
                     </div>
                   </td>
-                  <td style={{ fontWeight: 900 }}>{resText}</td>
+
+                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{resText}</td>
 
                   {users.map((u) => {
-                    const pr =
-                      predByMatchUser.get(mid)?.get(u.user_id) ?? {
-                        h: null,
-                        a: null,
-                      };
-
-                    const predText =
-                      pr.h == null || pr.a == null
-                        ? "—"
-                        : `${pr.h}:${pr.a}`;
-
+                    const pr = predByMatchUser.get(mid)?.get(u.user_id) ?? { h: null, a: null };
+                    const predText = pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
                     const s = scoreByMatchUser.get(mid)?.get(u.user_id);
 
                     return (
@@ -370,13 +361,7 @@ export default async function AdminCurrentTablePage() {
                         {s ? (
                           <PointsPopover
                             pts={Number(s.points)}
-                            breakdown={toPtsBDVariant1(
-                              m,
-                              predText,
-                              resText,
-                              s,
-                              pr
-                            )}
+                            breakdown={toPtsBDVariant1(m, predText, resText, s, pr)}
                           />
                         ) : null}
                       </td>
