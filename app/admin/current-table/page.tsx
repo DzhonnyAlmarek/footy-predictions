@@ -143,7 +143,7 @@ export default async function AdminCurrentTablePage() {
 
   const { data: predsRaw } = await sb
     .from("predictions")
-    .select("id,match_id,user_id,home_pred,away_pred")
+    .select("match_id,user_id,home_pred,away_pred")
     .in("match_id", matchIds)
     .in("user_id", userIds);
 
@@ -157,7 +157,6 @@ export default async function AdminCurrentTablePage() {
     });
   }
 
-  // ✅ ledger (+ base/bonus)
   const { data: ledgerRaw } = await sb
     .from("points_ledger")
     .select(
@@ -189,7 +188,6 @@ export default async function AdminCurrentTablePage() {
     });
   }
 
-  // ===== guessed counts (исход/разница) по матчу =====
   const outcomeGuessedByMatch = new Map<number, number>();
   const diffGuessedByMatch = new Map<number, number>();
   const totalPredsByMatch = new Map<number, number>();
@@ -197,7 +195,6 @@ export default async function AdminCurrentTablePage() {
   for (const m of matches) {
     const mid = Number(m.id);
 
-    // учитываем только матчи с известным результатом
     if (m.home_score == null || m.away_score == null) {
       outcomeGuessedByMatch.set(mid, 0);
       diffGuessedByMatch.set(mid, 0);
@@ -230,7 +227,6 @@ export default async function AdminCurrentTablePage() {
     totalPredsByMatch.set(mid, totalPreds);
   }
 
-  // totals по пользователю из ledger
   const totalByUser = new Map<string, number>();
   for (const u of users) totalByUser.set(u.user_id, 0);
 
@@ -238,13 +234,17 @@ export default async function AdminCurrentTablePage() {
     const mid = Number(m.id);
     for (const u of users) {
       const s = scoreByMatchUser.get(mid)?.get(u.user_id);
-      if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.points)));
+      if (s) {
+        totalByUser.set(
+          u.user_id,
+          round2((totalByUser.get(u.user_id) ?? 0) + Number(s.points))
+        );
+      }
     }
   }
 
   function toPtsBDVariant1(
     m: MatchRow,
-    u: UserRow,
     predText: string,
     resText: string,
     s: LedgerScoreRow,
@@ -253,9 +253,9 @@ export default async function AdminCurrentTablePage() {
     const homeRes = m.home_score;
     const awayRes = m.away_score;
 
-    // Голы команд: 0.5 + 0.5 (если угадал точные голы по каждой команде)
     const homeGoalsPts =
       pr.h != null && homeRes != null && pr.h === Number(homeRes) ? 0.5 : 0;
+
     const awayGoalsPts =
       pr.a != null && awayRes != null && pr.a === Number(awayRes) ? 0.5 : 0;
 
@@ -287,14 +287,14 @@ export default async function AdminCurrentTablePage() {
       outcomeBase,
       outcomeTotal,
       outcomeMultBonus,
-      outcomeMult,
+      outcomeMult: outcomeMult ?? undefined,
       outcomeGuessed: outcomeGuessedByMatch.get(mid) ?? 0,
       outcomeTotalPreds: totalPreds,
 
       diffBase,
       diffTotal,
       diffMultBonus,
-      diffMult,
+      diffMult: diffMult ?? undefined,
       diffGuessed: diffGuessedByMatch.get(mid) ?? 0,
       diffTotalPreds: totalPreds,
 
@@ -320,11 +320,12 @@ export default async function AdminCurrentTablePage() {
               <th style={{ width: 54 }}>№</th>
               <th style={{ width: 320 }}>Матч</th>
               <th style={{ width: 70 }}>Рез.</th>
-
               {users.map((u) => (
                 <th key={u.user_id} className="ctUserHead">
                   {u.login}
-                  <span className="ctTotal">({formatPts(totalByUser.get(u.user_id) ?? 0)})</span>
+                  <span className="ctTotal">
+                    ({formatPts(totalByUser.get(u.user_id) ?? 0)})
+                  </span>
                 </th>
               ))}
             </tr>
@@ -334,34 +335,48 @@ export default async function AdminCurrentTablePage() {
             {matches.map((m, idx) => {
               const no = m.stage_match_no ?? idx + 1;
               const resText =
-                m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
+                m.home_score == null || m.away_score == null
+                  ? "—"
+                  : `${m.home_score}:${m.away_score}`;
               const mid = Number(m.id);
 
               return (
                 <tr key={m.id}>
-                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{no}</td>
-
+                  <td style={{ fontWeight: 900 }}>{no}</td>
                   <td>
                     <div style={{ fontWeight: 900 }}>
                       {teamName(m.home_team)} — {teamName(m.away_team)}
                     </div>
                   </td>
-
-                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{resText}</td>
+                  <td style={{ fontWeight: 900 }}>{resText}</td>
 
                   {users.map((u) => {
-                    const pr = predByMatchUser.get(mid)?.get(u.user_id) ?? { h: null, a: null };
-                    const predText = pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
+                    const pr =
+                      predByMatchUser.get(mid)?.get(u.user_id) ?? {
+                        h: null,
+                        a: null,
+                      };
+
+                    const predText =
+                      pr.h == null || pr.a == null
+                        ? "—"
+                        : `${pr.h}:${pr.a}`;
+
                     const s = scoreByMatchUser.get(mid)?.get(u.user_id);
 
                     return (
                       <td key={u.user_id} className="ctCell">
                         <span className="predText">{predText}</span>
-
                         {s ? (
                           <PointsPopover
                             pts={Number(s.points)}
-                            breakdown={toPtsBDVariant1(m, u, predText, resText, s, pr)}
+                            breakdown={toPtsBDVariant1(
+                              m,
+                              predText,
+                              resText,
+                              s,
+                              pr
+                            )}
                           />
                         ) : null}
                       </td>
