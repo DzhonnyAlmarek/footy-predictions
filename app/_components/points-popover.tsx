@@ -5,26 +5,51 @@ import { useEffect, useId, useRef, useState } from "react";
 export type PointsBreakdown = {
   total: number;
 
-  // Компоненты (могут быть 0, если модель их не хранит)
-  teamGoals?: number; // 0..1 (0.5 + 0.5)
-  outcome?: number; // 0..(2 * mult) или просто 2
-  diff?: number; // 0..(1 * mult) или просто 1
+  // Текст
+  predText: string; // "2:1"
+  resText: string; // "2:1"
+
+  // Legacy-поля (могут приходить из prediction_scores)
+  teamGoals?: number; // 0..1
+  outcome?: number; // 0..(2*mult) или просто 2
+  diff?: number; // 0..(1*mult) или просто 1
   nearBonus?: number; // 0 или 0.5 или сумма бонусов
 
-  // Множители + причины (опционально; в points_ledger их нет)
   outcomeGuessed?: number;
-  outcomeMult?: number; // 1 / 1.25 / 1.5 / 1.75
+  outcomeMult?: number; // 1/1.25/1.5/1.75
   diffGuessed?: number;
   diffMult?: number;
 
-  // Для текста
-  predText: string; // "2:1"
-  resText: string; // "2:1"
+  // ✅ Ledger-детализация (points_ledger)
+  outcomeBase?: number;
+  outcomeMultBonus?: number; // бонус множителя по исходу
+  diffBase?: number;
+  diffMultBonus?: number; // бонус множителя по разнице
+
+  h1?: number;
+  h2?: number;
+  bonus?: number; // прочие бонусы
 };
 
 function fmt(n: number) {
   const v = Math.round(n * 100) / 100;
   return Number.isInteger(v) ? String(v) : String(v);
+}
+
+function safeNum(v: unknown) {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function deriveMult(totalPart: number, base: number) {
+  if (base <= 0) return null;
+  const m = totalPart / base;
+  const r = Math.round(m * 100) / 100;
+  return r;
 }
 
 function multLabel(mult: number, guessed: number) {
@@ -34,8 +59,7 @@ function multLabel(mult: number, guessed: number) {
   return `x1 (угадали ${guessed} участников)`;
 }
 
-function hasMultInfo(b: PointsBreakdown) {
-  // считаем, что “информация есть”, только если mult задан и guessed задан
+function hasLegacyMultInfo(b: PointsBreakdown) {
   const om = b.outcomeMult;
   const og = b.outcomeGuessed;
   const dm = b.diffMult;
@@ -73,16 +97,42 @@ export default function PointsPopover(props: { pts: number; breakdown: PointsBre
     };
   }, [open]);
 
-  const teamGoals = Number(breakdown.teamGoals ?? 0);
-  const outcome = Number(breakdown.outcome ?? 0);
-  const diff = Number(breakdown.diff ?? 0);
-  const nearBonus = Number(breakdown.nearBonus ?? 0);
+  // Ledger-поля
+  const outcomeBase = safeNum(breakdown.outcomeBase);
+  const outcomeMultBonus = safeNum(breakdown.outcomeMultBonus);
+  const diffBase = safeNum(breakdown.diffBase);
+  const diffMultBonus = safeNum(breakdown.diffMultBonus);
 
-  const showMult = hasMultInfo(breakdown);
+  const h1 = safeNum(breakdown.h1);
+  const h2 = safeNum(breakdown.h2);
+  const bonus = safeNum(breakdown.bonus);
 
-  // чтобы не показывать “пустые” строки, если компонент = 0 и он не релевантен
+  const hasLedgerDetail =
+    outcomeBase !== 0 ||
+    outcomeMultBonus !== 0 ||
+    diffBase !== 0 ||
+    diffMultBonus !== 0 ||
+    h1 !== 0 ||
+    h2 !== 0 ||
+    bonus !== 0;
+
+  // Итоги по компонентам
+  const outcomeTotal = hasLedgerDetail ? round2(outcomeBase + outcomeMultBonus) : safeNum(breakdown.outcome);
+  const diffTotal = hasLedgerDetail ? round2(diffBase + diffMultBonus) : safeNum(breakdown.diff);
+  const bonusesTotal = hasLedgerDetail ? round2(h1 + h2 + bonus) : safeNum(breakdown.nearBonus);
+
+  // legacy (командные голы)
+  const teamGoals = safeNum(breakdown.teamGoals);
+
+  // Вывод множителя в ledger-режиме (вычисляем из total/base)
+  const outcomeMultDerived = hasLedgerDetail ? deriveMult(outcomeTotal, outcomeBase) : null;
+  const diffMultDerived = hasLedgerDetail ? deriveMult(diffTotal, diffBase) : null;
+
+  // Показ строк (чтобы не засорять нулями)
   const showTeamGoals = teamGoals !== 0;
-  const showNearBonus = nearBonus !== 0;
+  const showBonuses = bonusesTotal !== 0;
+
+  const showLegacyMult = !hasLedgerDetail && hasLegacyMultInfo(breakdown);
 
   return (
     <span className="ppWrap">
@@ -102,12 +152,7 @@ export default function PointsPopover(props: { pts: number; breakdown: PointsBre
         <div ref={popRef} id={id} role="dialog" className="ppPop">
           <div className="ppTitle">
             <span>Начисление за матч</span>
-            <button
-              className="ppClose"
-              onClick={() => setOpen(false)}
-              aria-label="Закрыть"
-              type="button"
-            >
+            <button className="ppClose" onClick={() => setOpen(false)} aria-label="Закрыть" type="button">
               ✕
             </button>
           </div>
@@ -133,10 +178,19 @@ export default function PointsPopover(props: { pts: number; breakdown: PointsBre
           <div className="ppLine">
             <span className="ppKey">Исход</span>
             <span className="ppVal">
-              {fmt(outcome)}{" "}
-              {showMult && typeof breakdown.outcomeMult === "number" && typeof breakdown.outcomeGuessed === "number" ? (
+              {fmt(outcomeTotal)}
+              {hasLedgerDetail ? (
                 <span className="ppHint">
-                  ({multLabel(breakdown.outcomeMult, breakdown.outcomeGuessed)})
+                  {" "}
+                  (база {fmt(outcomeBase)}
+                  {outcomeMultDerived ? ` × ${fmt(outcomeMultDerived)}` : ""}
+                  {outcomeMultBonus !== 0 ? `, бонус множителя +${fmt(outcomeMultBonus)}` : ""}
+                  )
+                </span>
+              ) : showLegacyMult && breakdown.outcomeMult != null && breakdown.outcomeGuessed != null ? (
+                <span className="ppHint">
+                  {" "}
+                  ({multLabel(Number(breakdown.outcomeMult), Number(breakdown.outcomeGuessed))})
                 </span>
               ) : null}
             </span>
@@ -145,34 +199,53 @@ export default function PointsPopover(props: { pts: number; breakdown: PointsBre
           <div className="ppLine">
             <span className="ppKey">Разница</span>
             <span className="ppVal">
-              {fmt(diff)}{" "}
-              {showMult && typeof breakdown.diffMult === "number" && typeof breakdown.diffGuessed === "number" ? (
+              {fmt(diffTotal)}
+              {hasLedgerDetail ? (
                 <span className="ppHint">
-                  ({multLabel(breakdown.diffMult, breakdown.diffGuessed)})
+                  {" "}
+                  (база {fmt(diffBase)}
+                  {diffMultDerived ? ` × ${fmt(diffMultDerived)}` : ""}
+                  {diffMultBonus !== 0 ? `, бонус множителя +${fmt(diffMultBonus)}` : ""}
+                  )
+                </span>
+              ) : showLegacyMult && breakdown.diffMult != null && breakdown.diffGuessed != null ? (
+                <span className="ppHint">
+                  {" "}
+                  ({multLabel(Number(breakdown.diffMult), Number(breakdown.diffGuessed))})
                 </span>
               ) : null}
             </span>
           </div>
 
-          {showNearBonus && (
+          {showBonuses && (
             <div className="ppLine">
               <span className="ppKey">Бонусы</span>
-              <span className="ppVal">{fmt(nearBonus)}</span>
+              <span className="ppVal">
+                {fmt(bonusesTotal)}
+                {hasLedgerDetail ? (
+                  <span className="ppHint">
+                    {" "}
+                    (H1 {fmt(h1)} + H2 {fmt(h2)}
+                    {bonus !== 0 ? ` + бонус ${fmt(bonus)}` : ""}
+                    )
+                  </span>
+                ) : null}
+              </span>
             </div>
           )}
 
           <div className="ppHr" />
 
           <div className="ppTotal">
-            Итого: <b>{fmt(Number(breakdown.total ?? pts))}</b>
+            Итого: <b>{fmt(safeNum(breakdown.total ?? pts))}</b>
           </div>
 
-          {showMult && (
+          {showLegacyMult ? (
             <div className="ppMini">
               Угадали исход: <b>{Number(breakdown.outcomeGuessed ?? 0)}</b>, разницу:{" "}
               <b>{Number(breakdown.diffGuessed ?? 0)}</b>
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </span>

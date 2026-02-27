@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
@@ -56,6 +55,11 @@ type LedgerScoreRow = {
   points_h1: number;
   points_h2: number;
   points_bonus: number;
+
+  points_outcome_base: number;
+  points_outcome_bonus: number;
+  points_diff_base: number;
+  points_diff_bonus: number;
 };
 
 function teamName(t: TeamMaybeArray): string {
@@ -74,46 +78,27 @@ function formatPts(n: number | null): string {
   return Number.isInteger(x) ? String(x) : String(x);
 }
 
-/**
- * Мы больше НЕ используем prediction_scores (там были guessed/mult/pred_text/res_text).
- * Для поповера собираем breakdown из points_ledger.
- * Поля guessed/mult заполняем 0, тексты — из прогноза и результата матча.
- */
-function toPtsBDFromLedger(
-  l: LedgerScoreRow,
-  predText: string,
-  resText: string
-): PtsBD {
-  const total = Number(l.points ?? 0);
-
-  const outcome = Number(l.points_outcome ?? 0);
-  const diff = Number(l.points_diff ?? 0);
-  const h1 = Number(l.points_h1 ?? 0);
-  const h2 = Number(l.points_h2 ?? 0);
-  const bonus = Number(l.points_bonus ?? 0);
-
+function toPtsBDFromLedger(l: LedgerScoreRow, predText: string, resText: string): PtsBD {
   return {
-    total,
-
-    // В твоём UI это отдельное поле; в ledger его нет.
-    // Оставляем 0, чтобы не ломать типы/компонент.
-    teamGoals: 0,
-
-    outcome,
-    diff,
-
-    // nearBonus в старой модели = "приблизительный бонус"
-    // В ledger у тебя есть h1/h2/bonus — суммируем их.
-    nearBonus: round2(h1 + h2 + bonus),
-
-    // guessed/mult в ledger не хранятся
-    outcomeGuessed: 0,
-    outcomeMult: 0,
-    diffGuessed: 0,
-    diffMult: 0,
-
+    total: Number(l.points ?? 0),
     predText,
     resText,
+
+    // legacy поля (оставим для совместимости)
+    teamGoals: 0,
+    outcome: Number(l.points_outcome ?? 0),
+    diff: Number(l.points_diff ?? 0),
+    nearBonus: round2(Number(l.points_h1 ?? 0) + Number(l.points_h2 ?? 0) + Number(l.points_bonus ?? 0)),
+
+    // ✅ новые поля для понятной расшифровки
+    outcomeBase: Number(l.points_outcome_base ?? 0),
+    outcomeMultBonus: Number(l.points_outcome_bonus ?? 0),
+    diffBase: Number(l.points_diff_base ?? 0),
+    diffMultBonus: Number(l.points_diff_bonus ?? 0),
+
+    h1: Number(l.points_h1 ?? 0),
+    h2: Number(l.points_h2 ?? 0),
+    bonus: Number(l.points_bonus ?? 0),
   };
 }
 
@@ -160,7 +145,7 @@ export default async function AdminCurrentTablePage() {
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `)
-    .eq("stage_id", stage.id)
+    .eq("stage_id", (stage as any).id)
     .order("stage_match_no", { ascending: true, nullsFirst: false })
     .order("kickoff_at", { ascending: true });
 
@@ -177,16 +162,18 @@ export default async function AdminCurrentTablePage() {
   for (const p of predsRaw ?? []) {
     const mid = Number((p as any).match_id);
     if (!predByMatchUser.has(mid)) predByMatchUser.set(mid, new Map());
-    predByMatchUser.get(mid)!.set((p as any).user_id, {
+    predByMatchUser.get(mid)!.set(String((p as any).user_id), {
       h: (p as any).home_pred == null ? null : Number((p as any).home_pred),
       a: (p as any).away_pred == null ? null : Number((p as any).away_pred),
     });
   }
 
-  // ✅ ВМЕСТО prediction_scores читаем points_ledger
+  // ✅ ВМЕСТО prediction_scores читаем points_ledger (+ base/bonus)
   const { data: ledgerRaw } = await sb
     .from("points_ledger")
-    .select("match_id,user_id,points,points_outcome,points_diff,points_h1,points_h2,points_bonus")
+    .select(
+      "match_id,user_id,points,points_outcome,points_diff,points_h1,points_h2,points_bonus,points_outcome_base,points_outcome_bonus,points_diff_base,points_diff_bonus"
+    )
     .in("match_id", matchIds)
     .in("user_id", userIds);
 
@@ -205,10 +192,14 @@ export default async function AdminCurrentTablePage() {
       points_h1: Number(r.points_h1 ?? 0),
       points_h2: Number(r.points_h2 ?? 0),
       points_bonus: Number(r.points_bonus ?? 0),
+
+      points_outcome_base: Number(r.points_outcome_base ?? 0),
+      points_outcome_bonus: Number(r.points_outcome_bonus ?? 0),
+      points_diff_base: Number(r.points_diff_base ?? 0),
+      points_diff_bonus: Number(r.points_diff_bonus ?? 0),
     });
   }
 
-  // totals из ledger
   const totalByUser = new Map<string, number>();
   for (const u of users) totalByUser.set(u.user_id, 0);
 
@@ -273,7 +264,6 @@ export default async function AdminCurrentTablePage() {
                     return (
                       <td key={u.user_id} className="ctCell">
                         <span className="predText">{predText}</span>
-
                         {s ? (
                           <PointsPopover
                             pts={Number(s.points)}
