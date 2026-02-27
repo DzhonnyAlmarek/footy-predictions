@@ -3,14 +3,10 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
-import PointsPopover, {
-  type PointsBreakdown as PtsBD,
-} from "@/app/_components/points-popover";
+import PointsPopover, { type PointsBreakdown as PtsBD } from "@/app/_components/points-popover";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-/* ================= utils ================= */
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -34,50 +30,39 @@ function service() {
   );
 }
 
-/* ================= types ================= */
-
 type TeamMaybeArray = { name: string } | { name: string }[] | null;
 
 type MatchRow = {
   id: string;
   kickoff_at: string | null;
-  stage_match_no?: number | null; // ✅ добавили
+  stage_match_no?: number | null;
   home_score: number | null;
   away_score: number | null;
-  tour?: { name: string } | { name: string }[] | null;
   home_team: TeamMaybeArray;
   away_team: TeamMaybeArray;
 };
 
-type UserRow = {
-  login: string;
-  user_id: string;
-};
-
+type UserRow = { login: string; user_id: string };
 type Pred = { h: number | null; a: number | null };
 
-type ScoreRow = {
-  prediction_id: number;
+type LedgerScoreRow = {
   match_id: number;
   user_id: string;
 
-  total: number;
+  points: number;
 
-  team_goals: number;
-  outcome: number;
-  diff: number;
-  near_bonus: number;
+  points_outcome: number;
+  points_diff: number;
 
-  outcome_guessed: number;
-  outcome_mult: number;
-  diff_guessed: number;
-  diff_mult: number;
+  points_h1: number; // баллы за голы хозяев
+  points_h2: number; // баллы за голы гостей
+  points_bonus: number; // промах на 1 мяч
 
-  pred_text: string;
-  res_text: string;
+  points_outcome_base: number;
+  points_outcome_bonus: number;
+  points_diff_base: number;
+  points_diff_bonus: number;
 };
-
-/* ================= helpers ================= */
 
 function teamName(t: TeamMaybeArray): string {
   if (!t) return "?";
@@ -95,36 +80,29 @@ function formatPts(n: number | null): string {
   return Number.isInteger(x) ? String(x) : String(x);
 }
 
-function toPtsBD(s: ScoreRow): PtsBD {
-  return {
-    total: Number(s.total),
-    teamGoals: Number(s.team_goals),
-    outcome: Number(s.outcome),
-    diff: Number(s.diff),
-    nearBonus: Number(s.near_bonus),
-
-    outcomeGuessed: Number(s.outcome_guessed),
-    outcomeMult: Number(s.outcome_mult),
-    diffGuessed: Number(s.diff_guessed),
-    diffMult: Number(s.diff_mult),
-
-    predText: s.pred_text,
-    resText: s.res_text,
-  };
+function sign(n: number) {
+  if (n > 0) return 1;
+  if (n < 0) return -1;
+  return 0;
 }
 
-/* ================= page ================= */
+function deriveMult(totalPart: number, base: number): number | null {
+  if (!base || base <= 0) return null;
+  const m = totalPart / base;
+  const r = Math.round(m * 100) / 100;
+  return Number.isFinite(r) ? r : null;
+}
 
-export default async function DashboardCurrentTablePage() {
-  // auth via fp_login
+export default async function CurrentTablePage() {
   const cs = await cookies();
-  const rawLogin = cs.get("fp_login")?.value ?? "";
-  const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
+  const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
   if (!fpLogin) redirect("/");
+
+  // если у тебя есть отдельная логика "не пускать ADMIN сюда" — можно оставить/убрать
+  // if (fpLogin === "ADMIN") redirect("/admin/current-table");
 
   const sb = service();
 
-  // current stage
   const { data: stage } = await sb
     .from("stages")
     .select("id,name,status")
@@ -140,7 +118,6 @@ export default async function DashboardCurrentTablePage() {
     );
   }
 
-  // users (все участники, кроме ADMIN)
   const { data: usersRaw } = await sb
     .from("login_accounts")
     .select("login,user_id")
@@ -150,7 +127,6 @@ export default async function DashboardCurrentTablePage() {
   const users = (usersRaw ?? []) as UserRow[];
   const userIds = users.map((u) => u.user_id);
 
-  // matches
   const { data: matchesRaw } = await sb
     .from("matches")
     .select(`
@@ -159,55 +135,107 @@ export default async function DashboardCurrentTablePage() {
       stage_match_no,
       home_score,
       away_score,
-      tour:tours ( name ),
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `)
-    .eq("stage_id", stage.id)
-    // ✅ сортировка по номеру матча этапа (если есть), потом по дате
+    .eq("stage_id", (stage as any).id)
     .order("stage_match_no", { ascending: true, nullsFirst: false })
     .order("kickoff_at", { ascending: true });
 
   const matches = (matchesRaw ?? []) as MatchRow[];
   const matchIds = matches.map((m) => Number(m.id));
 
-  // predictions (нужны для отображения predText даже если матч не сыгран)
+  // прогнозы (текст в ячейке + подсчёт "угадали X из Y")
   const { data: predsRaw } = await sb
     .from("predictions")
-    .select("id,match_id,user_id,home_pred,away_pred")
+    .select("match_id,user_id,home_pred,away_pred")
     .in("match_id", matchIds)
     .in("user_id", userIds);
 
-  const predByMatchUser = new Map<number, Map<string, { pred: Pred; predictionId: number }>>();
+  const predByMatchUser = new Map<number, Map<string, Pred>>();
   for (const p of predsRaw ?? []) {
-    const mid = Number(p.match_id);
+    const mid = Number((p as any).match_id);
     if (!predByMatchUser.has(mid)) predByMatchUser.set(mid, new Map());
-    predByMatchUser.get(mid)!.set(p.user_id, {
-      predictionId: Number(p.id),
-      pred: {
-        h: p.home_pred == null ? null : Number(p.home_pred),
-        a: p.away_pred == null ? null : Number(p.away_pred),
-      },
+    predByMatchUser.get(mid)!.set(String((p as any).user_id), {
+      h: (p as any).home_pred == null ? null : Number((p as any).home_pred),
+      a: (p as any).away_pred == null ? null : Number((p as any).away_pred),
     });
   }
 
-  // prediction_scores for these matches/users
-  const { data: scoresRaw } = await sb
-    .from("prediction_scores")
+  // начисления (источник истины) — из points_ledger
+  const { data: ledgerRaw } = await sb
+    .from("points_ledger")
     .select(
-      "prediction_id,match_id,user_id,total,team_goals,outcome,diff,near_bonus,outcome_guessed,outcome_mult,diff_guessed,diff_mult,pred_text,res_text"
+      "match_id,user_id,points,points_outcome,points_diff,points_h1,points_h2,points_bonus,points_outcome_base,points_outcome_bonus,points_diff_base,points_diff_bonus"
     )
     .in("match_id", matchIds)
     .in("user_id", userIds);
 
-  const scoreByMatchUser = new Map<number, Map<string, ScoreRow>>();
-  for (const s of (scoresRaw ?? []) as any[]) {
-    const mid = Number(s.match_id);
+  const scoreByMatchUser = new Map<number, Map<string, LedgerScoreRow>>();
+  for (const r of (ledgerRaw ?? []) as any[]) {
+    const mid = Number(r.match_id);
     if (!scoreByMatchUser.has(mid)) scoreByMatchUser.set(mid, new Map());
-    scoreByMatchUser.get(mid)!.set(s.user_id, s as ScoreRow);
+    scoreByMatchUser.get(mid)!.set(String(r.user_id), {
+      match_id: Number(r.match_id),
+      user_id: String(r.user_id),
+
+      points: Number(r.points ?? 0),
+
+      points_outcome: Number(r.points_outcome ?? 0),
+      points_diff: Number(r.points_diff ?? 0),
+
+      points_h1: Number(r.points_h1 ?? 0),
+      points_h2: Number(r.points_h2 ?? 0),
+      points_bonus: Number(r.points_bonus ?? 0),
+
+      points_outcome_base: Number(r.points_outcome_base ?? 0),
+      points_outcome_bonus: Number(r.points_outcome_bonus ?? 0),
+      points_diff_base: Number(r.points_diff_base ?? 0),
+      points_diff_bonus: Number(r.points_diff_bonus ?? 0),
+    });
   }
 
-  // totals by user from stored scores
+  // "угадали X из Y" — считаем по прогнозам на матч (только заполненные прогнозы)
+  const outcomeGuessedByMatch = new Map<number, number>();
+  const diffGuessedByMatch = new Map<number, number>();
+  const totalPredsByMatch = new Map<number, number>();
+
+  for (const m of matches) {
+    const mid = Number(m.id);
+
+    if (m.home_score == null || m.away_score == null) {
+      outcomeGuessedByMatch.set(mid, 0);
+      diffGuessedByMatch.set(mid, 0);
+      totalPredsByMatch.set(mid, 0);
+      continue;
+    }
+
+    const resSign = sign(Number(m.home_score) - Number(m.away_score));
+    const resDiff = Number(m.home_score) - Number(m.away_score);
+
+    let totalPreds = 0;
+    let outcomeGuessed = 0;
+    let diffGuessed = 0;
+
+    const mp = predByMatchUser.get(mid);
+    for (const u of users) {
+      const pr = mp?.get(u.user_id);
+      if (!pr || pr.h == null || pr.a == null) continue;
+
+      totalPreds++;
+      const prSign = sign(pr.h - pr.a);
+      const prDiff = pr.h - pr.a;
+
+      if (prSign === resSign) outcomeGuessed++;
+      if (prDiff === resDiff) diffGuessed++;
+    }
+
+    outcomeGuessedByMatch.set(mid, outcomeGuessed);
+    diffGuessedByMatch.set(mid, diffGuessed);
+    totalPredsByMatch.set(mid, totalPreds);
+  }
+
+  // totals по пользователю из ledger
   const totalByUser = new Map<string, number>();
   for (const u of users) totalByUser.set(u.user_id, 0);
 
@@ -215,40 +243,84 @@ export default async function DashboardCurrentTablePage() {
     const mid = Number(m.id);
     for (const u of users) {
       const s = scoreByMatchUser.get(mid)?.get(u.user_id);
-      if (s) {
-        totalByUser.set(
-          u.user_id,
-          round2((totalByUser.get(u.user_id) ?? 0) + Number(s.total))
-        );
-      }
+      if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.points)));
     }
+  }
+
+  function toPtsBD(m: MatchRow, predText: string, resText: string, s: LedgerScoreRow, pr: Pred): PtsBD {
+    const outcomeTotal = Number(s.points_outcome ?? 0);
+    const outcomeBase = Number(s.points_outcome_base ?? 0);
+    const outcomeMultBonus = Number(s.points_outcome_bonus ?? 0);
+    const outcomeMult = deriveMult(outcomeTotal, outcomeBase);
+
+    const diffTotal = Number(s.points_diff ?? 0);
+    const diffBase = Number(s.points_diff_base ?? 0);
+    const diffMultBonus = Number(s.points_diff_bonus ?? 0);
+    const diffMult = deriveMult(diffTotal, diffBase);
+
+    const mid = Number(m.id);
+    const totalPreds = totalPredsByMatch.get(mid) ?? 0;
+
+    return {
+      total: Number(s.points ?? 0),
+      predText,
+      resText,
+
+      // голы команд — из ledger
+      homeGoalsPts: Number(s.points_h1 ?? 0),
+      awayGoalsPts: Number(s.points_h2 ?? 0),
+      homeGoalsPred: pr.h,
+      awayGoalsPred: pr.a,
+      homeGoalsRes: m.home_score,
+      awayGoalsRes: m.away_score,
+
+      // исход
+      outcomeBase,
+      outcomeTotal,
+      outcomeMultBonus,
+      outcomeMult: outcomeMult ?? undefined,
+      outcomeGuessed: outcomeGuessedByMatch.get(mid) ?? 0,
+      outcomeTotalPreds: totalPreds,
+
+      // разница
+      diffBase,
+      diffTotal,
+      diffMultBonus,
+      diffMult: diffMult ?? undefined,
+      diffGuessed: diffGuessedByMatch.get(mid) ?? 0,
+      diffTotalPreds: totalPreds,
+
+      // промах на 1 мяч — отдельно
+      nearMissPts: Number(s.points_bonus ?? 0),
+    };
   }
 
   return (
     <main className="page">
-      <h1>Текущая таблица</h1>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+        <h1>Текущая таблица</h1>
+        <Link href="/dashboard" className="link">
+          ← Назад
+        </Link>
+      </div>
+
       <div className="pageMeta">
-        Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-        {stage.status ? <span> • {stage.status}</span> : null}
+        Этап: <b>{(stage as any).name ?? `#${(stage as any).id}`}</b>
+        {(stage as any).status ? <span> • {(stage as any).status}</span> : null}
       </div>
 
       <div className="tableWrap">
-        <table className="table" style={{ minWidth: 980 }}>
+        <table className="table currentTable">
           <thead>
             <tr>
-              {/* ✅ новая колонка № */}
               <th style={{ width: 54 }}>№</th>
-              <th style={{ width: 110 }}>Дата</th>
-              <th>Матч</th>
+              <th style={{ width: 320 }}>Матч</th>
               <th style={{ width: 70 }}>Рез.</th>
 
               {users.map((u) => (
                 <th key={u.user_id} className="ctUserHead">
                   {u.login}
-                  <span style={{ opacity: 0.7, fontWeight: 800 }}>
-                    {" "}
-                    ({formatPts(totalByUser.get(u.user_id) ?? 0)})
-                  </span>
+                  <span className="ctTotal">({formatPts(totalByUser.get(u.user_id) ?? 0)})</span>
                 </th>
               ))}
             </tr>
@@ -256,25 +328,14 @@ export default async function DashboardCurrentTablePage() {
 
           <tbody>
             {matches.map((m, idx) => {
-              const date = m.kickoff_at
-                ? new Date(m.kickoff_at).toLocaleDateString("ru-RU")
-                : "—";
-
-              const no = m.stage_match_no ?? idx + 1; // ✅ номер матча этапа
-
-              const res =
-                m.home_score == null || m.away_score == null
-                  ? "—"
-                  : `${m.home_score}:${m.away_score}`;
-
+              const no = m.stage_match_no ?? idx + 1;
+              const resText =
+                m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
               const mid = Number(m.id);
 
               return (
                 <tr key={m.id}>
-                  {/* ✅ № */}
                   <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{no}</td>
-
-                  <td style={{ whiteSpace: "nowrap" }}>{date}</td>
 
                   <td>
                     <div style={{ fontWeight: 900 }}>
@@ -282,22 +343,21 @@ export default async function DashboardCurrentTablePage() {
                     </div>
                   </td>
 
-                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{res}</td>
+                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{resText}</td>
 
                   {users.map((u) => {
-                    const predPack = predByMatchUser.get(mid)?.get(u.user_id);
-                    const pr = predPack?.pred ?? { h: null, a: null };
-
-                    const predText =
-                      pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
-
+                    const pr = predByMatchUser.get(mid)?.get(u.user_id) ?? { h: null, a: null };
+                    const predText = pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
                     const s = scoreByMatchUser.get(mid)?.get(u.user_id);
 
                     return (
                       <td key={u.user_id} className="ctCell">
                         <span className="predText">{predText}</span>
                         {s ? (
-                          <PointsPopover pts={Number(s.total)} breakdown={toPtsBD(s)} />
+                          <PointsPopover
+                            pts={Number(s.points)}
+                            breakdown={toPtsBD(m, predText, resText, s, pr)}
+                          />
                         ) : null}
                       </td>
                     );
@@ -308,7 +368,6 @@ export default async function DashboardCurrentTablePage() {
           </tbody>
         </table>
       </div>
-
     </main>
   );
 }
