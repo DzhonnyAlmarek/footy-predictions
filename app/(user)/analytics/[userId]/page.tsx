@@ -60,22 +60,22 @@ type ArchRow = {
 };
 
 const TIP = {
-  points:
-    "Очки — сумма points_ledger.points по матчам текущего этапа (reason='prediction').",
-  ppm:
-    "Очки/матч = Очки / Матчи. Лучше сравнивать людей именно по этому.",
+  points: "Сколько очков вы набрали за учтённые матчи этапа.",
+  avgPoints:
+    "Среднее число очков за один учтённый матч. Удобно сравнивать, если у людей разное число матчей.",
   outcome:
-    "Исход % — совпал знак (home-away) в прогнозе и результате: победа/ничья/поражение.",
+    "Как часто вы угадываете победу/ничью/поражение (1/X/2), даже если точный счёт не совпал.",
   diff:
-    "Разница % — совпала разница: (home-away) в прогнозе и результате.",
-  exact:
-    "Точный % — прогноз полностью совпал со счётом.",
+    "Как часто вы угадываете разницу мячей (например 2:1 и 3:2 — обе разница +1).",
+  exact: "Как часто вы угадываете точный счёт.",
   form:
-    "Форма = avg(очки последних 5 матчей) − avg(очки всех матчей этапа).",
+    "Показывает, стали ли последние матчи лучше вашего среднего уровня. Плюс — вы набираете больше обычного, минус — меньше.",
   spark:
-    "График — очки по матчам в порядке времени (последние 12 значений).",
+    "Очки по матчам подряд (слева старее → справа новее). Видно серии и провалы.",
   archetype:
-    "Архетип — стиль прогнозов (осторожный/смелый/точный и т.п.). Это про манеру, а не про силу.",
+    "Ваш стиль прогнозов. Это про манеру, а не про “сильнее/слабее”.",
+  pointsCheck:
+    "Проверка: сравниваем “Очки” со суммой очков по матчам. Если есть ⚠️ — значит где-то ещё не обновилось или есть расхождение в учёте матчей.",
 };
 
 function pct(a: number, b: number) {
@@ -84,6 +84,9 @@ function pct(a: number, b: number) {
 }
 function n2(v: number) {
   return (Math.round(v * 100) / 100).toFixed(2);
+}
+function sumNums(arr: number[]) {
+  return (arr ?? []).reduce((s, x) => s + (Number.isFinite(x) ? x : 0), 0);
 }
 
 function Sparkline({ values }: { values: number[] }) {
@@ -185,14 +188,19 @@ export default async function AnalyticsUserPage({ params }: Props) {
     .eq("user_id", userId)
     .maybeSingle<ArchRow>();
 
-  const matches = agg?.matches_count ?? 0;
+  const matches = Number(agg?.matches_count ?? 0);
   const pointsSum = Number(agg?.points_sum ?? 0);
-  const ppm = matches ? pointsSum / matches : 0;
+  const avgPoints = matches ? pointsSum / matches : 0;
 
   const seriesRaw = mom?.momentum_series ?? [];
   const series = Array.isArray(seriesRaw) ? seriesRaw.map((x: any) => Number(x ?? 0)) : [];
+  const seriesSum = sumNums(series);
 
-  const updated = (arch?.updated_at || mom?.updated_at) ? new Date((arch?.updated_at ?? mom?.updated_at) as string).toLocaleString("ru-RU") : "—";
+  const mismatch = series.length ? Math.abs(pointsSum - seriesSum) > 0.01 : false;
+
+  const updated = (arch?.updated_at || mom?.updated_at)
+    ? new Date((arch?.updated_at ?? mom?.updated_at) as string).toLocaleString("ru-RU")
+    : "—";
 
   return (
     <div className="page">
@@ -205,17 +213,17 @@ export default async function AnalyticsUserPage({ params }: Props) {
       </div>
 
       <details className="helpBox" style={{ marginTop: 10 }}>
-        <summary className="helpSummary">Пояснения (как считается)</summary>
+        <summary className="helpSummary">Пояснения (что означает и как читать)</summary>
         <div className="helpBody">
           <ul className="helpList">
-            <li><b>Очки</b>: {TIP.points}</li>
-            <li><b>Очки/матч</b>: {TIP.ppm}</li>
-            <li><b>Исход %</b>: {TIP.outcome}</li>
-            <li><b>Разница %</b>: {TIP.diff}</li>
-            <li><b>Точный %</b>: {TIP.exact}</li>
-            <li><b>Форма</b>: {TIP.form}</li>
-            <li><b>График</b>: {TIP.spark}</li>
-            <li><b>Архетип</b>: {TIP.archetype}</li>
+            <li><b>Очки</b> — {TIP.points}</li>
+            <li><b>Средние очки</b> — {TIP.avgPoints}</li>
+            <li><b>Исход %</b> — {TIP.outcome}</li>
+            <li><b>Разница %</b> — {TIP.diff}</li>
+            <li><b>Точный %</b> — {TIP.exact}</li>
+            <li><b>Форма</b> — {TIP.form}</li>
+            <li><b>График</b> — {TIP.spark}</li>
+            <li><b>Архетип</b> — {TIP.archetype}</li>
           </ul>
         </div>
       </details>
@@ -223,7 +231,7 @@ export default async function AnalyticsUserPage({ params }: Props) {
       <div className="card" style={{ marginTop: 14 }}>
         <div className="cardBody">
           <div className="kpiRow">
-            <div className="kpi" title="Матчи учтено">
+            <div className="kpi" title="Сколько матчей учтено для вас">
               <div className="kpiLabel">Матчей</div>
               <div className="kpiValue">{matches}</div>
             </div>
@@ -233,25 +241,33 @@ export default async function AnalyticsUserPage({ params }: Props) {
               <div className="kpiValue">{n2(pointsSum)}</div>
             </div>
 
-            <div className="kpi" title={TIP.ppm}>
-              <div className="kpiLabel">Очки/матч</div>
-              <div className="kpiValue">{n2(ppm)}</div>
+            <div className="kpi" title={TIP.avgPoints}>
+              <div className="kpiLabel">Средние очки</div>
+              <div className="kpiValue">{n2(avgPoints)}</div>
             </div>
 
             <div className="kpi" title={TIP.outcome}>
               <div className="kpiLabel">Исход</div>
-              <div className="kpiValue">{pct(agg?.outcome_hit_count ?? 0, matches)}</div>
+              <div className="kpiValue">{pct(Number(agg?.outcome_hit_count ?? 0), matches)}</div>
             </div>
 
             <div className="kpi" title={TIP.diff}>
               <div className="kpiLabel">Разница</div>
-              <div className="kpiValue">{pct(agg?.diff_hit_count ?? 0, matches)}</div>
+              <div className="kpiValue">{pct(Number(agg?.diff_hit_count ?? 0), matches)}</div>
             </div>
 
             <div className="kpi" title={TIP.exact}>
               <div className="kpiLabel">Точный</div>
-              <div className="kpiValue">{pct(agg?.exact_count ?? 0, matches)}</div>
+              <div className="kpiValue">{pct(Number(agg?.exact_count ?? 0), matches)}</div>
             </div>
+          </div>
+
+          <div style={{ marginTop: 10, opacity: 0.85 }} title={TIP.pointsCheck}>
+            {mismatch ? (
+              <span style={{ fontWeight: 900 }}>⚠️ проверка очков по матчам: {n2(seriesSum)}</span>
+            ) : (
+              <span>проверка очков по матчам: {n2(seriesSum)}</span>
+            )}
           </div>
         </div>
       </div>
@@ -283,6 +299,13 @@ export default async function AnalyticsUserPage({ params }: Props) {
           ) : null}
         </div>
       </div>
+
+      {mismatch ? (
+        <div className="analyticsHintSmall" style={{ marginTop: 10 }} title={TIP.pointsCheck}>
+          ⚠️ Есть расхождение “Очки” и “проверка очков по матчам”. Обычно помогает повторный пересчёт последнего матча
+          (в админке через “Счёт”).
+        </div>
+      ) : null}
 
       <div style={{ marginTop: 14 }}>
         <Link href="/analytics" className="navLink">← Назад к списку</Link>

@@ -28,20 +28,12 @@ type AggRow = {
   user_id: string;
   matches_count: number;
 
-  points_sum: number;
-  points_avg: number;
+  points_sum: number; // очки за этап
+  points_avg: number; // средние очки
 
   exact_count: number;
   outcome_hit_count: number;
   diff_hit_count: number;
-
-  pred_home_count: number;
-  pred_draw_count: number;
-  pred_away_count: number;
-
-  pred_total_sum: number;
-  pred_absdiff_sum: number;
-  pred_bigdiff_count: number;
 };
 
 type ArchRow = {
@@ -84,6 +76,9 @@ function pct01(v: number) {
 function n2(v: number) {
   return (Math.round(v * 100) / 100).toFixed(2);
 }
+function sumNums(arr: number[]) {
+  return (arr ?? []).reduce((s, x) => s + (Number.isFinite(x) ? x : 0), 0);
+}
 
 function archetypeIcon(key: string): string {
   switch (key) {
@@ -118,31 +113,31 @@ function badgeClassByKey(key: string) {
   }
 }
 
-/* ---------- tooltips text (single source of truth) ---------- */
+/* ---------- user-level tips (no dev jargon) ---------- */
 
 const TIP = {
   updated:
-    "Дата обновления — когда последний раз пересчитывали analytics_* таблицы. Пересчёт запускается после нажатия «Счёт» по матчу.",
+    "Когда статистика последний раз обновлялась после сыгранного матча.",
   matches:
-    "Матчи — сколько завершённых матчей этапа вошло в расчёт для участника. Учитываются только матчи со status='finished' и заполненным счётом, и только заполненные прогнозы.",
+    "Сколько сыгранных матчей уже учтено именно для вас. Матч считается, если он завершён и у вас был заполнен прогноз.",
   points:
-    "Очки — сумма points_ledger.points по матчам этого этапа, где reason='prediction'.",
-  ppm:
-    "Очки/матч = Очки / Матчи. Это самый честный показатель, когда у людей разное число учтённых матчей.",
+    "Сколько очков вы набрали за учтённые матчи этапа.",
+  avgPoints:
+    "Среднее число очков за один учтённый матч. Удобно сравнивать участников, если матчей учтено разное число.",
   outcome:
-    "Исход % — доля матчей, где угадан 1/X/2 (П1/Н/П2). Считается по sign(home_pred-away_pred) == sign(home_score-away_score).",
+    "Как часто вы угадываете победу/ничью/поражение (1/X/2), даже если точный счёт не совпал.",
   diff:
-    "Разница % — доля матчей, где угадана разница голов: (home_pred-away_pred) == (home_score-away_score).",
+    "Как часто вы угадываете разницу мячей (например 2:1 и 3:2 — обе разница +1).",
   exact:
-    "Точный % — доля матчей, где прогноз полностью совпал со счётом: home_pred=home_score и away_pred=away_score.",
+    "Как часто вы угадываете точный счёт.",
   form:
-    "Форма — (средние очки за последние 5 матчей) − (средние очки за весь этап). Плюс значит: последние матчи лучше среднего.",
+    "Показывает, стали ли последние матчи лучше вашего среднего уровня. Плюс — вы набираете больше обычного, минус — меньше.",
   spark:
-    "График формы — очки по матчам (из points_ledger) в хронологическом порядке. Показываем последние 10 значений.",
+    "Очки по матчам подряд (слева старее → справа новее). Видно серии и провалы.",
   archetype:
-    "Архетип — стиль прогнозов. Мы смотрим на частоту ничьих, среднюю разницу в прогнозах, «смелость» (частые большие разницы), и частоту точных попаданий. Это не про «сильнее/слабее», а про манеру.",
-  top:
-    "TOP считается только среди участников, у кого учтено минимум матчей (порог указан рядом).",
+    "Ваш стиль прогнозов (осторожный/смелый/точный и т.д.). Это про манеру, а не про “сильнее/слабее”.",
+  pointsCheck:
+    "Проверка: сравниваем “Очки” со суммой очков по матчам. Если есть ⚠️ — значит где-то ещё не обновилось или есть расхождение в учёте матчей.",
 };
 
 /* ---------- tiny UI helpers ---------- */
@@ -188,7 +183,7 @@ function Sparkline({ values }: { values: number[] }) {
   const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join(" ");
 
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Форма (очки по матчам)">
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Очки по матчам">
       <path d={d} stroke="rgba(37,99,235,.85)" strokeWidth="2" fill="none" strokeLinecap="round" />
     </svg>
   );
@@ -230,7 +225,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const sb = service();
   const sp = (searchParams ? await searchParams : {}) as SearchParams;
 
-  const sort = (sp.sort ?? "ppm").toLowerCase(); // ppm|points|matches|outcome|diff|exact|name|form
+  const sort = (sp.sort ?? "avg").toLowerCase(); // avg|points|matches|outcome|diff|exact|name|form
   const mode = (sp.mode ?? "compact").toLowerCase() === "details" ? "details" : "compact";
 
   const { data: stage, error: sErr } = await sb
@@ -289,9 +284,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   const { data: aggRows } = await sb
     .from("analytics_stage_user")
-    .select(
-      "stage_id,user_id,matches_count,points_sum,points_avg,exact_count,outcome_hit_count,diff_hit_count,pred_home_count,pred_draw_count,pred_away_count,pred_total_sum,pred_absdiff_sum,pred_bigdiff_count"
-    )
+    .select("stage_id,user_id,matches_count,points_sum,points_avg,exact_count,outcome_hit_count,diff_hit_count")
     .eq("stage_id", stageId)
     .in("user_id", userIds);
 
@@ -325,16 +318,19 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
     const name = (prof?.display_name ?? "").trim() || (acc?.login ?? "").trim() || uid.slice(0, 8);
 
-    const matches = agg?.matches_count ?? 0;
+    const matches = Number(agg?.matches_count ?? 0);
     const pointsSum = Number(agg?.points_sum ?? 0);
-    const ppm = matches ? pointsSum / matches : 0;
 
-    const exactRate = safeDiv(agg?.exact_count ?? 0, matches);
-    const outcomeRate = safeDiv(agg?.outcome_hit_count ?? 0, matches);
-    const diffRate = safeDiv(agg?.diff_hit_count ?? 0, matches);
+    // IMPORTANT: avg показываем как pointsSum/matches (на всякий случай), а не как "points_avg" (чтобы не было рассинхрона)
+    const avgPoints = matches ? pointsSum / matches : 0;
+
+    const exactRate = safeDiv(Number(agg?.exact_count ?? 0), matches);
+    const outcomeRate = safeDiv(Number(agg?.outcome_hit_count ?? 0), matches);
+    const diffRate = safeDiv(Number(agg?.diff_hit_count ?? 0), matches);
 
     const seriesRaw = mom?.momentum_series ?? [];
     const series = Array.isArray(seriesRaw) ? seriesRaw.map((x: any) => Number(x ?? 0)) : [];
+    const seriesSum = sumNums(series);
 
     const momentum = Number(mom?.momentum_current ?? 0);
 
@@ -348,11 +344,12 @@ export default async function AnalyticsPage({ searchParams }: Props) {
       name,
       matches,
       pointsSum,
-      ppm,
+      avgPoints,
       exactRate,
       outcomeRate,
       diffRate,
       series,
+      seriesSum,
       momentum,
       archetype_key,
       title_ru,
@@ -361,20 +358,17 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     };
   });
 
-  // TOP (честность): только у кого матчей достаточно
-  const MIN_TOP_MATCHES = 3;
-  const withEnough = cards.filter((c) => c.matches >= MIN_TOP_MATCHES);
-
+  // TOP (6 плиток): выбираем лидеров по метрикам
   const pickTop = <T,>(arr: T[], score: (x: any) => number) =>
     [...arr].sort((a: any, b: any) => score(b) - score(a) || (b.matches ?? 0) - (a.matches ?? 0))[0] ?? null;
 
-  const topPPM = withEnough.length ? pickTop(withEnough, (c) => c.ppm) : null;
-  const topForm = withEnough.length ? pickTop(withEnough, (c) => c.momentum) : null;
-  const topPoints = withEnough.length ? pickTop(withEnough, (c) => c.pointsSum) : null;
+  const topAvg = pickTop(cards, (c) => c.avgPoints);
+  const topForm = pickTop(cards, (c) => c.momentum);
+  const topPoints = pickTop(cards, (c) => c.pointsSum);
 
-  const topOutcome = withEnough.length ? pickTop(withEnough, (c) => c.outcomeRate) : null;
-  const topDiff = withEnough.length ? pickTop(withEnough, (c) => c.diffRate) : null;
-  const topExact = withEnough.length ? pickTop(withEnough, (c) => c.exactRate) : null;
+  const topOutcome = pickTop(cards, (c) => c.outcomeRate);
+  const topDiff = pickTop(cards, (c) => c.diffRate);
+  const topExact = pickTop(cards, (c) => c.exactRate);
 
   const sorted = [...cards].sort((a, b) => {
     if (sort === "name") return a.name.localeCompare(b.name, "ru");
@@ -384,11 +378,10 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     if (sort === "outcome") return b.outcomeRate - a.outcomeRate;
     if (sort === "diff") return b.diffRate - a.diffRate;
     if (sort === "form") return b.momentum - a.momentum;
-    return b.ppm - a.ppm; // ppm default
+    return b.avgPoints - a.avgPoints; // avg default
   });
 
   const updated = baseline?.updated_at ? new Date(baseline.updated_at).toLocaleString("ru-RU") : "—";
-  const usersCount = baseline?.users_count ?? userIds.length;
 
   const q = (p: Partial<SearchParams>) => {
     const s = new URLSearchParams();
@@ -397,11 +390,16 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     return `/analytics?${s.toString()}`;
   };
 
-  function fmtMomentum(m: number, matches: number) {
-    if (matches < MIN_TOP_MATCHES) return "н/д";
+  function fmtMomentum(m: number) {
     const arrow = m > 0.02 ? "↗" : m < -0.02 ? "↘" : "→";
     const sign = m >= 0 ? "+" : "";
     return `${sign}${n2(m)} ${arrow}`;
+  }
+
+  // Для “проверки очков”: сравним pointsSum с суммой серии (если серия есть)
+  function pointsMismatch(pointsSum: number, seriesSum: number, seriesLen: number) {
+    if (!seriesLen) return false;
+    return Math.abs(pointsSum - seriesSum) > 0.01;
   }
 
   return (
@@ -416,22 +414,19 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </div>
 
           <details className="helpBox" style={{ marginTop: 10 }}>
-            <summary className="helpSummary">Пояснения (как читаем и как считается)</summary>
+            <summary className="helpSummary">Пояснения (что означает и как читать)</summary>
             <div className="helpBody">
               <ul className="helpList">
-                <li><b>Матчи</b>: {TIP.matches}</li>
-                <li><b>Очки</b>: {TIP.points}</li>
-                <li><b>Очки/матч</b>: {TIP.ppm}</li>
-                <li><b>Исход %</b>: {TIP.outcome}</li>
-                <li><b>Разница %</b>: {TIP.diff}</li>
-                <li><b>Точный %</b>: {TIP.exact}</li>
-                <li><b>Форма</b>: {TIP.form}</li>
-                <li><b>Архетип</b>: {TIP.archetype}</li>
+                <li><b>Матчи</b> — {TIP.matches}</li>
+                <li><b>Очки</b> — {TIP.points}</li>
+                <li><b>Средние очки</b> — {TIP.avgPoints}</li>
+                <li><b>Исход %</b> — {TIP.outcome}</li>
+                <li><b>Разница %</b> — {TIP.diff}</li>
+                <li><b>Точный %</b> — {TIP.exact}</li>
+                <li><b>Форма</b> — {TIP.form}</li>
+                <li><b>График</b> — {TIP.spark}</li>
+                <li><b>Архетип</b> — {TIP.archetype}</li>
               </ul>
-              <div style={{ marginTop: 10, opacity: 0.8 }}>
-                Обновление происходит автоматически после нажатия <b>«Счёт»</b> в админке (мы пересчитываем
-                points_ledger и затем analytics_* таблицы).
-              </div>
             </div>
           </details>
         </div>
@@ -444,7 +439,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             Подробнее
           </Link>
 
-          <Link href={q({ sort: "ppm" })} className="appNavLink" title={TIP.ppm}>Сорт: Очки/матч</Link>
+          <Link href={q({ sort: "avg" })} className="appNavLink" title={TIP.avgPoints}>Сорт: Средние очки</Link>
           <Link href={q({ sort: "form" })} className="appNavLink" title={TIP.form}>Форма</Link>
           <Link href={q({ sort: "points" })} className="appNavLink" title={TIP.points}>Очки</Link>
           <Link href={q({ sort: "matches" })} className="appNavLink" title={TIP.matches}>Матчи</Link>
@@ -455,44 +450,22 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      <div className="analyticsSummary" style={{ marginTop: 14 }}>
-        <div className="card analyticsSummaryCard">
-          <div className="analyticsSummaryInner" title="Сколько участников (без ADMIN)">
-            <div className="analyticsSummaryLabel">Участников</div>
-            <div className="analyticsSummaryValue">{usersCount}</div>
-          </div>
-        </div>
-
-        <div className="card analyticsSummaryCard">
-          <div className="analyticsSummaryInner" title="Режим страницы">
-            <div className="analyticsSummaryLabel">Режим</div>
-            <div className="analyticsSummaryValue">{mode === "compact" ? "Коротко" : "Подробнее"}</div>
-          </div>
-        </div>
-
-        <div className="card analyticsSummaryCard">
-          <div className="analyticsSummaryInner" title={TIP.top}>
-            <div className="analyticsSummaryLabel">TOP-порог</div>
-            <div className="analyticsSummaryValue">
-              {MIN_TOP_MATCHES} <span className="analyticsSummaryMuted">матча</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* TOP */}
+      {/* TOP: 2 колонки × 3 ряда */}
       <div style={{ marginTop: 14 }}>
         <div className="analyticsSectionTitle">TOP по этапу</div>
 
-        <div className="analyticsTopGrid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" as any }}>
-          {topPPM ? (
+        <div
+          className="analyticsTopGrid"
+          style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" as any, gap: 10 }}
+        >
+          {topAvg ? (
             <TopMiniCard
-              title="🏆 Очки/матч"
-              href={`/analytics/${topPPM.uid}`}
-              name={topPPM.name}
-              value={n2(topPPM.ppm)}
-              meta={`Матчей: ${topPPM.matches}`}
-              tip={TIP.ppm}
+              title="🏆 Средние очки"
+              href={`/analytics/${topAvg.uid}`}
+              name={topAvg.name}
+              value={n2(topAvg.avgPoints)}
+              meta={`Матчей: ${topAvg.matches}`}
+              tip={TIP.avgPoints}
             />
           ) : null}
 
@@ -501,7 +474,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               title="📈 Форма"
               href={`/analytics/${topForm.uid}`}
               name={topForm.name}
-              value={fmtMomentum(topForm.momentum, topForm.matches)}
+              value={fmtMomentum(topForm.momentum)}
               meta={`Матчей: ${topForm.matches}`}
               tip={TIP.form}
             />
@@ -517,9 +490,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               tip={TIP.points}
             />
           ) : null}
-        </div>
 
-        <div className="analyticsTopGrid" style={{ marginTop: 10, gridTemplateColumns: "repeat(3, minmax(0, 1fr))" as any }}>
           {topOutcome ? (
             <TopMiniCard
               title="🎯 Исход %"
@@ -553,10 +524,6 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             />
           ) : null}
         </div>
-
-        <div className="analyticsHint" title={TIP.top}>
-          TOP считается только для участников, у кого учтено <b>{MIN_TOP_MATCHES}+</b> матча.
-        </div>
       </div>
 
       {/* table */}
@@ -574,8 +541,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 <ThHelp label="Очки" tip={TIP.points} />
               </th>
 
-              <th className="thCenter" style={{ width: 120 }}>
-                <ThHelp label="Очки/матч" tip={TIP.ppm} />
+              <th className="thCenter" style={{ width: 140 }}>
+                <ThHelp label="Средние очки" tip={TIP.avgPoints} />
               </th>
 
               <th className="thCenter" style={{ width: 110 }}>
@@ -595,7 +562,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
               </th>
 
               {mode === "details" ? (
-                <th className="thCenter" style={{ width: 170 }}>
+                <th className="thCenter" style={{ width: 220 }}>
                   <ThHelp label="Форма" tip={TIP.spark} />
                 </th>
               ) : null}
@@ -605,6 +572,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           <tbody>
             {sorted.map((c) => {
               const icon = archetypeIcon(c.archetype_key);
+              const mismatch = pointsMismatch(c.pointsSum, c.seriesSum, c.series.length);
 
               return (
                 <tr key={c.uid}>
@@ -625,8 +593,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                     <b>{n2(c.pointsSum)}</b>
                   </td>
 
-                  <td className="tdCenter" title={TIP.ppm}>
-                    <b>{n2(c.ppm)}</b>
+                  <td className="tdCenter" title={TIP.avgPoints}>
+                    <b>{n2(c.avgPoints)}</b>
                   </td>
 
                   <td className="tdCenter" title={TIP.outcome}>
@@ -650,12 +618,25 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                   </td>
 
                   {mode === "details" ? (
-                    <td className="tdCenter" title={TIP.spark}>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                        <Sparkline values={c.series} />
+                    <td className="tdCenter">
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                        <div title={TIP.spark}>
+                          <Sparkline values={c.series} />
+                        </div>
+
                         <span className="badge isNeutral" title={TIP.form}>
-                          {fmtMomentum(c.momentum, c.matches)}
+                          {fmtMomentum(c.momentum)}
                         </span>
+
+                        <div style={{ fontSize: 12, opacity: 0.8 }} title={TIP.pointsCheck}>
+                          {mismatch ? (
+                            <span style={{ fontWeight: 900 }}>
+                              ⚠️ проверка очков: {n2(c.seriesSum)}
+                            </span>
+                          ) : (
+                            <span>проверка очков: {n2(c.seriesSum)}</span>
+                          )}
+                        </div>
                       </div>
                     </td>
                   ) : null}
@@ -666,9 +647,10 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         </table>
       </div>
 
-      {mode === "compact" ? (
-        <div className="analyticsHintSmall">
-          Детали (описание архетипа, спарклайн формы, число “форма”) — включи режим <b>Подробнее</b>.
+      {mode === "details" ? (
+        <div className="analyticsHintSmall" title={TIP.pointsCheck}>
+          Если рядом с “проверка очков” есть ⚠️ — значит сейчас есть расхождение в учёте матчей/обновлении данных.
+          Обычно помогает повторный пересчёт последнего матча (через “Счёт”).
         </div>
       ) : null}
 
