@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -19,65 +20,146 @@ function service() {
 }
 
 type StageRow = { id: number; name: string; status?: string | null };
-
 type LoginAccountRow = { user_id: string; login: string };
 type ProfileRow = { id: string; display_name: string | null };
 
-type MatchRow = {
-  id: number;
+type AggRow = {
   stage_id: number;
-  status: string | null;
-  home_score: number | null;
-  away_score: number | null;
-};
-
-type PredRow = {
-  match_id: number;
   user_id: string;
-  home_pred: number | null;
-  away_pred: number | null;
+  matches_count: number;
+
+  points_sum: number;
+  points_avg: number;
+
+  exact_count: number;
+  outcome_hit_count: number;
+  diff_hit_count: number;
+
+  pred_home_count: number;
+  pred_draw_count: number;
+  pred_away_count: number;
+
+  pred_total_sum: number;
+  pred_absdiff_sum: number;
+  pred_bigdiff_count: number;
 };
 
-type LedgerRow = {
-  match_id: number;
+type ArchRow = {
+  stage_id: number;
   user_id: string;
-  points: number;
-  reason: string | null;
+  archetype_key: string;
+  title_ru: string;
+  summary_ru: string;
+  state: "forming" | "preliminary" | "final";
+  updated_at: string;
 };
 
-type SearchParams = {
-  sort?: string; // points|matches|exact|outcome|diff|name
+type MomRow = {
+  stage_id: number;
+  user_id: string;
+  matches_count: number;
+  momentum_current: number;
+  momentum_series: any;
+  avg_last_n: number;
+  avg_all: number;
+  n: number;
+  k: number;
+  updated_at: string;
 };
 
-type Props = {
-  searchParams?: Promise<SearchParams>;
-};
+type BaselineRow = { stage_id: number; users_count: number; updated_at: string };
 
-function sign(n: number) {
-  if (n > 0) return 1;
-  if (n < 0) return -1;
-  return 0;
-}
+type SearchParams = { sort?: string; mode?: string };
+type Props = { searchParams?: Promise<SearchParams> };
 
 function safeDiv(a: number, b: number) {
   if (!b) return 0;
   return a / b;
 }
-
 function pct01(v: number) {
   return `${Math.round(v * 100)}%`;
 }
-
 function n2(v: number) {
   return (Math.round(v * 100) / 100).toFixed(2);
+}
+function archetypeIcon(key: string): string {
+  switch (key) {
+    case "sniper":
+      return "🏹";
+    case "peacekeeper":
+      return "🤝";
+    case "risky":
+      return "🔥";
+    case "rational":
+      return "🧠";
+    case "forming":
+      return "⏳";
+    default:
+      return "⚽";
+  }
+}
+function badgeClassByKey(key: string) {
+  switch (key) {
+    case "sniper":
+      return "badge isOk";
+    case "peacekeeper":
+      return "badge isInfo";
+    case "risky":
+      return "badge isWarn";
+    case "rational":
+      return "badge isInfo";
+    case "forming":
+    default:
+      return "badge isNeutral";
+  }
+}
+
+function Sparkline({ values }: { values: number[] }) {
+  const W = 150;
+  const H = 34;
+  const pad = 2;
+
+  const vals = (values ?? []).slice(-10);
+  if (vals.length < 2) {
+    return (
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
+        <path d={`M${pad} ${H - pad} L${W - pad} ${H - pad}`} stroke="rgba(17,24,39,.16)" fill="none" />
+      </svg>
+    );
+  }
+
+  let min = Math.min(...vals);
+  let max = Math.max(...vals);
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  }
+
+  const dx = (W - pad * 2) / (vals.length - 1);
+
+  const pts = vals.map((v, i) => {
+    const x = pad + i * dx;
+    const t = (v - min) / (max - min);
+    const y = pad + (1 - t) * (H - pad * 2);
+    return [x, y] as const;
+  });
+
+  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join(" ");
+
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Форма (очки по матчам)">
+      <path d={d} stroke="rgba(37,99,235,.85)" strokeWidth="2" fill="none" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 export default async function AnalyticsPage({ searchParams }: Props) {
   const sb = service();
   const sp = (searchParams ? await searchParams : {}) as SearchParams;
-  const sort = (sp.sort ?? "points").toLowerCase();
 
-  // current stage
+  const sort = (sp.sort ?? "ppm").toLowerCase(); // ppm|points|matches|outcome|diff|exact|name
+  const mode = (sp.mode ?? "compact").toLowerCase() === "details" ? "details" : "compact";
+
   const { data: stage, error: sErr } = await sb
     .from("stages")
     .select("id,name,status")
@@ -103,27 +185,19 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   const stageId = Number(stage.id);
 
-  // users (exclude ADMIN)
-  const { data: accounts, error: accErr } = await sb
-    .from("login_accounts")
-    .select("user_id,login")
-    .not("user_id", "is", null);
+  const { data: baseline } = await sb
+    .from("analytics_stage_baseline")
+    .select("stage_id,users_count,updated_at")
+    .eq("stage_id", stageId)
+    .maybeSingle<BaselineRow>();
 
-  if (accErr) {
-    return (
-      <div className="page">
-        <h1>Аналитика</h1>
-        <p>Ошибка загрузки пользователей: {accErr.message}</p>
-      </div>
-    );
-  }
+  const { data: accounts } = await sb.from("login_accounts").select("user_id,login").not("user_id", "is", null);
 
-  const realAccounts = (accounts ?? []).filter(
-    (a: LoginAccountRow) => String(a.login ?? "").trim().toUpperCase() !== "ADMIN"
-  ) as LoginAccountRow[];
+  const realAccounts = ((accounts ?? []) as LoginAccountRow[]).filter(
+    (a) => String(a.login ?? "").trim().toUpperCase() !== "ADMIN"
+  );
 
   const userIds = Array.from(new Set(realAccounts.map((a) => a.user_id)));
-
   if (!userIds.length) {
     return (
       <div className="page">
@@ -133,218 +207,211 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     );
   }
 
-  const { data: profiles } = await sb
-    .from("profiles")
-    .select("id,display_name")
-    .in("id", userIds);
-
+  const { data: profiles } = await sb.from("profiles").select("id,display_name").in("id", userIds);
   const profMap = new Map<string, ProfileRow>();
   for (const p of (profiles ?? []) as ProfileRow[]) profMap.set(p.id, p);
 
-  // finished matches in current stage
-  const { data: matchesRaw, error: mErr } = await sb
-    .from("matches")
-    .select("id,stage_id,status,home_score,away_score")
+  const { data: aggRows } = await sb
+    .from("analytics_stage_user")
+    .select(
+      "stage_id,user_id,matches_count,points_sum,points_avg,exact_count,outcome_hit_count,diff_hit_count,pred_home_count,pred_draw_count,pred_away_count,pred_total_sum,pred_absdiff_sum,pred_bigdiff_count"
+    )
     .eq("stage_id", stageId)
-    .eq("status", "finished")
-    .not("home_score", "is", null)
-    .not("away_score", "is", null);
-
-  if (mErr) {
-    return (
-      <div className="page">
-        <h1>Аналитика</h1>
-        <p>Ошибка загрузки матчей: {mErr.message}</p>
-      </div>
-    );
-  }
-
-  const matches = (matchesRaw ?? []) as MatchRow[];
-  const matchIds = matches.map((m) => m.id);
-
-  const finishedCnt = matchIds.length;
-
-  // predictions for finished matches
-  const { data: predsRaw } = await sb
-    .from("predictions")
-    .select("match_id,user_id,home_pred,away_pred")
-    .in("match_id", matchIds)
     .in("user_id", userIds);
 
-  const preds = (predsRaw ?? []) as PredRow[];
-
-  // ledger points (source of truth)
-  const { data: ledgerRaw } = await sb
-    .from("points_ledger")
-    .select("match_id,user_id,points,reason")
-    .in("match_id", matchIds)
+  const { data: momRows } = await sb
+    .from("analytics_stage_user_momentum")
+    .select("stage_id,user_id,matches_count,momentum_current,momentum_series,avg_last_n,avg_all,n,k,updated_at")
+    .eq("stage_id", stageId)
     .in("user_id", userIds);
 
-  const ledger = (ledgerRaw ?? []) as LedgerRow[];
+  const { data: archRows } = await sb
+    .from("analytics_stage_user_archetype")
+    .select("stage_id,user_id,archetype_key,title_ru,summary_ru,state,updated_at")
+    .eq("stage_id", stageId)
+    .in("user_id", userIds);
 
-  // build maps
-  const matchMap = new Map<number, MatchRow>();
-  for (const m of matches) matchMap.set(m.id, m);
+  const aggMap = new Map<string, AggRow>();
+  for (const a of (aggRows ?? []) as any[]) aggMap.set(a.user_id, a as AggRow);
 
-  const predByMatchUser = new Map<number, Map<string, PredRow>>();
-  for (const p of preds) {
-    if (p.home_pred == null || p.away_pred == null) continue;
-    if (!predByMatchUser.has(p.match_id)) predByMatchUser.set(p.match_id, new Map());
-    predByMatchUser.get(p.match_id)!.set(p.user_id, p);
-  }
+  const momMap = new Map<string, MomRow>();
+  for (const m of (momRows ?? []) as any[]) momMap.set(m.user_id, m as MomRow);
 
-  const ptsByMatchUser = new Map<number, Map<string, number>>();
-  for (const r of ledger) {
-    if (String(r.reason ?? "") !== "prediction") continue;
-    if (!ptsByMatchUser.has(r.match_id)) ptsByMatchUser.set(r.match_id, new Map());
-    ptsByMatchUser.get(r.match_id)!.set(r.user_id, Number(r.points ?? 0));
-  }
+  const archMap = new Map<string, ArchRow>();
+  for (const a of (archRows ?? []) as any[]) archMap.set(a.user_id, a as ArchRow);
 
-  // compute stats per user
-  const rows = userIds.map((uid) => {
-    let matchesCount = 0;
-    let pointsSum = 0;
-
-    let exact = 0;
-    let outcomeHit = 0;
-    let diffHit = 0;
-
-    for (const mid of matchIds) {
-      const m = matchMap.get(mid);
-      if (!m || m.home_score == null || m.away_score == null) continue;
-
-      const pr = predByMatchUser.get(mid)?.get(uid);
-      if (!pr) continue;
-
-      matchesCount++;
-
-      const pts = ptsByMatchUser.get(mid)?.get(uid) ?? 0;
-      pointsSum += pts;
-
-      const ph = Number(pr.home_pred);
-      const pa = Number(pr.away_pred);
-
-      if (ph === m.home_score && pa === m.away_score) exact++;
-
-      const resSign = sign(m.home_score - m.away_score);
-      const predSign = sign(ph - pa);
-      if (resSign === predSign) outcomeHit++;
-
-      const resDiff = m.home_score - m.away_score;
-      const predDiff = ph - pa;
-      if (resDiff === predDiff) diffHit++;
-    }
-
+  const cards = userIds.map((uid) => {
     const acc = realAccounts.find((a) => a.user_id === uid);
     const prof = profMap.get(uid);
+    const agg = aggMap.get(uid);
+    const mom = momMap.get(uid);
+    const arch = archMap.get(uid);
 
-    const name =
-      (prof?.display_name ?? "").trim() ||
-      (acc?.login ?? "").trim() ||
-      uid.slice(0, 8);
+    const name = (prof?.display_name ?? "").trim() || (acc?.login ?? "").trim() || uid.slice(0, 8);
+
+    const matches = agg?.matches_count ?? 0;
+    const pointsSum = Number(agg?.points_sum ?? 0);
+    const ppm = matches ? pointsSum / matches : 0;
+
+    const exactRate = safeDiv(agg?.exact_count ?? 0, matches);
+    const outcomeRate = safeDiv(agg?.outcome_hit_count ?? 0, matches);
+    const diffRate = safeDiv(agg?.diff_hit_count ?? 0, matches);
+
+    const seriesRaw = mom?.momentum_series ?? [];
+    const series = Array.isArray(seriesRaw) ? seriesRaw.map((x: any) => Number(x ?? 0)) : [];
+
+    const archetype_key = arch?.archetype_key ?? "forming";
+    const title_ru = arch?.title_ru ?? "Формируется";
+    const summary_ru = arch?.summary_ru ?? "Пока мало данных для стиля.";
+    const state = (arch?.state ?? "forming") as ArchRow["state"];
 
     return {
       uid,
       name,
-      matchesCount,
-      pointsSum: Math.round(pointsSum * 100) / 100,
-      exactRate: safeDiv(exact, matchesCount),
-      outcomeRate: safeDiv(outcomeHit, matchesCount),
-      diffRate: safeDiv(diffHit, matchesCount),
+      matches,
+      pointsSum,
+      ppm,
+      exactRate,
+      outcomeRate,
+      diffRate,
+      series,
+      momentum: Number(mom?.momentum_current ?? 0),
+      archetype_key,
+      title_ru,
+      summary_ru,
+      state,
     };
   });
 
-  const sorted = [...rows].sort((a, b) => {
+  const sorted = [...cards].sort((a, b) => {
     if (sort === "name") return a.name.localeCompare(b.name, "ru");
-    if (sort === "matches") return (b.matchesCount ?? 0) - (a.matchesCount ?? 0);
+    if (sort === "matches") return b.matches - a.matches;
+    if (sort === "points") return b.pointsSum - a.pointsSum;
     if (sort === "exact") return b.exactRate - a.exactRate;
     if (sort === "outcome") return b.outcomeRate - a.outcomeRate;
     if (sort === "diff") return b.diffRate - a.diffRate;
-    // default points
-    return (b.pointsSum ?? 0) - (a.pointsSum ?? 0);
+    // default ppm
+    return b.ppm - a.ppm;
   });
 
-  const q = (nextSort: string) => `/analytics?sort=${encodeURIComponent(nextSort)}`;
+  const updated = baseline?.updated_at ? new Date(baseline.updated_at).toLocaleString("ru-RU") : "—";
+  const usersCount = baseline?.users_count ?? userIds.length;
+
+  const q = (p: Partial<SearchParams>) => {
+    const s = new URLSearchParams();
+    s.set("sort", p.sort ?? sort);
+    s.set("mode", p.mode ?? mode);
+    return `/analytics?${s.toString()}`;
+  };
 
   return (
     <div className="page">
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+      <div className="analyticsHead">
         <div>
           <h1>Аналитика</h1>
           <div className="pageMeta">
             Этап: <b>{stage.name}</b>
             {stage.status ? <span> · {stage.status}</span> : null}
-            <span> · сыграно матчей: <b>{finishedCnt}</b></span>
+            <span> · обновлено: <b>{updated}</b></span>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link className="appNavLink" href={q("points")}>Сорт: Очки</Link>
-          <Link className="appNavLink" href={q("matches")}>Матчи</Link>
-          <Link className="appNavLink" href={q("exact")}>Точный %</Link>
-          <Link className="appNavLink" href={q("outcome")}>Исход %</Link>
-          <Link className="appNavLink" href={q("diff")}>Разница %</Link>
-          <Link className="appNavLink" href={q("name")}>Имя</Link>
+        <div className="analyticsControls">
+          <Link href={q({ mode: "compact" })} className={`appNavLink ${mode === "compact" ? "navActive" : ""}`}>
+            Коротко
+          </Link>
+          <Link href={q({ mode: "details" })} className={`appNavLink ${mode === "details" ? "navActive" : ""}`}>
+            Подробнее
+          </Link>
+
+          <Link href={q({ sort: "ppm" })} className="appNavLink">Сорт: Очки/матч</Link>
+          <Link href={q({ sort: "points" })} className="appNavLink">Очки</Link>
+          <Link href={q({ sort: "matches" })} className="appNavLink">Матчи</Link>
+          <Link href={q({ sort: "outcome" })} className="appNavLink">Исход%</Link>
+          <Link href={q({ sort: "diff" })} className="appNavLink">Разн.%</Link>
+          <Link href={q({ sort: "exact" })} className="appNavLink">Точный%</Link>
+          <Link href={q({ sort: "name" })} className="appNavLink">Имя</Link>
         </div>
       </div>
 
-      {finishedCnt === 0 ? (
-        <div className="card" style={{ marginTop: 14 }}>
-          <div className="cardBody">
-            <b>Пока нет завершённых матчей.</b>
-            <div style={{ marginTop: 6, opacity: 0.8 }}>
-              Аналитика появляется после того, как у матчей есть счёт и статус <code>finished</code>.
-            </div>
+      <div className="analyticsSummary" style={{ marginTop: 14 }}>
+        <div className="card analyticsSummaryCard">
+          <div className="analyticsSummaryInner" title="Сколько участников (без ADMIN)">
+            <div className="analyticsSummaryLabel">Участников</div>
+            <div className="analyticsSummaryValue">{usersCount}</div>
           </div>
         </div>
-      ) : null}
+
+        <div className="card analyticsSummaryCard">
+          <div className="analyticsSummaryInner" title="Режим страницы">
+            <div className="analyticsSummaryLabel">Режим</div>
+            <div className="analyticsSummaryValue">{mode === "compact" ? "Коротко" : "Подробнее"}</div>
+          </div>
+        </div>
+      </div>
 
       <div className="tableWrap" style={{ marginTop: 14 }}>
-        <table className="table" style={{ minWidth: 820 }}>
+        <table className="table" style={{ minWidth: 980 }}>
           <thead>
             <tr>
               <th className="thLeft">Участник</th>
-              <th className="thCenter" style={{ width: 110 }}>Матчей</th>
+              <th className="thCenter" style={{ width: 90 }}>Матчи</th>
               <th className="thCenter" style={{ width: 110 }}>Очки</th>
-              <th className="thCenter" style={{ width: 120 }}>Точный</th>
-              <th className="thCenter" style={{ width: 120 }}>Исход</th>
-              <th className="thCenter" style={{ width: 120 }}>Разница</th>
+              <th className="thCenter" style={{ width: 120 }}>Очки/матч</th>
+              <th className="thCenter" style={{ width: 110 }}>Исход</th>
+              <th className="thCenter" style={{ width: 110 }}>Разница</th>
+              <th className="thCenter" style={{ width: 110 }}>Точный</th>
+              <th className="thCenter" style={{ width: 220 }}>Архетип</th>
+              {mode === "details" ? <th className="thCenter" style={{ width: 170 }}>Форма</th> : null}
             </tr>
           </thead>
 
           <tbody>
-            {sorted.map((r) => (
-              <tr key={r.uid}>
-                <td className="tdLeft">
-                  <div style={{ fontWeight: 950 }}>
-                    <Link href={`/analytics/${r.uid}`}>{r.name}</Link>
-                  </div>
-                  <div style={{ opacity: 0.75, marginTop: 4 }}>
-                    учтено матчей с прогнозом: <b>{r.matchesCount}</b>
-                  </div>
-                </td>
+            {sorted.map((c) => {
+              const icon = archetypeIcon(c.archetype_key);
+              return (
+                <tr key={c.uid}>
+                  <td className="tdLeft">
+                    <div style={{ fontWeight: 950 }}>
+                      <Link href={`/analytics/${c.uid}`}>{c.name}</Link>
+                    </div>
+                    {mode === "details" ? (
+                      <div style={{ marginTop: 6, opacity: 0.78 }}>
+                        {c.summary_ru}
+                      </div>
+                    ) : null}
+                  </td>
 
-                <td className="tdCenter">
-                  <span className="badge isNeutral">{r.matchesCount}</span>
-                </td>
+                  <td className="tdCenter">
+                    <span className="badge isNeutral">{c.matches}</span>
+                  </td>
 
-                <td className="tdCenter">
-                  <b>{n2(r.pointsSum)}</b>
-                </td>
+                  <td className="tdCenter">
+                    <b>{n2(c.pointsSum)}</b>
+                  </td>
 
-                <td className="tdCenter">
-                  <b>{pct01(r.exactRate)}</b>
-                </td>
+                  <td className="tdCenter">
+                    <b>{n2(c.ppm)}</b>
+                  </td>
 
-                <td className="tdCenter">
-                  <b>{pct01(r.outcomeRate)}</b>
-                </td>
+                  <td className="tdCenter"><b>{pct01(c.outcomeRate)}</b></td>
+                  <td className="tdCenter"><b>{pct01(c.diffRate)}</b></td>
+                  <td className="tdCenter"><b>{pct01(c.exactRate)}</b></td>
 
-                <td className="tdCenter">
-                  <b>{pct01(r.diffRate)}</b>
-                </td>
-              </tr>
-            ))}
+                  <td className="tdCenter">
+                    <span className={badgeClassByKey(c.archetype_key)} title={c.summary_ru}>
+                      <span aria-hidden="true">{icon}</span> {c.title_ru}
+                    </span>
+                  </td>
+
+                  {mode === "details" ? (
+                    <td className="tdCenter" title="Очки по матчам (последние 10)">
+                      <Sparkline values={c.series} />
+                    </td>
+                  ) : null}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
