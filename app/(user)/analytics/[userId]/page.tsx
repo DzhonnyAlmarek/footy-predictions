@@ -59,6 +59,25 @@ type ArchRow = {
   updated_at: string;
 };
 
+const TIP = {
+  points:
+    "Очки — сумма points_ledger.points по матчам текущего этапа (reason='prediction').",
+  ppm:
+    "Очки/матч = Очки / Матчи. Лучше сравнивать людей именно по этому.",
+  outcome:
+    "Исход % — совпал знак (home-away) в прогнозе и результате: победа/ничья/поражение.",
+  diff:
+    "Разница % — совпала разница: (home-away) в прогнозе и результате.",
+  exact:
+    "Точный % — прогноз полностью совпал со счётом.",
+  form:
+    "Форма = avg(очки последних 5 матчей) − avg(очки всех матчей этапа).",
+  spark:
+    "График — очки по матчам в порядке времени (последние 12 значений).",
+  archetype:
+    "Архетип — стиль прогнозов (осторожный/смелый/точный и т.п.). Это про манеру, а не про силу.",
+};
+
 function pct(a: number, b: number) {
   if (!b) return "0%";
   return `${Math.round((a / b) * 100)}%`;
@@ -68,8 +87,8 @@ function n2(v: number) {
 }
 
 function Sparkline({ values }: { values: number[] }) {
-  const W = 220;
-  const H = 44;
+  const W = 240;
+  const H = 52;
   const pad = 3;
 
   const vals = (values ?? []).slice(-12);
@@ -110,7 +129,12 @@ export default async function AnalyticsUserPage({ params }: Props) {
   const sb = service();
   const { userId } = await params;
 
-  const { data: account } = await sb.from("login_accounts").select("user_id,login").eq("user_id", userId).maybeSingle();
+  const { data: account } = await sb
+    .from("login_accounts")
+    .select("user_id,login")
+    .eq("user_id", userId)
+    .maybeSingle();
+
   if (!account) notFound();
 
   const { data: profile } = await sb.from("profiles").select("display_name").eq("id", userId).maybeSingle();
@@ -168,7 +192,7 @@ export default async function AnalyticsUserPage({ params }: Props) {
   const seriesRaw = mom?.momentum_series ?? [];
   const series = Array.isArray(seriesRaw) ? seriesRaw.map((x: any) => Number(x ?? 0)) : [];
 
-  const updated = arch?.updated_at ? new Date(arch.updated_at).toLocaleString("ru-RU") : "—";
+  const updated = (arch?.updated_at || mom?.updated_at) ? new Date((arch?.updated_at ?? mom?.updated_at) as string).toLocaleString("ru-RU") : "—";
 
   return (
     <div className="page">
@@ -180,30 +204,51 @@ export default async function AnalyticsUserPage({ params }: Props) {
         <span> · обновлено: <b>{updated}</b></span>
       </div>
 
+      <details className="helpBox" style={{ marginTop: 10 }}>
+        <summary className="helpSummary">Пояснения (как считается)</summary>
+        <div className="helpBody">
+          <ul className="helpList">
+            <li><b>Очки</b>: {TIP.points}</li>
+            <li><b>Очки/матч</b>: {TIP.ppm}</li>
+            <li><b>Исход %</b>: {TIP.outcome}</li>
+            <li><b>Разница %</b>: {TIP.diff}</li>
+            <li><b>Точный %</b>: {TIP.exact}</li>
+            <li><b>Форма</b>: {TIP.form}</li>
+            <li><b>График</b>: {TIP.spark}</li>
+            <li><b>Архетип</b>: {TIP.archetype}</li>
+          </ul>
+        </div>
+      </details>
+
       <div className="card" style={{ marginTop: 14 }}>
         <div className="cardBody">
           <div className="kpiRow">
-            <div className="kpi">
+            <div className="kpi" title="Матчи учтено">
               <div className="kpiLabel">Матчей</div>
               <div className="kpiValue">{matches}</div>
             </div>
-            <div className="kpi">
+
+            <div className="kpi" title={TIP.points}>
               <div className="kpiLabel">Очки</div>
               <div className="kpiValue">{n2(pointsSum)}</div>
             </div>
-            <div className="kpi">
+
+            <div className="kpi" title={TIP.ppm}>
               <div className="kpiLabel">Очки/матч</div>
               <div className="kpiValue">{n2(ppm)}</div>
             </div>
-            <div className="kpi">
+
+            <div className="kpi" title={TIP.outcome}>
               <div className="kpiLabel">Исход</div>
               <div className="kpiValue">{pct(agg?.outcome_hit_count ?? 0, matches)}</div>
             </div>
-            <div className="kpi">
+
+            <div className="kpi" title={TIP.diff}>
               <div className="kpiLabel">Разница</div>
               <div className="kpiValue">{pct(agg?.diff_hit_count ?? 0, matches)}</div>
             </div>
-            <div className="kpi">
+
+            <div className="kpi" title={TIP.exact}>
               <div className="kpiLabel">Точный</div>
               <div className="kpiValue">{pct(agg?.exact_count ?? 0, matches)}</div>
             </div>
@@ -214,20 +259,25 @@ export default async function AnalyticsUserPage({ params }: Props) {
       <div className="card" style={{ marginTop: 14 }}>
         <div className="cardBody">
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-            <div style={{ fontWeight: 950 }}>Форма (очки по матчам)</div>
-            <div style={{ opacity: 0.75 }}>
+            <div style={{ fontWeight: 950 }} title={TIP.spark}>Форма (очки по матчам)</div>
+            <div style={{ opacity: 0.78 }}>
               среднее: <b>{n2(Number(mom?.avg_all ?? 0))}</b> · последние {mom?.n ?? 5}:{" "}
-              <b>{n2(Number(mom?.avg_last_n ?? 0))}</b>
+              <b>{n2(Number(mom?.avg_last_n ?? 0))}</b> · форма:{" "}
+              <b>{(Number(mom?.momentum_current ?? 0) >= 0 ? "+" : "") + n2(Number(mom?.momentum_current ?? 0))}</b>
             </div>
           </div>
 
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 10 }} title={TIP.spark}>
             <Sparkline values={series} />
           </div>
 
           {arch ? (
             <div style={{ marginTop: 14 }}>
-              <div style={{ fontWeight: 950 }}>Архетип: {arch.title_ru}</div>
+              <div style={{ fontWeight: 950 }} title={TIP.archetype}>
+                Архетип: {arch.title_ru}
+                {arch.state === "preliminary" ? <span style={{ opacity: 0.7, marginLeft: 8 }}>· предвар.</span> : null}
+                {arch.state === "final" ? <span style={{ opacity: 0.7, marginLeft: 8 }}>· финал</span> : null}
+              </div>
               <div style={{ opacity: 0.85, marginTop: 6 }}>{arch.summary_ru}</div>
             </div>
           ) : null}

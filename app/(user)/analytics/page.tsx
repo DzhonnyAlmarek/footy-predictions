@@ -72,6 +72,8 @@ type BaselineRow = { stage_id: number; users_count: number; updated_at: string }
 type SearchParams = { sort?: string; mode?: string };
 type Props = { searchParams?: Promise<SearchParams> };
 
+/* ---------------- helpers ---------------- */
+
 function safeDiv(a: number, b: number) {
   if (!b) return 0;
   return a / b;
@@ -82,6 +84,7 @@ function pct01(v: number) {
 function n2(v: number) {
   return (Math.round(v * 100) / 100).toFixed(2);
 }
+
 function archetypeIcon(key: string): string {
   switch (key) {
     case "sniper":
@@ -98,6 +101,7 @@ function archetypeIcon(key: string): string {
       return "⚽";
   }
 }
+
 function badgeClassByKey(key: string) {
   switch (key) {
     case "sniper":
@@ -112,6 +116,43 @@ function badgeClassByKey(key: string) {
     default:
       return "badge isNeutral";
   }
+}
+
+/* ---------- tooltips text (single source of truth) ---------- */
+
+const TIP = {
+  updated:
+    "Дата обновления — когда последний раз пересчитывали analytics_* таблицы. Пересчёт запускается после нажатия «Счёт» по матчу.",
+  matches:
+    "Матчи — сколько завершённых матчей этапа вошло в расчёт для участника. Учитываются только матчи со status='finished' и заполненным счётом, и только заполненные прогнозы.",
+  points:
+    "Очки — сумма points_ledger.points по матчам этого этапа, где reason='prediction'.",
+  ppm:
+    "Очки/матч = Очки / Матчи. Это самый честный показатель, когда у людей разное число учтённых матчей.",
+  outcome:
+    "Исход % — доля матчей, где угадан 1/X/2 (П1/Н/П2). Считается по sign(home_pred-away_pred) == sign(home_score-away_score).",
+  diff:
+    "Разница % — доля матчей, где угадана разница голов: (home_pred-away_pred) == (home_score-away_score).",
+  exact:
+    "Точный % — доля матчей, где прогноз полностью совпал со счётом: home_pred=home_score и away_pred=away_score.",
+  form:
+    "Форма — (средние очки за последние 5 матчей) − (средние очки за весь этап). Плюс значит: последние матчи лучше среднего.",
+  spark:
+    "График формы — очки по матчам (из points_ledger) в хронологическом порядке. Показываем последние 10 значений.",
+  archetype:
+    "Архетип — стиль прогнозов. Мы смотрим на частоту ничьих, среднюю разницу в прогнозах, «смелость» (частые большие разницы), и частоту точных попаданий. Это не про «сильнее/слабее», а про манеру.",
+  top:
+    "TOP считается только среди участников, у кого учтено минимум матчей (порог указан рядом).",
+};
+
+/* ---------- tiny UI helpers ---------- */
+
+function ThHelp(props: { label: string; tip: string }) {
+  return (
+    <span className="thHelp" title={props.tip}>
+      {props.label} <span className="thHelpIcon" aria-hidden="true">ℹ️</span>
+    </span>
+  );
 }
 
 function Sparkline({ values }: { values: number[] }) {
@@ -153,11 +194,43 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
+function TopMiniCard(props: {
+  title: string;
+  name: string;
+  value: string;
+  meta: string;
+  tip: string;
+  href?: string;
+}) {
+  const body = (
+    <div className="card analyticsTopCard" title={props.tip}>
+      <div className="analyticsTopCardInner">
+        <div className="analyticsTopTitle">{props.title}</div>
+        <div className="analyticsTopName">{props.name}</div>
+        <div className="analyticsTopBottom">
+          <div className="analyticsTopValue">{props.value}</div>
+          <div className="analyticsTopMeta">{props.meta}</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return props.href ? (
+    <Link href={props.href} style={{ textDecoration: "none", color: "inherit" }}>
+      {body}
+    </Link>
+  ) : (
+    body
+  );
+}
+
+/* ---------------- main ---------------- */
+
 export default async function AnalyticsPage({ searchParams }: Props) {
   const sb = service();
   const sp = (searchParams ? await searchParams : {}) as SearchParams;
 
-  const sort = (sp.sort ?? "ppm").toLowerCase(); // ppm|points|matches|outcome|diff|exact|name
+  const sort = (sp.sort ?? "ppm").toLowerCase(); // ppm|points|matches|outcome|diff|exact|name|form
   const mode = (sp.mode ?? "compact").toLowerCase() === "details" ? "details" : "compact";
 
   const { data: stage, error: sErr } = await sb
@@ -191,7 +264,10 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     .eq("stage_id", stageId)
     .maybeSingle<BaselineRow>();
 
-  const { data: accounts } = await sb.from("login_accounts").select("user_id,login").not("user_id", "is", null);
+  const { data: accounts } = await sb
+    .from("login_accounts")
+    .select("user_id,login")
+    .not("user_id", "is", null);
 
   const realAccounts = ((accounts ?? []) as LoginAccountRow[]).filter(
     (a) => String(a.login ?? "").trim().toUpperCase() !== "ADMIN"
@@ -260,6 +336,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     const seriesRaw = mom?.momentum_series ?? [];
     const series = Array.isArray(seriesRaw) ? seriesRaw.map((x: any) => Number(x ?? 0)) : [];
 
+    const momentum = Number(mom?.momentum_current ?? 0);
+
     const archetype_key = arch?.archetype_key ?? "forming";
     const title_ru = arch?.title_ru ?? "Формируется";
     const summary_ru = arch?.summary_ru ?? "Пока мало данных для стиля.";
@@ -275,13 +353,28 @@ export default async function AnalyticsPage({ searchParams }: Props) {
       outcomeRate,
       diffRate,
       series,
-      momentum: Number(mom?.momentum_current ?? 0),
+      momentum,
       archetype_key,
       title_ru,
       summary_ru,
       state,
     };
   });
+
+  // TOP (честность): только у кого матчей достаточно
+  const MIN_TOP_MATCHES = 3;
+  const withEnough = cards.filter((c) => c.matches >= MIN_TOP_MATCHES);
+
+  const pickTop = <T,>(arr: T[], score: (x: any) => number) =>
+    [...arr].sort((a: any, b: any) => score(b) - score(a) || (b.matches ?? 0) - (a.matches ?? 0))[0] ?? null;
+
+  const topPPM = withEnough.length ? pickTop(withEnough, (c) => c.ppm) : null;
+  const topForm = withEnough.length ? pickTop(withEnough, (c) => c.momentum) : null;
+  const topPoints = withEnough.length ? pickTop(withEnough, (c) => c.pointsSum) : null;
+
+  const topOutcome = withEnough.length ? pickTop(withEnough, (c) => c.outcomeRate) : null;
+  const topDiff = withEnough.length ? pickTop(withEnough, (c) => c.diffRate) : null;
+  const topExact = withEnough.length ? pickTop(withEnough, (c) => c.exactRate) : null;
 
   const sorted = [...cards].sort((a, b) => {
     if (sort === "name") return a.name.localeCompare(b.name, "ru");
@@ -290,8 +383,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     if (sort === "exact") return b.exactRate - a.exactRate;
     if (sort === "outcome") return b.outcomeRate - a.outcomeRate;
     if (sort === "diff") return b.diffRate - a.diffRate;
-    // default ppm
-    return b.ppm - a.ppm;
+    if (sort === "form") return b.momentum - a.momentum;
+    return b.ppm - a.ppm; // ppm default
   });
 
   const updated = baseline?.updated_at ? new Date(baseline.updated_at).toLocaleString("ru-RU") : "—";
@@ -304,16 +397,43 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     return `/analytics?${s.toString()}`;
   };
 
+  function fmtMomentum(m: number, matches: number) {
+    if (matches < MIN_TOP_MATCHES) return "н/д";
+    const arrow = m > 0.02 ? "↗" : m < -0.02 ? "↘" : "→";
+    const sign = m >= 0 ? "+" : "";
+    return `${sign}${n2(m)} ${arrow}`;
+  }
+
   return (
     <div className="page">
       <div className="analyticsHead">
         <div>
           <h1>Аналитика</h1>
-          <div className="pageMeta">
+          <div className="pageMeta" title={TIP.updated}>
             Этап: <b>{stage.name}</b>
             {stage.status ? <span> · {stage.status}</span> : null}
             <span> · обновлено: <b>{updated}</b></span>
           </div>
+
+          <details className="helpBox" style={{ marginTop: 10 }}>
+            <summary className="helpSummary">Пояснения (как читаем и как считается)</summary>
+            <div className="helpBody">
+              <ul className="helpList">
+                <li><b>Матчи</b>: {TIP.matches}</li>
+                <li><b>Очки</b>: {TIP.points}</li>
+                <li><b>Очки/матч</b>: {TIP.ppm}</li>
+                <li><b>Исход %</b>: {TIP.outcome}</li>
+                <li><b>Разница %</b>: {TIP.diff}</li>
+                <li><b>Точный %</b>: {TIP.exact}</li>
+                <li><b>Форма</b>: {TIP.form}</li>
+                <li><b>Архетип</b>: {TIP.archetype}</li>
+              </ul>
+              <div style={{ marginTop: 10, opacity: 0.8 }}>
+                Обновление происходит автоматически после нажатия <b>«Счёт»</b> в админке (мы пересчитываем
+                points_ledger и затем analytics_* таблицы).
+              </div>
+            </div>
+          </details>
         </div>
 
         <div className="analyticsControls">
@@ -324,12 +444,13 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             Подробнее
           </Link>
 
-          <Link href={q({ sort: "ppm" })} className="appNavLink">Сорт: Очки/матч</Link>
-          <Link href={q({ sort: "points" })} className="appNavLink">Очки</Link>
-          <Link href={q({ sort: "matches" })} className="appNavLink">Матчи</Link>
-          <Link href={q({ sort: "outcome" })} className="appNavLink">Исход%</Link>
-          <Link href={q({ sort: "diff" })} className="appNavLink">Разн.%</Link>
-          <Link href={q({ sort: "exact" })} className="appNavLink">Точный%</Link>
+          <Link href={q({ sort: "ppm" })} className="appNavLink" title={TIP.ppm}>Сорт: Очки/матч</Link>
+          <Link href={q({ sort: "form" })} className="appNavLink" title={TIP.form}>Форма</Link>
+          <Link href={q({ sort: "points" })} className="appNavLink" title={TIP.points}>Очки</Link>
+          <Link href={q({ sort: "matches" })} className="appNavLink" title={TIP.matches}>Матчи</Link>
+          <Link href={q({ sort: "outcome" })} className="appNavLink" title={TIP.outcome}>Исход%</Link>
+          <Link href={q({ sort: "diff" })} className="appNavLink" title={TIP.diff}>Разн.%</Link>
+          <Link href={q({ sort: "exact" })} className="appNavLink" title={TIP.exact}>Точный%</Link>
           <Link href={q({ sort: "name" })} className="appNavLink">Имя</Link>
         </div>
       </div>
@@ -348,65 +469,194 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             <div className="analyticsSummaryValue">{mode === "compact" ? "Коротко" : "Подробнее"}</div>
           </div>
         </div>
+
+        <div className="card analyticsSummaryCard">
+          <div className="analyticsSummaryInner" title={TIP.top}>
+            <div className="analyticsSummaryLabel">TOP-порог</div>
+            <div className="analyticsSummaryValue">
+              {MIN_TOP_MATCHES} <span className="analyticsSummaryMuted">матча</span>
+            </div>
+          </div>
+        </div>
       </div>
 
+      {/* TOP */}
+      <div style={{ marginTop: 14 }}>
+        <div className="analyticsSectionTitle">TOP по этапу</div>
+
+        <div className="analyticsTopGrid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" as any }}>
+          {topPPM ? (
+            <TopMiniCard
+              title="🏆 Очки/матч"
+              href={`/analytics/${topPPM.uid}`}
+              name={topPPM.name}
+              value={n2(topPPM.ppm)}
+              meta={`Матчей: ${topPPM.matches}`}
+              tip={TIP.ppm}
+            />
+          ) : null}
+
+          {topForm ? (
+            <TopMiniCard
+              title="📈 Форма"
+              href={`/analytics/${topForm.uid}`}
+              name={topForm.name}
+              value={fmtMomentum(topForm.momentum, topForm.matches)}
+              meta={`Матчей: ${topForm.matches}`}
+              tip={TIP.form}
+            />
+          ) : null}
+
+          {topPoints ? (
+            <TopMiniCard
+              title="💰 Очки"
+              href={`/analytics/${topPoints.uid}`}
+              name={topPoints.name}
+              value={n2(topPoints.pointsSum)}
+              meta={`Матчей: ${topPoints.matches}`}
+              tip={TIP.points}
+            />
+          ) : null}
+        </div>
+
+        <div className="analyticsTopGrid" style={{ marginTop: 10, gridTemplateColumns: "repeat(3, minmax(0, 1fr))" as any }}>
+          {topOutcome ? (
+            <TopMiniCard
+              title="🎯 Исход %"
+              href={`/analytics/${topOutcome.uid}`}
+              name={topOutcome.name}
+              value={pct01(topOutcome.outcomeRate)}
+              meta={`Матчей: ${topOutcome.matches}`}
+              tip={TIP.outcome}
+            />
+          ) : null}
+
+          {topDiff ? (
+            <TopMiniCard
+              title="📐 Разница %"
+              href={`/analytics/${topDiff.uid}`}
+              name={topDiff.name}
+              value={pct01(topDiff.diffRate)}
+              meta={`Матчей: ${topDiff.matches}`}
+              tip={TIP.diff}
+            />
+          ) : null}
+
+          {topExact ? (
+            <TopMiniCard
+              title="🏹 Точный %"
+              href={`/analytics/${topExact.uid}`}
+              name={topExact.name}
+              value={pct01(topExact.exactRate)}
+              meta={`Матчей: ${topExact.matches}`}
+              tip={TIP.exact}
+            />
+          ) : null}
+        </div>
+
+        <div className="analyticsHint" title={TIP.top}>
+          TOP считается только для участников, у кого учтено <b>{MIN_TOP_MATCHES}+</b> матча.
+        </div>
+      </div>
+
+      {/* table */}
       <div className="tableWrap" style={{ marginTop: 14 }}>
-        <table className="table" style={{ minWidth: 980 }}>
+        <table className="table" style={{ minWidth: 1040 }}>
           <thead>
             <tr>
               <th className="thLeft">Участник</th>
-              <th className="thCenter" style={{ width: 90 }}>Матчи</th>
-              <th className="thCenter" style={{ width: 110 }}>Очки</th>
-              <th className="thCenter" style={{ width: 120 }}>Очки/матч</th>
-              <th className="thCenter" style={{ width: 110 }}>Исход</th>
-              <th className="thCenter" style={{ width: 110 }}>Разница</th>
-              <th className="thCenter" style={{ width: 110 }}>Точный</th>
-              <th className="thCenter" style={{ width: 220 }}>Архетип</th>
-              {mode === "details" ? <th className="thCenter" style={{ width: 170 }}>Форма</th> : null}
+
+              <th className="thCenter" style={{ width: 90 }}>
+                <ThHelp label="Матчи" tip={TIP.matches} />
+              </th>
+
+              <th className="thCenter" style={{ width: 110 }}>
+                <ThHelp label="Очки" tip={TIP.points} />
+              </th>
+
+              <th className="thCenter" style={{ width: 120 }}>
+                <ThHelp label="Очки/матч" tip={TIP.ppm} />
+              </th>
+
+              <th className="thCenter" style={{ width: 110 }}>
+                <ThHelp label="Исход" tip={TIP.outcome} />
+              </th>
+
+              <th className="thCenter" style={{ width: 110 }}>
+                <ThHelp label="Разница" tip={TIP.diff} />
+              </th>
+
+              <th className="thCenter" style={{ width: 110 }}>
+                <ThHelp label="Точный" tip={TIP.exact} />
+              </th>
+
+              <th className="thCenter" style={{ width: 220 }}>
+                <ThHelp label="Архетип" tip={TIP.archetype} />
+              </th>
+
+              {mode === "details" ? (
+                <th className="thCenter" style={{ width: 170 }}>
+                  <ThHelp label="Форма" tip={TIP.spark} />
+                </th>
+              ) : null}
             </tr>
           </thead>
 
           <tbody>
             {sorted.map((c) => {
               const icon = archetypeIcon(c.archetype_key);
+
               return (
                 <tr key={c.uid}>
                   <td className="tdLeft">
                     <div style={{ fontWeight: 950 }}>
                       <Link href={`/analytics/${c.uid}`}>{c.name}</Link>
                     </div>
-                    {mode === "details" ? (
-                      <div style={{ marginTop: 6, opacity: 0.78 }}>
-                        {c.summary_ru}
-                      </div>
-                    ) : null}
+                    {mode === "details" ? <div style={{ marginTop: 6, opacity: 0.78 }}>{c.summary_ru}</div> : null}
                   </td>
 
                   <td className="tdCenter">
-                    <span className="badge isNeutral">{c.matches}</span>
+                    <span className="badge isNeutral" title={TIP.matches}>
+                      {c.matches}
+                    </span>
                   </td>
 
-                  <td className="tdCenter">
+                  <td className="tdCenter" title={TIP.points}>
                     <b>{n2(c.pointsSum)}</b>
                   </td>
 
-                  <td className="tdCenter">
+                  <td className="tdCenter" title={TIP.ppm}>
                     <b>{n2(c.ppm)}</b>
                   </td>
 
-                  <td className="tdCenter"><b>{pct01(c.outcomeRate)}</b></td>
-                  <td className="tdCenter"><b>{pct01(c.diffRate)}</b></td>
-                  <td className="tdCenter"><b>{pct01(c.exactRate)}</b></td>
+                  <td className="tdCenter" title={TIP.outcome}>
+                    <b>{pct01(c.outcomeRate)}</b>
+                  </td>
+
+                  <td className="tdCenter" title={TIP.diff}>
+                    <b>{pct01(c.diffRate)}</b>
+                  </td>
+
+                  <td className="tdCenter" title={TIP.exact}>
+                    <b>{pct01(c.exactRate)}</b>
+                  </td>
 
                   <td className="tdCenter">
                     <span className={badgeClassByKey(c.archetype_key)} title={c.summary_ru}>
                       <span aria-hidden="true">{icon}</span> {c.title_ru}
+                      {c.state === "preliminary" ? <span style={{ opacity: 0.7, marginLeft: 6 }}>· предвар.</span> : null}
+                      {c.state === "final" ? <span style={{ opacity: 0.7, marginLeft: 6 }}>· финал</span> : null}
                     </span>
                   </td>
 
                   {mode === "details" ? (
-                    <td className="tdCenter" title="Очки по матчам (последние 10)">
-                      <Sparkline values={c.series} />
+                    <td className="tdCenter" title={TIP.spark}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                        <Sparkline values={c.series} />
+                        <span className="badge isNeutral" title={TIP.form}>
+                          {fmtMomentum(c.momentum, c.matches)}
+                        </span>
+                      </div>
                     </td>
                   ) : null}
                 </tr>
@@ -416,8 +666,16 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         </table>
       </div>
 
+      {mode === "compact" ? (
+        <div className="analyticsHintSmall">
+          Детали (описание архетипа, спарклайн формы, число “форма”) — включи режим <b>Подробнее</b>.
+        </div>
+      ) : null}
+
       <div style={{ marginTop: 14 }}>
-        <Link href="/dashboard" className="navLink">← Назад</Link>
+        <Link href="/dashboard" className="navLink">
+          ← Назад
+        </Link>
       </div>
     </div>
   );
