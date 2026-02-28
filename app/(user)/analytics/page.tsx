@@ -18,344 +18,69 @@ function service() {
   );
 }
 
-type StageRow = { id: number; name: string };
+type StageRow = { id: number; name: string; status?: string | null };
 
-type LoginAccountRow = {
-  user_id: string;
-  login: string;
-};
+type LoginAccountRow = { user_id: string; login: string };
+type ProfileRow = { id: string; display_name: string | null };
 
-type ProfileRow = {
-  id: string;
-  display_name: string | null;
-};
-
-type AggRow = {
+type MatchRow = {
+  id: number;
   stage_id: number;
-  user_id: string;
-  matches_count: number;
-
-  exact_count: number;
-
-  pred_home_count: number;
-  pred_draw_count: number;
-  pred_away_count: number;
-
-  pred_total_sum: number;
-  pred_absdiff_sum: number;
-  pred_bigdiff_count: number;
-
-  outcome_hit_count?: number;
-  diff_hit_count?: number;
+  status: string | null;
+  home_score: number | null;
+  away_score: number | null;
 };
 
-type ArchRow = {
-  stage_id: number;
+type PredRow = {
+  match_id: number;
   user_id: string;
-  archetype_key: string;
-  title_ru: string;
-  summary_ru: string;
-  state: "forming" | "preliminary" | "final";
-  updated_at: string;
+  home_pred: number | null;
+  away_pred: number | null;
 };
 
-type MomRow = {
-  stage_id: number;
+type LedgerRow = {
+  match_id: number;
   user_id: string;
-  matches_count: number;
-  momentum_current: number;
-  momentum_series: any; // jsonb
-  avg_last_n: number;
-  avg_all: number;
-  n: number;
-  k: number;
-  updated_at: string;
+  points: number;
+  reason: string | null;
 };
 
 type SearchParams = {
-  sort?: string;
-  view?: string; // quality|style
-  mode?: string; // compact|details
+  sort?: string; // points|matches|exact|outcome|diff|name
 };
 
 type Props = {
-  // ✅ Next.js 15.5: searchParams ожидается как Promise
   searchParams?: Promise<SearchParams>;
 };
 
-const MIN_TOP_MATCHES = 3;
+function sign(n: number) {
+  if (n > 0) return 1;
+  if (n < 0) return -1;
+  return 0;
+}
 
-const SORT_OPTIONS_QUALITY: Array<{ value: string; label: string }> = [
-  { value: "matches", label: "Матчей учтено" },
-  { value: "exact", label: "Точные счета %" },
-  { value: "outcome", label: "Исход %" },
-  { value: "diff", label: "Разница %" },
-  { value: "name", label: "Имя" },
-];
-
-const SORT_OPTIONS_STYLE: Array<{ value: string; label: string }> = [
-  { value: "matches", label: "Матчей учтено" },
-  { value: "risk", label: "Риск (разница)" },
-  { value: "draw", label: "Ничьи %" },
-  { value: "total", label: "Средний тотал" },
-  { value: "name", label: "Имя" },
-];
-
-function safeDiv(a: number, b: number): number {
+function safeDiv(a: number, b: number) {
   if (!b) return 0;
   return a / b;
 }
 
-function pct01(v: number): string {
+function pct01(v: number) {
   return `${Math.round(v * 100)}%`;
 }
 
-function n2(v: number): string {
+function n2(v: number) {
   return (Math.round(v * 100) / 100).toFixed(2);
 }
 
-function stageStateLabel(state: ArchRow["state"]) {
-  if (state === "forming") return "Формируется";
-  if (state === "preliminary") return "Предварительно";
-  return "";
-}
-
-function archetypeIcon(key: string): string {
-  switch (key) {
-    case "sniper":
-      return "🏹";
-    case "peacekeeper":
-      return "🤝";
-    case "risky":
-      return "🔥";
-    case "rational":
-      return "🧠";
-    case "home":
-      return "🏠";
-    case "away":
-      return "✈️";
-    case "forming":
-      return "⏳";
-    default:
-      return "⚽";
-  }
-}
-
-function badgeClassByKey(key: string) {
-  switch (key) {
-    case "sniper":
-      return "badge isOk";
-    case "peacekeeper":
-      return "badge isInfo";
-    case "risky":
-      return "badge isWarn";
-    case "rational":
-      return "badge isInfo";
-    case "home":
-    case "away":
-      return "badge isNeutral";
-    case "forming":
-      return "badge isNeutral";
-    default:
-      return "badge isNeutral";
-  }
-}
-
-/* ---------- tiny UI helpers (tooltips) ---------- */
-
-function ThHelp(props: { label: string; tip: string }) {
-  return (
-    <span className="thHelp" title={props.tip}>
-      {props.label} <span className="thHelpIcon" aria-hidden="true">ℹ️</span>
-    </span>
-  );
-}
-
-/* ---------- charts (shown only in Details mode) ---------- */
-
-function Sparkline(props: { values: number[] }) {
-  const W = 140;
-  const H = 34;
-  const pad = 2;
-
-  const vals = (props.values ?? []).slice(-10);
-  if (vals.length < 2) {
-    return (
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
-        <path
-          d={`M${pad} ${H - pad} L${W - pad} ${H - pad}`}
-          stroke="rgba(17,24,39,.16)"
-          fill="none"
-        />
-      </svg>
-    );
-  }
-
-  let min = Math.min(...vals);
-  let max = Math.max(...vals);
-  if (min === max) {
-    min -= 1;
-    max += 1;
-  }
-
-  const dx = (W - pad * 2) / (vals.length - 1);
-
-  const pts = vals.map((v, i) => {
-    const x = pad + i * dx;
-    const t = (v - min) / (max - min);
-    const y = pad + (1 - t) * (H - pad * 2);
-    return [x, y] as const;
-  });
-
-  const d = pts
-    .map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(2)} ${p[1].toFixed(2)}`)
-    .join(" ");
-
-  const hasZero = min < 0 && max > 0;
-  const y0 = hasZero ? pad + (1 - (0 - min) / (max - min)) * (H - pad * 2) : null;
-
-  return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="График формы">
-      {y0 != null ? (
-        <line x1={pad} y1={y0} x2={W - pad} y2={y0} stroke="rgba(17,24,39,.12)" />
-      ) : null}
-      <path
-        d={d}
-        stroke="rgba(37,99,235,.85)"
-        strokeWidth="2"
-        fill="none"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function OutcomeBar(props: { home: number; draw: number; away: number }) {
-  const W = 220;
-  const H = 10;
-  const total = props.home + props.draw + props.away;
-  const h = total ? (props.home / total) * W : 0;
-  const d = total ? (props.draw / total) * W : 0;
-  const a = total ? (props.away / total) * W : 0;
-
-  return (
-    <svg
-      width={W}
-      height={H}
-      viewBox={`0 0 ${W} ${H}`}
-      role="img"
-      aria-label="Распределение исходов 1/X/2"
-    >
-      <rect x="0" y="0" width={W} height={H} rx="5" fill="rgba(17,24,39,.08)" />
-      <rect x="0" y="0" width={h} height={H} rx="5" fill="rgba(37,99,235,.60)" />
-      <rect x={h} y="0" width={d} height={H} fill="rgba(16,185,129,.55)" />
-      <rect x={h + d} y="0" width={a} height={H} rx="5" fill="rgba(245,158,11,.60)" />
-    </svg>
-  );
-}
-
-/* ---------- navigation pills ---------- */
-
-function TabLink(props: { href: string; active: boolean; label: string; icon: string }) {
-  return (
-    <Link href={props.href} className={`appNavLink ${props.active ? "navActive" : ""}`}>
-      <span aria-hidden="true" className="appNavIcon">
-        {props.icon}
-      </span>
-      <span>{props.label}</span>
-    </Link>
-  );
-}
-
-function ModePill(props: { href: string; active: boolean; label: string; tip: string }) {
-  return (
-    <Link
-      href={props.href}
-      className={`appNavLink ${props.active ? "navActive" : ""}`}
-      title={props.tip}
-    >
-      <span>{props.label}</span>
-    </Link>
-  );
-}
-
-/* ---------- top cards ---------- */
-
-function TopMiniCard(props: {
-  title: string;
-  name: string;
-  value: string;
-  meta: string;
-  tip: string;
-  href?: string;
-}) {
-  const body = (
-    <div className="card analyticsTopCard" title={props.tip}>
-      <div className="analyticsTopCardInner">
-        <div className="analyticsTopTitle">{props.title}</div>
-        <div className="analyticsTopName">{props.name}</div>
-        <div className="analyticsTopBottom">
-          <div className="analyticsTopValue">{props.value}</div>
-          <div className="analyticsTopMeta">{props.meta}</div>
-        </div>
-      </div>
-    </div>
-  );
-
-  return props.href ? (
-    <Link href={props.href} style={{ textDecoration: "none", color: "inherit" }}>
-      {body}
-    </Link>
-  ) : (
-    body
-  );
-}
-
-/* ---------- tooltips text (single source of truth) ---------- */
-
-const TIP = {
-  matches:
-    "Матчей учтено — сколько завершённых матчей вошло в расчёт для этого участника. Чем больше, тем стабильнее статистика.",
-  exact:
-    "Точный счёт — % матчей, где прогноз полностью совпал с фактическим счётом (например 2:1 угадан ровно 2:1).",
-  outcome:
-    "Исход — % матчей, где угадан 1/X/2 (П1/Н/П2), независимо от точного счёта.",
-  diff:
-    "Разница — % матчей, где угадана разница мячей (например 2:1 и 3:2 обе дают разницу +1).",
-  risk:
-    "Риск — средняя разница голов в ваших прогнозах. Чем выше число, тем смелее прогнозы (условно: 3:0 рискованнее, чем 1:0).",
-  total:
-    "Тотал — средняя сумма голов в ваших прогнозах. Чем выше, тем чаще ставите результативные матчи (например 2:2/3:1).",
-  draw:
-    "Ничьи — доля прогнозов, где выбран исход X.",
-  form:
-    "Форма = (средние очки за последние 5 матчей) − (средние очки за весь этап). Плюс — вы набираете больше обычного. Появляется, когда есть достаточно матчей.",
-  archetype:
-    "Архетип — стиль прогнозов (про то, как вы ставите), а не качество. Подробное объяснение — внутри «Детали».",
-  outcomeBar:
-    "Распределение 1/X/2 — это стиль: как часто вы ставите победу хозяев (1), ничью (X) и победу гостей (2).",
-};
-
-/* ---------- main page ---------- */
-
 export default async function AnalyticsPage({ searchParams }: Props) {
   const sb = service();
-
   const sp = (searchParams ? await searchParams : {}) as SearchParams;
+  const sort = (sp.sort ?? "points").toLowerCase();
 
-  const viewRaw = (sp.view ?? "quality").toLowerCase();
-  const view: "quality" | "style" = viewRaw === "style" ? "style" : "quality";
-
-  const modeRaw = (sp.mode ?? "compact").toLowerCase();
-  const mode: "compact" | "details" = modeRaw === "details" ? "details" : "compact";
-
-  const sort = (sp.sort ?? "matches").toLowerCase();
-  const sortOptions = view === "style" ? SORT_OPTIONS_STYLE : SORT_OPTIONS_QUALITY;
-
-  // Текущий этап
+  // current stage
   const { data: stage, error: sErr } = await sb
     .from("stages")
-    .select("id,name")
+    .select("id,name,status")
     .eq("is_current", true)
     .maybeSingle<StageRow>();
 
@@ -378,21 +103,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   const stageId = Number(stage.id);
 
-  const { data: base } = await sb
-    .from("analytics_stage_baseline")
-    .select("updated_at,users_count")
-    .eq("stage_id", stageId)
-    .maybeSingle();
-
-  const { count: finishedCnt } = await sb
-    .from("matches")
-    .select("id", { count: "exact", head: true })
-    .eq("stage_id", stageId)
-    .eq("status", "finished")
-    .not("home_score", "is", null)
-    .not("away_score", "is", null);
-
-  // Пользователи (без ADMIN)
+  // users (exclude ADMIN)
   const { data: accounts, error: accErr } = await sb
     .from("login_accounts")
     .select("user_id,login")
@@ -409,11 +120,11 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   const realAccounts = (accounts ?? []).filter(
     (a: LoginAccountRow) => String(a.login ?? "").trim().toUpperCase() !== "ADMIN"
-  );
+  ) as LoginAccountRow[];
 
-  const realUserIds = Array.from(new Set(realAccounts.map((a: LoginAccountRow) => a.user_id)));
+  const userIds = Array.from(new Set(realAccounts.map((a) => a.user_id)));
 
-  if (realUserIds.length === 0) {
+  if (!userIds.length) {
     return (
       <div className="page">
         <h1>Аналитика</h1>
@@ -422,480 +133,224 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     );
   }
 
-  const { data: archRows } = await sb
-    .from("analytics_stage_user_archetype")
-    .select("stage_id,user_id,archetype_key,title_ru,summary_ru,state,updated_at")
-    .eq("stage_id", stageId)
-    .in("user_id", realUserIds);
-
-  const { data: aggRows } = await sb
-    .from("analytics_stage_user")
-    .select(
-      "stage_id,user_id,matches_count,exact_count,pred_home_count,pred_draw_count,pred_away_count,pred_total_sum,pred_absdiff_sum,pred_bigdiff_count,outcome_hit_count,diff_hit_count"
-    )
-    .eq("stage_id", stageId)
-    .in("user_id", realUserIds);
-
-  const { data: momRows } = await sb
-    .from("analytics_stage_user_momentum")
-    .select("stage_id,user_id,matches_count,momentum_current,momentum_series,avg_last_n,avg_all,n,k,updated_at")
-    .eq("stage_id", stageId)
-    .in("user_id", realUserIds);
-
   const { data: profiles } = await sb
     .from("profiles")
     .select("id,display_name")
-    .in("id", realUserIds);
+    .in("id", userIds);
 
   const profMap = new Map<string, ProfileRow>();
-  for (const p of profiles ?? []) profMap.set(p.id, p);
+  for (const p of (profiles ?? []) as ProfileRow[]) profMap.set(p.id, p);
 
-  const aggMap = new Map<string, AggRow>();
-  for (const a of aggRows ?? []) aggMap.set(a.user_id, a);
+  // finished matches in current stage
+  const { data: matchesRaw, error: mErr } = await sb
+    .from("matches")
+    .select("id,stage_id,status,home_score,away_score")
+    .eq("stage_id", stageId)
+    .eq("status", "finished")
+    .not("home_score", "is", null)
+    .not("away_score", "is", null);
 
-  const archMap = new Map<string, ArchRow>();
-  for (const a of archRows ?? []) archMap.set(a.user_id, a);
+  if (mErr) {
+    return (
+      <div className="page">
+        <h1>Аналитика</h1>
+        <p>Ошибка загрузки матчей: {mErr.message}</p>
+      </div>
+    );
+  }
 
-  const momMap = new Map<string, MomRow>();
-  for (const m of momRows ?? []) momMap.set(m.user_id, m);
+  const matches = (matchesRaw ?? []) as MatchRow[];
+  const matchIds = matches.map((m) => m.id);
 
-  const cards = realUserIds.map((uid) => {
+  const finishedCnt = matchIds.length;
+
+  // predictions for finished matches
+  const { data: predsRaw } = await sb
+    .from("predictions")
+    .select("match_id,user_id,home_pred,away_pred")
+    .in("match_id", matchIds)
+    .in("user_id", userIds);
+
+  const preds = (predsRaw ?? []) as PredRow[];
+
+  // ledger points (source of truth)
+  const { data: ledgerRaw } = await sb
+    .from("points_ledger")
+    .select("match_id,user_id,points,reason")
+    .in("match_id", matchIds)
+    .in("user_id", userIds);
+
+  const ledger = (ledgerRaw ?? []) as LedgerRow[];
+
+  // build maps
+  const matchMap = new Map<number, MatchRow>();
+  for (const m of matches) matchMap.set(m.id, m);
+
+  const predByMatchUser = new Map<number, Map<string, PredRow>>();
+  for (const p of preds) {
+    if (p.home_pred == null || p.away_pred == null) continue;
+    if (!predByMatchUser.has(p.match_id)) predByMatchUser.set(p.match_id, new Map());
+    predByMatchUser.get(p.match_id)!.set(p.user_id, p);
+  }
+
+  const ptsByMatchUser = new Map<number, Map<string, number>>();
+  for (const r of ledger) {
+    if (String(r.reason ?? "") !== "prediction") continue;
+    if (!ptsByMatchUser.has(r.match_id)) ptsByMatchUser.set(r.match_id, new Map());
+    ptsByMatchUser.get(r.match_id)!.set(r.user_id, Number(r.points ?? 0));
+  }
+
+  // compute stats per user
+  const rows = userIds.map((uid) => {
+    let matchesCount = 0;
+    let pointsSum = 0;
+
+    let exact = 0;
+    let outcomeHit = 0;
+    let diffHit = 0;
+
+    for (const mid of matchIds) {
+      const m = matchMap.get(mid);
+      if (!m || m.home_score == null || m.away_score == null) continue;
+
+      const pr = predByMatchUser.get(mid)?.get(uid);
+      if (!pr) continue;
+
+      matchesCount++;
+
+      const pts = ptsByMatchUser.get(mid)?.get(uid) ?? 0;
+      pointsSum += pts;
+
+      const ph = Number(pr.home_pred);
+      const pa = Number(pr.away_pred);
+
+      if (ph === m.home_score && pa === m.away_score) exact++;
+
+      const resSign = sign(m.home_score - m.away_score);
+      const predSign = sign(ph - pa);
+      if (resSign === predSign) outcomeHit++;
+
+      const resDiff = m.home_score - m.away_score;
+      const predDiff = ph - pa;
+      if (resDiff === predDiff) diffHit++;
+    }
+
     const acc = realAccounts.find((a) => a.user_id === uid);
     const prof = profMap.get(uid);
-    const agg = aggMap.get(uid);
-    const mom = momMap.get(uid);
-
-    const arch =
-      archMap.get(uid) ??
-      ({
-        stage_id: stageId,
-        user_id: uid,
-        archetype_key: "forming",
-        title_ru: "Формируется",
-        summary_ru: "Пока мало данных для стиля. Нужны завершённые матчи и заполненные прогнозы.",
-        state: "forming",
-        updated_at: base?.updated_at ?? new Date().toISOString(),
-      } as ArchRow);
-
-    const matches = agg?.matches_count ?? 0;
-
-    const exactRate = safeDiv(agg?.exact_count ?? 0, matches);
-    const outcomeRate = safeDiv(agg?.outcome_hit_count ?? 0, matches);
-    const diffRate = safeDiv(agg?.diff_hit_count ?? 0, matches);
-
-    const drawRate = safeDiv(agg?.pred_draw_count ?? 0, matches);
-    const avgTotal = matches ? Number(agg?.pred_total_sum ?? 0) / matches : 0;
-    const avgAbsDiff = matches ? Number(agg?.pred_absdiff_sum ?? 0) / matches : 0;
-
-    const predHome = agg?.pred_home_count ?? 0;
-    const predDraw = agg?.pred_draw_count ?? 0;
-    const predAway = agg?.pred_away_count ?? 0;
 
     const name =
       (prof?.display_name ?? "").trim() ||
       (acc?.login ?? "").trim() ||
       uid.slice(0, 8);
 
-    const momentumCurrent = Number(mom?.momentum_current ?? 0);
-    const momentumSeriesRaw = mom?.momentum_series ?? [];
-    const momentumSeries = Array.isArray(momentumSeriesRaw)
-      ? momentumSeriesRaw.map((x: any) => Number(x ?? 0))
-      : [];
-
     return {
       uid,
       name,
-      matches,
-
-      exactRate,
-      outcomeRate,
-      diffRate,
-
-      drawRate,
-      avgTotal,
-      avgAbsDiff,
-
-      predHome,
-      predDraw,
-      predAway,
-
-      archetype_key: arch.archetype_key,
-      title_ru: arch.title_ru,
-      summary_ru: arch.summary_ru,
-      state: arch.state,
-
-      momentumCurrent,
-      momentumSeries,
+      matchesCount,
+      pointsSum: Math.round(pointsSum * 100) / 100,
+      exactRate: safeDiv(exact, matchesCount),
+      outcomeRate: safeDiv(outcomeHit, matchesCount),
+      diffRate: safeDiv(diffHit, matchesCount),
     };
   });
 
-  // TOP — только если матчей достаточно
-  const withEnough = cards.filter((c) => c.matches >= MIN_TOP_MATCHES);
-
-  const pickTop = <T,>(arr: T[], score: (x: any) => number) =>
-    [...arr].sort(
-      (a: any, b: any) =>
-        score(b) - score(a) || (b.matches ?? 0) - (a.matches ?? 0)
-    )[0] ?? null;
-
-  const bestExact = withEnough.length ? pickTop(withEnough, (c) => c.exactRate) : null;
-  const bestOutcome = withEnough.length ? pickTop(withEnough, (c) => c.outcomeRate) : null;
-  const bestDiff = withEnough.length ? pickTop(withEnough, (c) => c.diffRate) : null;
-
-  const mostRisky = withEnough.length ? pickTop(withEnough, (c) => c.avgAbsDiff) : null;
-  const mostPeace = withEnough.length ? pickTop(withEnough, (c) => c.drawRate) : null;
-  const mostHighTotal = withEnough.length ? pickTop(withEnough, (c) => c.avgTotal) : null;
-
-  // сортировка списка
-  const sorted = [...cards].sort((a, b) => {
+  const sorted = [...rows].sort((a, b) => {
     if (sort === "name") return a.name.localeCompare(b.name, "ru");
+    if (sort === "matches") return (b.matchesCount ?? 0) - (a.matchesCount ?? 0);
     if (sort === "exact") return b.exactRate - a.exactRate;
     if (sort === "outcome") return b.outcomeRate - a.outcomeRate;
     if (sort === "diff") return b.diffRate - a.diffRate;
-    if (sort === "risk") return b.avgAbsDiff - a.avgAbsDiff;
-    if (sort === "draw") return b.drawRate - a.drawRate;
-    if (sort === "total") return b.avgTotal - a.avgTotal;
-    return (b.matches ?? 0) - (a.matches ?? 0);
+    // default points
+    return (b.pointsSum ?? 0) - (a.pointsSum ?? 0);
   });
 
-  const updated = base?.updated_at ? new Date(base.updated_at).toLocaleString("ru-RU") : "—";
-  const usersCount = base?.users_count ?? realUserIds.length;
-
-  const finished = finishedCnt ?? 0;
-  const totalMatches = 56;
-
-  function fmtMomentum(m: number, matches: number) {
-    if (matches < 3) return "н/д";
-    const arrow = m > 0.02 ? "↗" : m < -0.02 ? "↘" : "→";
-    const sign = m >= 0 ? "+" : "";
-    return `${sign}${n2(m)} ${arrow}`;
-  }
-
-  const baseHref = "/analytics";
-  const q = (next: Partial<SearchParams>) => {
-    const p = new URLSearchParams();
-    p.set("view", next.view ?? view);
-    p.set("sort", next.sort ?? sort);
-    p.set("mode", next.mode ?? mode);
-    return `${baseHref}?${p.toString()}`;
-  };
+  const q = (nextSort: string) => `/analytics?sort=${encodeURIComponent(nextSort)}`;
 
   return (
     <div className="page">
-      <div className="analyticsHead">
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
         <div>
           <h1>Аналитика</h1>
           <div className="pageMeta">
-            Этап: <b>{stage.name}</b> · обновлено: <b>{updated}</b>
+            Этап: <b>{stage.name}</b>
+            {stage.status ? <span> · {stage.status}</span> : null}
+            <span> · сыграно матчей: <b>{finishedCnt}</b></span>
           </div>
-
-          <details className="helpBox" style={{ marginTop: 10 }}>
-            <summary className="helpSummary">Пояснения (как читать)</summary>
-            <div className="helpBody">
-              <ul className="helpList">
-                <li><b>Качество</b> — точность попаданий (точный счёт / исход / разница).</li>
-                <li><b>Стиль</b> — что вы чаще ставите (риск, тотал, ничьи, распределение 1/X/2).</li>
-                <li><b>Форма</b> — отклонение последних матчей от среднего по этапу (плюс — вы “на ходу”).</li>
-                <li><b>Архетип</b> — краткое описание вашей манеры прогнозов.</li>
-              </ul>
-            </div>
-          </details>
         </div>
 
-        <div className="analyticsControls">
-          <TabLink href={q({ view: "quality", sort: "matches" })} active={view === "quality"} label="Качество" icon="🎯" />
-          <TabLink href={q({ view: "style", sort: "matches" })} active={view === "style"} label="Стиль" icon="🎛️" />
-
-          <ModePill
-            href={q({ mode: "compact" })}
-            active={mode === "compact"}
-            label="Коротко"
-            tip="Показываем только главное: читабельная таблица + минимум деталей."
-          />
-          <ModePill
-            href={q({ mode: "details" })}
-            active={mode === "details"}
-            label="Подробнее"
-            tip="Добавляются детали: спарклайн формы, распределение 1/X/2 и описания архетипов."
-          />
-
-          <form action="/analytics" method="get" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <input type="hidden" name="view" value={view} />
-            <input type="hidden" name="mode" value={mode} />
-            <select className="select" name="sort" defaultValue={sort} title="Сортировка списка участников">
-              {sortOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  Сортировка: {o.label}
-                </option>
-              ))}
-            </select>
-            <button className="appNavLink" type="submit" title="Применить сортировку">
-              Применить
-            </button>
-          </form>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Link className="appNavLink" href={q("points")}>Сорт: Очки</Link>
+          <Link className="appNavLink" href={q("matches")}>Матчи</Link>
+          <Link className="appNavLink" href={q("exact")}>Точный %</Link>
+          <Link className="appNavLink" href={q("outcome")}>Исход %</Link>
+          <Link className="appNavLink" href={q("diff")}>Разница %</Link>
+          <Link className="appNavLink" href={q("name")}>Имя</Link>
         </div>
       </div>
 
-      {/* Сводка */}
-      <div className="analyticsSummary" style={{ marginTop: 14 }}>
-        <div className="card analyticsSummaryCard">
-          <div className="analyticsSummaryInner" title="Сколько матчей завершено (и попало в расчёт аналитики)">
-            <div className="analyticsSummaryLabel">Завершено</div>
-            <div className="analyticsSummaryValue">
-              {finished} <span className="analyticsSummaryMuted">/ {totalMatches}</span>
+      {finishedCnt === 0 ? (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="cardBody">
+            <b>Пока нет завершённых матчей.</b>
+            <div style={{ marginTop: 6, opacity: 0.8 }}>
+              Аналитика появляется после того, как у матчей есть счёт и статус <code>finished</code>.
             </div>
           </div>
         </div>
+      ) : null}
 
-        <div className="card analyticsSummaryCard">
-          <div className="analyticsSummaryInner" title="Сколько участников (без ADMIN)">
-            <div className="analyticsSummaryLabel">Участников</div>
-            <div className="analyticsSummaryValue">{usersCount}</div>
-          </div>
-        </div>
+      <div className="tableWrap" style={{ marginTop: 14 }}>
+        <table className="table" style={{ minWidth: 820 }}>
+          <thead>
+            <tr>
+              <th className="thLeft">Участник</th>
+              <th className="thCenter" style={{ width: 110 }}>Матчей</th>
+              <th className="thCenter" style={{ width: 110 }}>Очки</th>
+              <th className="thCenter" style={{ width: 120 }}>Точный</th>
+              <th className="thCenter" style={{ width: 120 }}>Исход</th>
+              <th className="thCenter" style={{ width: 120 }}>Разница</th>
+            </tr>
+          </thead>
 
-        <div className="card analyticsSummaryCard">
-          <div
-            className="analyticsSummaryInner"
-            title={`TOP считается только для участников, у кого учтено минимум ${MIN_TOP_MATCHES} матч(а/ей)`}
-          >
-            <div className="analyticsSummaryLabel">TOP-порог</div>
-            <div className="analyticsSummaryValue">
-              {MIN_TOP_MATCHES} <span className="analyticsSummaryMuted">матча</span>
-            </div>
-          </div>
-        </div>
+          <tbody>
+            {sorted.map((r) => (
+              <tr key={r.uid}>
+                <td className="tdLeft">
+                  <div style={{ fontWeight: 950 }}>
+                    <Link href={`/analytics/${r.uid}`}>{r.name}</Link>
+                  </div>
+                  <div style={{ opacity: 0.75, marginTop: 4 }}>
+                    учтено матчей с прогнозом: <b>{r.matchesCount}</b>
+                  </div>
+                </td>
 
-        <div className="card analyticsSummaryCard">
-          <div className="analyticsSummaryInner" title="Режим отображения страницы">
-            <div className="analyticsSummaryLabel">Режим</div>
-            <div className="analyticsSummaryValue">{mode === "compact" ? "Коротко" : "Подробнее"}</div>
-          </div>
-        </div>
-      </div>
+                <td className="tdCenter">
+                  <span className="badge isNeutral">{r.matchesCount}</span>
+                </td>
 
-      {/* TOP */}
-      <div style={{ marginTop: 14 }}>
-        <div className="analyticsSectionTitle">TOP по этапу</div>
+                <td className="tdCenter">
+                  <b>{n2(r.pointsSum)}</b>
+                </td>
 
-        <div className="analyticsTopGrid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" as any }}>
-          {view === "quality" ? (
-            <>
-              {bestExact ? (
-                <TopMiniCard
-                  title="🏹 Точный счёт"
-                  href={`/analytics/${bestExact.uid}`}
-                  name={bestExact.name}
-                  value={pct01(bestExact.exactRate)}
-                  meta={`Матчей: ${bestExact.matches}`}
-                  tip={TIP.exact}
-                />
-              ) : null}
+                <td className="tdCenter">
+                  <b>{pct01(r.exactRate)}</b>
+                </td>
 
-              {bestOutcome ? (
-                <TopMiniCard
-                  title="🎯 Исход"
-                  href={`/analytics/${bestOutcome.uid}`}
-                  name={bestOutcome.name}
-                  value={pct01(bestOutcome.outcomeRate)}
-                  meta={`Матчей: ${bestOutcome.matches}`}
-                  tip={TIP.outcome}
-                />
-              ) : null}
+                <td className="tdCenter">
+                  <b>{pct01(r.outcomeRate)}</b>
+                </td>
 
-              {bestDiff ? (
-                <TopMiniCard
-                  title="📐 Разница"
-                  href={`/analytics/${bestDiff.uid}`}
-                  name={bestDiff.name}
-                  value={pct01(bestDiff.diffRate)}
-                  meta={`Матчей: ${bestDiff.matches}`}
-                  tip={TIP.diff}
-                />
-              ) : null}
-            </>
-          ) : (
-            <>
-              {mostRisky ? (
-                <TopMiniCard
-                  title="🔥 Риск"
-                  href={`/analytics/${mostRisky.uid}`}
-                  name={mostRisky.name}
-                  value={n2(mostRisky.avgAbsDiff)}
-                  meta={`Матчей: ${mostRisky.matches}`}
-                  tip={TIP.risk}
-                />
-              ) : null}
-
-              {mostHighTotal ? (
-                <TopMiniCard
-                  title="⚽ Тотал"
-                  href={`/analytics/${mostHighTotal.uid}`}
-                  name={mostHighTotal.name}
-                  value={n2(mostHighTotal.avgTotal)}
-                  meta={`Матчей: ${mostHighTotal.matches}`}
-                  tip={TIP.total}
-                />
-              ) : null}
-
-              {mostPeace ? (
-                <TopMiniCard
-                  title="🤝 Ничьи"
-                  href={`/analytics/${mostPeace.uid}`}
-                  name={mostPeace.name}
-                  value={pct01(mostPeace.drawRate)}
-                  meta={`Матчей: ${mostPeace.matches}`}
-                  tip={TIP.draw}
-                />
-              ) : null}
-            </>
-          )}
-        </div>
-
-        <div className="analyticsHint" title="Чтобы TOP был честным, требуется минимум матчей.">
-          TOP считается только для участников, у кого учтено <b>{MIN_TOP_MATCHES}+</b> матча.
-        </div>
-      </div>
-
-      {/* Участники */}
-      <div style={{ marginTop: 16 }}>
-        <div className="analyticsSectionTitle">Участники</div>
-
-        <div className="tableWrap" style={{ marginTop: 10 }}>
-          <table className="table" style={{ minWidth: 900 }}>
-            <thead>
-              <tr>
-                <th className="thLeft">
-                  <ThHelp label="Участник" tip="Кликни по имени, чтобы открыть персональную страницу аналитики (если она есть)." />
-                </th>
-
-                <th className="thCenter" style={{ width: 110 }}>
-                  <ThHelp label="Матчи" tip={TIP.matches} />
-                </th>
-
-                {view === "quality" ? (
-                  <>
-                    <th className="thCenter" style={{ width: 140 }}>
-                      <ThHelp label="Точный" tip={TIP.exact} />
-                    </th>
-                    <th className="thCenter" style={{ width: 120 }}>
-                      <ThHelp label="Исход" tip={TIP.outcome} />
-                    </th>
-                    <th className="thCenter" style={{ width: 120 }}>
-                      <ThHelp label="Разница" tip={TIP.diff} />
-                    </th>
-                  </>
-                ) : (
-                  <>
-                    <th className="thCenter" style={{ width: 120 }}>
-                      <ThHelp label="Риск" tip={TIP.risk} />
-                    </th>
-                    <th className="thCenter" style={{ width: 120 }}>
-                      <ThHelp label="Тотал" tip={TIP.total} />
-                    </th>
-                    <th className="thCenter" style={{ width: 120 }}>
-                      <ThHelp label="Ничьи" tip={TIP.draw} />
-                    </th>
-                  </>
-                )}
-
-                <th className="thCenter" style={{ width: 140 }}>
-                  <ThHelp label="Форма" tip={TIP.form} />
-                </th>
-
-                <th className="thCenter" style={{ width: 220 }}>
-                  <ThHelp label="Архетип" tip={TIP.archetype} />
-                </th>
+                <td className="tdCenter">
+                  <b>{pct01(r.diffRate)}</b>
+                </td>
               </tr>
-            </thead>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-            <tbody>
-              {sorted.map((c) => {
-                const icon = archetypeIcon(c.archetype_key);
-                const stateLabel = stageStateLabel(c.state);
-
-                return (
-                  <tr key={c.uid}>
-                    <td className="tdLeft">
-                      <div style={{ fontWeight: 950 }}>
-                        <Link href={`/analytics/${c.uid}`}>{c.name}</Link>
-                      </div>
-
-                      {mode === "details" ? (
-                        <div style={{ marginTop: 6, opacity: 0.75, fontWeight: 800 }} title={TIP.outcomeBar}>
-                          1/X/2: {pct01(safeDiv(c.predHome, c.matches))} / {pct01(safeDiv(c.predDraw, c.matches))} /{" "}
-                          {pct01(safeDiv(c.predAway, c.matches))}
-                        </div>
-                      ) : null}
-                    </td>
-
-                    <td className="tdCenter">
-                      <span className="badge isNeutral" title={TIP.matches}>
-                        {c.matches}
-                      </span>
-                    </td>
-
-                    {view === "quality" ? (
-                      <>
-                        <td className="tdCenter" title={TIP.exact}><b>{pct01(c.exactRate)}</b></td>
-                        <td className="tdCenter" title={TIP.outcome}><b>{pct01(c.outcomeRate)}</b></td>
-                        <td className="tdCenter" title={TIP.diff}><b>{pct01(c.diffRate)}</b></td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="tdCenter" title={TIP.risk}><b>{n2(c.avgAbsDiff)}</b></td>
-                        <td className="tdCenter" title={TIP.total}><b>{n2(c.avgTotal)}</b></td>
-                        <td className="tdCenter" title={TIP.draw}><b>{pct01(c.drawRate)}</b></td>
-                      </>
-                    )}
-
-                    <td className="tdCenter" title={TIP.form}>
-                      <span className="badge isNeutral">{fmtMomentum(c.momentumCurrent, c.matches)}</span>
-                    </td>
-
-                    <td className="tdCenter">
-                      <span
-                        className={badgeClassByKey(c.archetype_key)}
-                        title={mode === "details" ? c.summary_ru : "Включи режим «Подробнее», чтобы читать описание"}
-                      >
-                        <span aria-hidden="true">{icon}</span> {c.title_ru}
-                        {stateLabel ? <span style={{ opacity: 0.7, marginLeft: 6 }}>· {stateLabel}</span> : null}
-                      </span>
-
-                      {mode === "details" ? (
-                        <details className="helpBox" style={{ marginTop: 10, textAlign: "left" }}>
-                          <summary className="helpSummary">Детали</summary>
-                          <div className="helpBody">
-                            <div style={{ fontWeight: 900, marginBottom: 8 }} title={TIP.archetype}>
-                              Архетип
-                            </div>
-                            <div style={{ opacity: 0.85 }}>{c.summary_ru}</div>
-
-                            <div style={{ marginTop: 12, fontWeight: 900, marginBottom: 8 }} title={TIP.form}>
-                              Форма (последние значения)
-                            </div>
-                            <Sparkline values={c.momentumSeries ?? []} />
-
-                            <div style={{ marginTop: 12, fontWeight: 900, marginBottom: 8 }} title={TIP.outcomeBar}>
-                              Распределение 1/X/2
-                            </div>
-                            <OutcomeBar home={c.predHome} draw={c.predDraw} away={c.predAway} />
-                          </div>
-                        </details>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {mode === "compact" ? (
-          <div className="analyticsHintSmall">
-            Подробности (описание архетипа, график формы, распределение 1/X/2) — включи режим <b>Подробнее</b>.
-          </div>
-        ) : null}
+      <div style={{ marginTop: 14 }}>
+        <Link href="/dashboard" className="navLink">← Назад</Link>
       </div>
     </div>
   );
