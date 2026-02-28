@@ -869,6 +869,13 @@ CREATE OR REPLACE FUNCTION "public"."score_match"("p_match_id" bigint) RETURNS "
 declare
   v_is_admin boolean;
 begin
+  -- ✅ service_role имеет право (server routes с SUPABASE_SERVICE_ROLE_KEY)
+  if auth.role() = 'service_role' then
+    perform public.score_match_core(p_match_id);
+    return;
+  end if;
+
+  -- ✅ обычные админы (если вызов идет от пользователя)
   select exists (
     select 1
     from public.profiles
