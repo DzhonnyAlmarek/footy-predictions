@@ -79,9 +79,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Пересчитываем начисления. Пробуем несколько вариантов имён/аргументов,
-    // чтобы не гадать как именно названы параметры в SQL-функциях.
-    const attempts: Array<{ fn: string; args: any }> = [
+    // 1) Пересчитываем начисления (points_ledger)
+    const scoreAttempts: Array<{ fn: string; args: any }> = [
       { fn: "recalculate_match", args: { p_match_id: matchId } },
       { fn: "recalculate_match", args: { match_id: matchId } },
       { fn: "recalculate_match", args: { id: matchId } },
@@ -92,18 +91,18 @@ export async function POST(req: Request) {
     ];
 
     let lastMsg = "";
-    let ok = false;
+    let scoreOk = false;
 
-    for (const a of attempts) {
+    for (const a of scoreAttempts) {
       const r = await tryRpc(sb, a.fn, a.args);
       if (r.ok) {
-        ok = true;
+        scoreOk = true;
         break;
       }
       lastMsg = `${a.fn}(${Object.keys(a.args).join(",")}): ${r.message}`;
     }
 
-    if (!ok) {
+    if (!scoreOk) {
       return NextResponse.json(
         {
           ok: false,
@@ -111,6 +110,39 @@ export async function POST(req: Request) {
           message:
             lastMsg ||
             "Could not run recalculate_match/score_match (check function name/args and permissions).",
+        },
+        { status: 500 }
+      );
+    }
+
+    // 2) Обновляем аналитику этапа (analytics_* таблицы)
+    // Делаем это после успешного начисления, чтобы аналитика читала уже готовый points_ledger.
+    const analyticsAttempts: Array<{ fn: string; args: any }> = [
+      { fn: "recompute_stage_analytics_for_match", args: { p_match_id: matchId } },
+      { fn: "recompute_stage_analytics_for_match", args: { match_id: matchId } },
+      { fn: "recompute_stage_analytics_for_match", args: { id: matchId } },
+    ];
+
+    let aMsg = "";
+    let analyticsOk = false;
+
+    for (const a of analyticsAttempts) {
+      const r = await tryRpc(sb, a.fn, a.args);
+      if (r.ok) {
+        analyticsOk = true;
+        break;
+      }
+      aMsg = `${a.fn}(${Object.keys(a.args).join(",")}): ${r.message}`;
+    }
+
+    if (!analyticsOk) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "analytics_recalc_failed",
+          message:
+            aMsg ||
+            "Could not run recompute_stage_analytics_for_match (check function name/args and permissions).",
         },
         { status: 500 }
       );
