@@ -27,26 +27,9 @@ type AggRow = {
   stage_id: number;
   user_id: string;
   matches_count: number;
-
-  points_sum: number;
-  points_avg: number;
-
   exact_count: number;
   outcome_hit_count: number;
   diff_hit_count: number;
-};
-
-type MomRow = {
-  stage_id: number;
-  user_id: string;
-  matches_count: number;
-  momentum_current: number;
-  momentum_series: any;
-  avg_last_n: number;
-  avg_all: number;
-  n: number;
-  k: number;
-  updated_at: string;
 };
 
 type ArchRow = {
@@ -59,10 +42,23 @@ type ArchRow = {
   updated_at: string;
 };
 
+type LedgerRow = {
+  user_id: string;
+  match_id: number;
+  points: string | number;
+  matches: {
+    kickoff_at: string | null;
+    stage_id: number;
+    status: string | null;
+    home_score: number | null;
+    away_score: number | null;
+  } | null;
+};
+
 const TIP = {
-  points: "Сколько очков вы набрали за учтённые матчи этапа.",
+  points: "Сумма очков за сыгранные матчи текущего этапа.",
   avgPoints:
-    "Среднее число очков за один учтённый матч. Удобно сравнивать, если у людей разное число матчей.",
+    "Среднее число очков за матч. Удобно сравнивать, если у людей разное число матчей.",
   outcome:
     "Как часто вы угадываете победу/ничью/поражение (1/X/2), даже если точный счёт не совпал.",
   diff:
@@ -74,8 +70,6 @@ const TIP = {
     "Очки по матчам подряд (слева старее → справа новее). Видно серии и провалы.",
   archetype:
     "Ваш стиль прогнозов. Это про манеру, а не про “сильнее/слабее”.",
-  pointsCheck:
-    "Проверка: сравниваем “Очки” со суммой очков по матчам. Если есть ⚠️ — значит где-то ещё не обновилось или есть расхождение в учёте матчей.",
 };
 
 function pct(a: number, b: number) {
@@ -167,20 +161,15 @@ export default async function AnalyticsUserPage({ params }: Props) {
     (account.login ?? "").trim() ||
     userId.slice(0, 8);
 
+  // качество (проценты) — из analytics_stage_user
   const { data: agg } = await sb
     .from("analytics_stage_user")
-    .select("stage_id,user_id,matches_count,points_sum,points_avg,exact_count,outcome_hit_count,diff_hit_count")
+    .select("stage_id,user_id,matches_count,exact_count,outcome_hit_count,diff_hit_count")
     .eq("stage_id", stageId)
     .eq("user_id", userId)
     .maybeSingle<AggRow>();
 
-  const { data: mom } = await sb
-    .from("analytics_stage_user_momentum")
-    .select("stage_id,user_id,matches_count,momentum_current,momentum_series,avg_last_n,avg_all,n,k,updated_at")
-    .eq("stage_id", stageId)
-    .eq("user_id", userId)
-    .maybeSingle<MomRow>();
-
+  // архетип
   const { data: arch } = await sb
     .from("analytics_stage_user_archetype")
     .select("stage_id,user_id,archetype_key,title_ru,summary_ru,state,updated_at")
@@ -188,19 +177,75 @@ export default async function AnalyticsUserPage({ params }: Props) {
     .eq("user_id", userId)
     .maybeSingle<ArchRow>();
 
-  const matches = Number(agg?.matches_count ?? 0);
-  const pointsSum = Number(agg?.points_sum ?? 0);
+  // ✅ очки/матчи/серия — из ledger
+  const { data: ledgerRows, error: ledErr } = await sb
+    .from("points_ledger")
+    .select(
+      `
+      user_id,
+      match_id,
+      points,
+      matches:matches!inner (
+        stage_id,
+        kickoff_at,
+        status,
+        home_score,
+        away_score
+      )
+    `
+    )
+    .eq("reason", "prediction")
+    .eq("user_id", userId)
+    .eq("matches.stage_id", stageId);
+
+  if (ledErr) {
+    return (
+      <div className="page">
+        <h1>{name}</h1>
+        <p>Ошибка загрузки начислений: {ledErr.message}</p>
+        <div style={{ marginTop: 14 }}>
+          <Link href="/analytics" className="navLink">← Назад</Link>
+        </div>
+      </div>
+    );
+  }
+
+  let pointsSum = 0;
+  const matchSet = new Set<number>();
+  const seriesPairs: Array<{ t: number; pts: number }> = [];
+
+  for (const r of (ledgerRows ?? []) as any as LedgerRow[]) {
+    const m = r.matches;
+    if (!m) continue;
+
+    const okFinished =
+      String(m.status ?? "") === "finished" &&
+      m.home_score != null &&
+      m.away_score != null;
+
+    if (!okFinished) continue;
+
+    const pts = Number(r.points ?? 0);
+    pointsSum += pts;
+    matchSet.add(Number(r.match_id));
+
+    const t = m.kickoff_at ? new Date(m.kickoff_at).getTime() : 0;
+    seriesPairs.push({ t, pts });
+  }
+
+  const matches = matchSet.size;
   const avgPoints = matches ? pointsSum / matches : 0;
 
-  const seriesRaw = mom?.momentum_series ?? [];
-  const series = Array.isArray(seriesRaw) ? seriesRaw.map((x: any) => Number(x ?? 0)) : [];
-  const seriesSum = sumNums(series);
+  seriesPairs.sort((a, b) => a.t - b.t);
+  const series = seriesPairs.map((x) => x.pts);
 
-  const mismatch = series.length ? Math.abs(pointsSum - seriesSum) > 0.01 : false;
+  // форма: avg(last5) - avg(all)
+  const allAvg = matches ? pointsSum / matches : 0;
+  const tail = series.slice(-5);
+  const lastAvg = tail.length ? sumNums(tail) / tail.length : 0;
+  const momentum = tail.length >= 2 ? lastAvg - allAvg : 0;
 
-  const updated = (arch?.updated_at || mom?.updated_at)
-    ? new Date((arch?.updated_at ?? mom?.updated_at) as string).toLocaleString("ru-RU")
-    : "—";
+  const updated = arch?.updated_at ? new Date(arch.updated_at).toLocaleString("ru-RU") : "—";
 
   return (
     <div className="page">
@@ -248,26 +293,18 @@ export default async function AnalyticsUserPage({ params }: Props) {
 
             <div className="kpi" title={TIP.outcome}>
               <div className="kpiLabel">Исход</div>
-              <div className="kpiValue">{pct(Number(agg?.outcome_hit_count ?? 0), matches)}</div>
+              <div className="kpiValue">{pct(Number(agg?.outcome_hit_count ?? 0), Number(agg?.matches_count ?? 0))}</div>
             </div>
 
             <div className="kpi" title={TIP.diff}>
               <div className="kpiLabel">Разница</div>
-              <div className="kpiValue">{pct(Number(agg?.diff_hit_count ?? 0), matches)}</div>
+              <div className="kpiValue">{pct(Number(agg?.diff_hit_count ?? 0), Number(agg?.matches_count ?? 0))}</div>
             </div>
 
             <div className="kpi" title={TIP.exact}>
               <div className="kpiLabel">Точный</div>
-              <div className="kpiValue">{pct(Number(agg?.exact_count ?? 0), matches)}</div>
+              <div className="kpiValue">{pct(Number(agg?.exact_count ?? 0), Number(agg?.matches_count ?? 0))}</div>
             </div>
-          </div>
-
-          <div style={{ marginTop: 10, opacity: 0.85 }} title={TIP.pointsCheck}>
-            {mismatch ? (
-              <span style={{ fontWeight: 900 }}>⚠️ проверка очков по матчам: {n2(seriesSum)}</span>
-            ) : (
-              <span>проверка очков по матчам: {n2(seriesSum)}</span>
-            )}
           </div>
         </div>
       </div>
@@ -277,9 +314,8 @@ export default async function AnalyticsUserPage({ params }: Props) {
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
             <div style={{ fontWeight: 950 }} title={TIP.spark}>Форма (очки по матчам)</div>
             <div style={{ opacity: 0.78 }}>
-              среднее: <b>{n2(Number(mom?.avg_all ?? 0))}</b> · последние {mom?.n ?? 5}:{" "}
-              <b>{n2(Number(mom?.avg_last_n ?? 0))}</b> · форма:{" "}
-              <b>{(Number(mom?.momentum_current ?? 0) >= 0 ? "+" : "") + n2(Number(mom?.momentum_current ?? 0))}</b>
+              среднее: <b>{n2(allAvg)}</b> · последние 5: <b>{n2(lastAvg)}</b> · форма:{" "}
+              <b>{(momentum >= 0 ? "+" : "") + n2(momentum)}</b>
             </div>
           </div>
 
@@ -299,13 +335,6 @@ export default async function AnalyticsUserPage({ params }: Props) {
           ) : null}
         </div>
       </div>
-
-      {mismatch ? (
-        <div className="analyticsHintSmall" style={{ marginTop: 10 }} title={TIP.pointsCheck}>
-          ⚠️ Есть расхождение “Очки” и “проверка очков по матчам”. Обычно помогает повторный пересчёт последнего матча
-          (в админке через “Счёт”).
-        </div>
-      ) : null}
 
       <div style={{ marginTop: 14 }}>
         <Link href="/analytics" className="navLink">← Назад к списку</Link>

@@ -27,10 +27,6 @@ type AggRow = {
   stage_id: number;
   user_id: string;
   matches_count: number;
-
-  points_sum: number; // очки за этап
-  points_avg: number; // средние очки
-
   exact_count: number;
   outcome_hit_count: number;
   diff_hit_count: number;
@@ -46,20 +42,18 @@ type ArchRow = {
   updated_at: string;
 };
 
-type MomRow = {
-  stage_id: number;
+type LedgerRow = {
   user_id: string;
-  matches_count: number;
-  momentum_current: number;
-  momentum_series: any;
-  avg_last_n: number;
-  avg_all: number;
-  n: number;
-  k: number;
-  updated_at: string;
+  match_id: number;
+  points: string | number;
+  matches: {
+    kickoff_at: string | null;
+    stage_id: number;
+    status: string | null;
+    home_score: number | null;
+    away_score: number | null;
+  } | null;
 };
-
-type BaselineRow = { stage_id: number; users_count: number; updated_at: string };
 
 type SearchParams = { sort?: string; mode?: string };
 type Props = { searchParams?: Promise<SearchParams> };
@@ -76,6 +70,7 @@ function pct01(v: number) {
 function n2(v: number) {
   return (Math.round(v * 100) / 100).toFixed(2);
 }
+
 function sumNums(arr: number[]) {
   return (arr ?? []).reduce((s, x) => s + (Number.isFinite(x) ? x : 0), 0);
 }
@@ -113,17 +108,15 @@ function badgeClassByKey(key: string) {
   }
 }
 
-/* ---------- user-level tips (no dev jargon) ---------- */
+/* ---------- user-level tips ---------- */
 
 const TIP = {
-  updated:
-    "Когда статистика последний раз обновлялась после сыгранного матча.",
   matches:
-    "Сколько сыгранных матчей уже учтено именно для вас. Матч считается, если он завершён и у вас был заполнен прогноз.",
+    "Сколько сыгранных матчей уже учтено для вас. Обычно это матчи, по которым начислены очки.",
   points:
-    "Сколько очков вы набрали за учтённые матчи этапа.",
+    "Сумма очков за сыгранные матчи текущего этапа.",
   avgPoints:
-    "Среднее число очков за один учтённый матч. Удобно сравнивать участников, если матчей учтено разное число.",
+    "Среднее число очков за матч. Удобно сравнивать участников, если у кого-то учтено больше матчей.",
   outcome:
     "Как часто вы угадываете победу/ничью/поражение (1/X/2), даже если точный счёт не совпал.",
   diff:
@@ -136,8 +129,6 @@ const TIP = {
     "Очки по матчам подряд (слева старее → справа новее). Видно серии и провалы.",
   archetype:
     "Ваш стиль прогнозов (осторожный/смелый/точный и т.д.). Это про манеру, а не про “сильнее/слабее”.",
-  pointsCheck:
-    "Проверка: сравниваем “Очки” со суммой очков по матчам. Если есть ⚠️ — значит где-то ещё не обновилось или есть расхождение в учёте матчей.",
 };
 
 /* ---------- tiny UI helpers ---------- */
@@ -253,12 +244,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   const stageId = Number(stage.id);
 
-  const { data: baseline } = await sb
-    .from("analytics_stage_baseline")
-    .select("stage_id,users_count,updated_at")
-    .eq("stage_id", stageId)
-    .maybeSingle<BaselineRow>();
-
+  // Пользователи (без ADMIN)
   const { data: accounts } = await sb
     .from("login_accounts")
     .select("user_id,login")
@@ -282,90 +268,159 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const profMap = new Map<string, ProfileRow>();
   for (const p of (profiles ?? []) as ProfileRow[]) profMap.set(p.id, p);
 
+  // Качество (проценты точный/исход/разница) — оставляем из analytics_stage_user (это не про сумму очков)
   const { data: aggRows } = await sb
     .from("analytics_stage_user")
-    .select("stage_id,user_id,matches_count,points_sum,points_avg,exact_count,outcome_hit_count,diff_hit_count")
-    .eq("stage_id", stageId)
-    .in("user_id", userIds);
-
-  const { data: momRows } = await sb
-    .from("analytics_stage_user_momentum")
-    .select("stage_id,user_id,matches_count,momentum_current,momentum_series,avg_last_n,avg_all,n,k,updated_at")
-    .eq("stage_id", stageId)
-    .in("user_id", userIds);
-
-  const { data: archRows } = await sb
-    .from("analytics_stage_user_archetype")
-    .select("stage_id,user_id,archetype_key,title_ru,summary_ru,state,updated_at")
+    .select("stage_id,user_id,matches_count,exact_count,outcome_hit_count,diff_hit_count")
     .eq("stage_id", stageId)
     .in("user_id", userIds);
 
   const aggMap = new Map<string, AggRow>();
   for (const a of (aggRows ?? []) as any[]) aggMap.set(a.user_id, a as AggRow);
 
-  const momMap = new Map<string, MomRow>();
-  for (const m of (momRows ?? []) as any[]) momMap.set(m.user_id, m as MomRow);
+  // Архетип
+  const { data: archRows } = await sb
+    .from("analytics_stage_user_archetype")
+    .select("stage_id,user_id,archetype_key,title_ru,summary_ru,state,updated_at")
+    .eq("stage_id", stageId)
+    .in("user_id", userIds);
 
   const archMap = new Map<string, ArchRow>();
   for (const a of (archRows ?? []) as any[]) archMap.set(a.user_id, a as ArchRow);
 
+  // ✅ КЛЮЧЕВОЕ: Очки/Матчи/Серия формы считаем из фактических начислений (points_ledger) по матчам текущего этапа
+  const { data: ledgerRows, error: ledErr } = await sb
+    .from("points_ledger")
+    .select(
+      `
+      user_id,
+      match_id,
+      points,
+      matches:matches!inner (
+        stage_id,
+        kickoff_at,
+        status,
+        home_score,
+        away_score
+      )
+    `
+    )
+    .eq("reason", "prediction")
+    .in("user_id", userIds)
+    .eq("matches.stage_id", stageId);
+
+  if (ledErr) {
+    return (
+      <div className="page">
+        <h1>Аналитика</h1>
+        <p>Ошибка загрузки начислений: {ledErr.message}</p>
+      </div>
+    );
+  }
+
+  // агрегируем: суммы, count, серия по kickoff_at
+  const perUserSum = new Map<string, number>();
+  const perUserMatchSet = new Map<string, Set<number>>();
+  const perUserSeries = new Map<string, Array<{ t: number; pts: number }>>();
+
+  for (const r of (ledgerRows ?? []) as any as LedgerRow[]) {
+    const m = r.matches;
+    if (!m) continue;
+
+    // считаем только завершённые матчи со счётом (как в текущей таблице)
+    const okFinished =
+      String(m.status ?? "") === "finished" &&
+      m.home_score != null &&
+      m.away_score != null;
+
+    if (!okFinished) continue;
+
+    const uid = r.user_id;
+    const pts = Number(r.points ?? 0);
+    const mid = Number(r.match_id);
+
+    perUserSum.set(uid, (perUserSum.get(uid) ?? 0) + pts);
+
+    if (!perUserMatchSet.has(uid)) perUserMatchSet.set(uid, new Set());
+    perUserMatchSet.get(uid)!.add(mid);
+
+    const t = m.kickoff_at ? new Date(m.kickoff_at).getTime() : 0;
+    if (!perUserSeries.has(uid)) perUserSeries.set(uid, []);
+    perUserSeries.get(uid)!.push({ t, pts });
+  }
+
+  // строим cards
   const cards = userIds.map((uid) => {
     const acc = realAccounts.find((a) => a.user_id === uid);
     const prof = profMap.get(uid);
     const agg = aggMap.get(uid);
-    const mom = momMap.get(uid);
-    const arch = archMap.get(uid);
 
     const name = (prof?.display_name ?? "").trim() || (acc?.login ?? "").trim() || uid.slice(0, 8);
 
-    const matches = Number(agg?.matches_count ?? 0);
-    const pointsSum = Number(agg?.points_sum ?? 0);
-
-    // IMPORTANT: avg показываем как pointsSum/matches (на всякий случай), а не как "points_avg" (чтобы не было рассинхрона)
+    const pointsSum = perUserSum.get(uid) ?? 0;
+    const matches = perUserMatchSet.get(uid)?.size ?? 0;
     const avgPoints = matches ? pointsSum / matches : 0;
 
-    const exactRate = safeDiv(Number(agg?.exact_count ?? 0), matches);
-    const outcomeRate = safeDiv(Number(agg?.outcome_hit_count ?? 0), matches);
-    const diffRate = safeDiv(Number(agg?.diff_hit_count ?? 0), matches);
+    const seriesPairs = (perUserSeries.get(uid) ?? []).sort((a, b) => a.t - b.t);
+    const series = seriesPairs.map((x) => x.pts);
 
-    const seriesRaw = mom?.momentum_series ?? [];
-    const series = Array.isArray(seriesRaw) ? seriesRaw.map((x: any) => Number(x ?? 0)) : [];
-    const seriesSum = sumNums(series);
+    // Форма: avg(last5) - avg(all)
+    const allAvg = matches ? pointsSum / matches : 0;
+    const lastN = 5;
+    const tail = series.slice(-lastN);
+    const lastAvg = tail.length ? sumNums(tail) / tail.length : 0;
+    const momentum = tail.length >= 2 ? lastAvg - allAvg : 0; // чтобы не шуметь на 1 матче
 
-    const momentum = Number(mom?.momentum_current ?? 0);
+    // quality rates — берём из analytics_stage_user, но нормируем по нашему matches (ledger) чтобы не расходилось
+    // если agg.matches_count отличается — проценты будут “красивые”, но лучше честно: считаем по agg / agg.matches_count?
+    // выберем компромисс: если agg.matches_count совпадает с matches — ок, иначе покажем по matches=agg.matches_count
+    const qMatches = Number(agg?.matches_count ?? matches ?? 0) || 0;
 
-    const archetype_key = arch?.archetype_key ?? "forming";
-    const title_ru = arch?.title_ru ?? "Формируется";
-    const summary_ru = arch?.summary_ru ?? "Пока мало данных для стиля.";
-    const state = (arch?.state ?? "forming") as ArchRow["state"];
+    const exactRate = safeDiv(Number(agg?.exact_count ?? 0), qMatches);
+    const outcomeRate = safeDiv(Number(agg?.outcome_hit_count ?? 0), qMatches);
+    const diffRate = safeDiv(Number(agg?.diff_hit_count ?? 0), qMatches);
+
+    const arch =
+      archMap.get(uid) ??
+      ({
+        stage_id: stageId,
+        user_id: uid,
+        archetype_key: "forming",
+        title_ru: "Формируется",
+        summary_ru: "Пока мало данных для стиля.",
+        state: "forming",
+        updated_at: new Date().toISOString(),
+      } as ArchRow);
 
     return {
       uid,
       name,
+
       matches,
       pointsSum,
       avgPoints,
+
       exactRate,
       outcomeRate,
       diffRate,
+
       series,
-      seriesSum,
       momentum,
-      archetype_key,
-      title_ru,
-      summary_ru,
-      state,
+
+      archetype_key: arch.archetype_key,
+      title_ru: arch.title_ru,
+      summary_ru: arch.summary_ru,
+      state: arch.state,
     };
   });
 
-  // TOP (6 плиток): выбираем лидеров по метрикам
+  // TOP (6 плиток)
   const pickTop = <T,>(arr: T[], score: (x: any) => number) =>
     [...arr].sort((a: any, b: any) => score(b) - score(a) || (b.matches ?? 0) - (a.matches ?? 0))[0] ?? null;
 
   const topAvg = pickTop(cards, (c) => c.avgPoints);
   const topForm = pickTop(cards, (c) => c.momentum);
   const topPoints = pickTop(cards, (c) => c.pointsSum);
-
   const topOutcome = pickTop(cards, (c) => c.outcomeRate);
   const topDiff = pickTop(cards, (c) => c.diffRate);
   const topExact = pickTop(cards, (c) => c.exactRate);
@@ -381,8 +436,6 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     return b.avgPoints - a.avgPoints; // avg default
   });
 
-  const updated = baseline?.updated_at ? new Date(baseline.updated_at).toLocaleString("ru-RU") : "—";
-
   const q = (p: Partial<SearchParams>) => {
     const s = new URLSearchParams();
     s.set("sort", p.sort ?? sort);
@@ -396,21 +449,14 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     return `${sign}${n2(m)} ${arrow}`;
   }
 
-  // Для “проверки очков”: сравним pointsSum с суммой серии (если серия есть)
-  function pointsMismatch(pointsSum: number, seriesSum: number, seriesLen: number) {
-    if (!seriesLen) return false;
-    return Math.abs(pointsSum - seriesSum) > 0.01;
-  }
-
   return (
     <div className="page">
       <div className="analyticsHead">
         <div>
           <h1>Аналитика</h1>
-          <div className="pageMeta" title={TIP.updated}>
+          <div className="pageMeta">
             Этап: <b>{stage.name}</b>
             {stage.status ? <span> · {stage.status}</span> : null}
-            <span> · обновлено: <b>{updated}</b></span>
           </div>
 
           <details className="helpBox" style={{ marginTop: 10 }}>
@@ -439,24 +485,43 @@ export default async function AnalyticsPage({ searchParams }: Props) {
             Подробнее
           </Link>
 
-          <Link href={q({ sort: "avg" })} className="appNavLink" title={TIP.avgPoints}>Сорт: Средние очки</Link>
-          <Link href={q({ sort: "form" })} className="appNavLink" title={TIP.form}>Форма</Link>
-          <Link href={q({ sort: "points" })} className="appNavLink" title={TIP.points}>Очки</Link>
-          <Link href={q({ sort: "matches" })} className="appNavLink" title={TIP.matches}>Матчи</Link>
-          <Link href={q({ sort: "outcome" })} className="appNavLink" title={TIP.outcome}>Исход%</Link>
-          <Link href={q({ sort: "diff" })} className="appNavLink" title={TIP.diff}>Разн.%</Link>
-          <Link href={q({ sort: "exact" })} className="appNavLink" title={TIP.exact}>Точный%</Link>
-          <Link href={q({ sort: "name" })} className="appNavLink">Имя</Link>
+          <Link href={q({ sort: "avg" })} className="appNavLink" title={TIP.avgPoints}>
+            Сорт: Средние очки
+          </Link>
+          <Link href={q({ sort: "form" })} className="appNavLink" title={TIP.form}>
+            Форма
+          </Link>
+          <Link href={q({ sort: "points" })} className="appNavLink" title={TIP.points}>
+            Очки
+          </Link>
+          <Link href={q({ sort: "matches" })} className="appNavLink" title={TIP.matches}>
+            Матчи
+          </Link>
+          <Link href={q({ sort: "outcome" })} className="appNavLink" title={TIP.outcome}>
+            Исход%
+          </Link>
+          <Link href={q({ sort: "diff" })} className="appNavLink" title={TIP.diff}>
+            Разн.%
+          </Link>
+          <Link href={q({ sort: "exact" })} className="appNavLink" title={TIP.exact}>
+            Точный%
+          </Link>
+          <Link href={q({ sort: "name" })} className="appNavLink">
+            Имя
+          </Link>
         </div>
       </div>
 
-      {/* TOP: 2 колонки × 3 ряда */}
+      {/* TOP: жестко 2 колонки */}
       <div style={{ marginTop: 14 }}>
         <div className="analyticsSectionTitle">TOP по этапу</div>
 
         <div
-          className="analyticsTopGrid"
-          style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" as any, gap: 10 }}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 10,
+          }}
         >
           {topAvg ? (
             <TopMiniCard
@@ -572,7 +637,6 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           <tbody>
             {sorted.map((c) => {
               const icon = archetypeIcon(c.archetype_key);
-              const mismatch = pointsMismatch(c.pointsSum, c.seriesSum, c.series.length);
 
               return (
                 <tr key={c.uid}>
@@ -623,20 +687,9 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                         <div title={TIP.spark}>
                           <Sparkline values={c.series} />
                         </div>
-
                         <span className="badge isNeutral" title={TIP.form}>
                           {fmtMomentum(c.momentum)}
                         </span>
-
-                        <div style={{ fontSize: 12, opacity: 0.8 }} title={TIP.pointsCheck}>
-                          {mismatch ? (
-                            <span style={{ fontWeight: 900 }}>
-                              ⚠️ проверка очков: {n2(c.seriesSum)}
-                            </span>
-                          ) : (
-                            <span>проверка очков: {n2(c.seriesSum)}</span>
-                          )}
-                        </div>
                       </div>
                     </td>
                   ) : null}
@@ -646,13 +699,6 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </tbody>
         </table>
       </div>
-
-      {mode === "details" ? (
-        <div className="analyticsHintSmall" title={TIP.pointsCheck}>
-          Если рядом с “проверка очков” есть ⚠️ — значит сейчас есть расхождение в учёте матчей/обновлении данных.
-          Обычно помогает повторный пересчёт последнего матча (через “Счёт”).
-        </div>
-      ) : null}
 
       <div style={{ marginTop: 14 }}>
         <Link href="/dashboard" className="navLink">
