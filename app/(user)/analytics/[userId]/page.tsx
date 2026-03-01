@@ -68,8 +68,7 @@ const TIP = {
     "Показывает, стали ли последние матчи лучше вашего среднего уровня. Плюс — вы набираете больше обычного, минус — меньше.",
   spark:
     "Очки по матчам подряд (слева старее → справа новее). Видно серии и провалы.",
-  archetype:
-    "Ваш стиль прогнозов. Это про манеру, а не про “сильнее/слабее”.",
+  archetype: "Ваш стиль прогнозов. Это про манеру, а не про “сильнее/слабее”.",
 };
 
 function pct(a: number, b: number) {
@@ -161,7 +160,7 @@ export default async function AnalyticsUserPage({ params }: Props) {
     (account.login ?? "").trim() ||
     userId.slice(0, 8);
 
-  // качество (проценты) — из analytics_stage_user
+  // качество (проценты)
   const { data: agg } = await sb
     .from("analytics_stage_user")
     .select("stage_id,user_id,matches_count,exact_count,outcome_hit_count,diff_hit_count")
@@ -239,7 +238,6 @@ export default async function AnalyticsUserPage({ params }: Props) {
   seriesPairs.sort((a, b) => a.t - b.t);
   const series = seriesPairs.map((x) => x.pts);
 
-  // форма: avg(last5) - avg(all)
   const allAvg = matches ? pointsSum / matches : 0;
   const tail = series.slice(-5);
   const lastAvg = tail.length ? sumNums(tail) / tail.length : 0;
@@ -293,17 +291,23 @@ export default async function AnalyticsUserPage({ params }: Props) {
 
             <div className="kpi" title={TIP.outcome}>
               <div className="kpiLabel">Исход</div>
-              <div className="kpiValue">{pct(Number(agg?.outcome_hit_count ?? 0), Number(agg?.matches_count ?? 0))}</div>
+              <div className="kpiValue">
+                {pct(Number(agg?.outcome_hit_count ?? 0), Number(agg?.matches_count ?? 0))}
+              </div>
             </div>
 
             <div className="kpi" title={TIP.diff}>
               <div className="kpiLabel">Разница</div>
-              <div className="kpiValue">{pct(Number(agg?.diff_hit_count ?? 0), Number(agg?.matches_count ?? 0))}</div>
+              <div className="kpiValue">
+                {pct(Number(agg?.diff_hit_count ?? 0), Number(agg?.matches_count ?? 0))}
+              </div>
             </div>
 
             <div className="kpi" title={TIP.exact}>
               <div className="kpiLabel">Точный</div>
-              <div className="kpiValue">{pct(Number(agg?.exact_count ?? 0), Number(agg?.matches_count ?? 0))}</div>
+              <div className="kpiValue">
+                {pct(Number(agg?.exact_count ?? 0), Number(agg?.matches_count ?? 0))}
+              </div>
             </div>
           </div>
         </div>
