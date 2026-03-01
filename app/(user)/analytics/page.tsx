@@ -312,22 +312,24 @@ function StageLinesChart(props: {
               stroke="rgba(17,24,39,.18)"
             />
 
-            {props.matchLabels.map((lab, i) => {
-              if (i % 2 === 1 && n > 10) return null;
-              const xx = x(i);
-              return (
-                <text
-                  key={lab + i}
-                  x={xx}
-                  y={H - 12}
-                  textAnchor="middle"
-                  fontSize="11"
-                  fill="rgba(17,24,39,.55)"
-                >
-                  {lab}
-                </text>
-              );
-            })}
+         {props.matchLabels.map((lab, i) => {
+  // при 20+ матчах показываем только каждый второй номер, чтобы не было шума
+  if (n >= 20 && i % 2 === 1) return null;
+
+  const xx = x(i);
+  return (
+    <text
+      key={lab + i}
+      x={xx}
+      y={H - 12}
+      textAnchor="middle"
+      fontSize="11"
+      fill="rgba(17,24,39,.55)"
+    >
+      {lab}
+    </text>
+  );
+})}
 
             {props.series.map((s, idx) => {
               const color = palette[idx % palette.length];
@@ -537,10 +539,11 @@ export default async function AnalyticsPage({ searchParams }: Props) {
     );
   }
 
-  const timeline = (stageMatches ?? []).map((m: any, idx: number) => ({
-    id: Number(m.id),
-    label: m.stage_match_no != null ? `#${m.stage_match_no}` : `#${idx + 1}`,
-  }));
+// Нумеруем матчи строго по порядку (1,2,3...) независимо от stage_match_no
+const timeline = (stageMatches ?? []).map((m: any, idx: number) => ({
+  id: Number(m.id),
+  label: `#${idx + 1}`,
+}));
 
   // user -> match -> points (for cumulative lines)
   const ptsByUserMatch = new Map<string, Map<number, number>>();
