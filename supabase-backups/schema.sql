@@ -863,6 +863,268 @@ $$;
 ALTER FUNCTION "public"."recalculate_stage_momentum"("p_stage_id" bigint, "p_n" integer, "p_k" integer) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."recompute_stage_analytics"("p_stage_id" bigint) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+declare
+  v_users_count int;
+begin
+  -- baseline users_count (участники без ADMIN)
+  select count(*)
+    into v_users_count
+  from public.login_accounts la
+  where upper(coalesce(la.login,'')) <> 'ADMIN'
+    and la.user_id is not null;
+
+  insert into public.analytics_stage_baseline(stage_id, users_count, updated_at)
+  values (p_stage_id, v_users_count, now())
+  on conflict (stage_id) do update
+    set users_count = excluded.users_count,
+        updated_at = excluded.updated_at;
+
+  -- чистим кэш по этапу
+  delete from public.analytics_stage_user where stage_id = p_stage_id;
+  delete from public.analytics_stage_user_momentum where stage_id = p_stage_id;
+  delete from public.analytics_stage_user_archetype where stage_id = p_stage_id;
+
+  -- Агрегаты по прогнозам + очкам
+  with finished as (
+    select m.id as match_id, m.home_score, m.away_score, m.kickoff_at
+    from public.matches m
+    where m.stage_id = p_stage_id
+      and m.status = 'finished'
+      and m.home_score is not null
+      and m.away_score is not null
+  ),
+  preds as (
+    select p.match_id, p.user_id, p.home_pred, p.away_pred
+    from public.predictions p
+    join finished f on f.match_id = p.match_id
+    where p.home_pred is not null and p.away_pred is not null
+  ),
+  pts as (
+    select pl.user_id, pl.match_id, pl.points::numeric as points
+    from public.points_ledger pl
+    join finished f on f.match_id = pl.match_id
+    where pl.reason = 'prediction'
+  ),
+  pts_agg as (
+    select user_id,
+           sum(points)::numeric as points_sum,
+           avg(points)::numeric as points_avg
+    from pts
+    group by user_id
+  ),
+  base as (
+    select
+      pr.user_id,
+      count(*)::int as matches_count,
+
+      sum(case when pr.home_pred = f.home_score and pr.away_pred = f.away_score then 1 else 0 end)::int as exact_count,
+
+      sum(case
+            when sign(pr.home_pred - pr.away_pred) = sign(f.home_score - f.away_score) then 1 else 0
+          end)::int as outcome_hit_count,
+
+      sum(case
+            when (pr.home_pred - pr.away_pred) = (f.home_score - f.away_score) then 1 else 0
+          end)::int as diff_hit_count,
+
+      sum(case when sign(pr.home_pred - pr.away_pred) > 0 then 1 else 0 end)::int as pred_home_count,
+      sum(case when sign(pr.home_pred - pr.away_pred) = 0 then 1 else 0 end)::int as pred_draw_count,
+      sum(case when sign(pr.home_pred - pr.away_pred) < 0 then 1 else 0 end)::int as pred_away_count,
+
+      sum((pr.home_pred + pr.away_pred))::numeric as pred_total_sum,
+      sum(abs(pr.home_pred - pr.away_pred))::numeric as pred_absdiff_sum,
+      sum(case when abs(pr.home_pred - pr.away_pred) >= 3 then 1 else 0 end)::int as pred_bigdiff_count
+
+    from preds pr
+    join finished f on f.match_id = pr.match_id
+    group by pr.user_id
+  )
+  insert into public.analytics_stage_user(
+    stage_id, user_id,
+    matches_count,
+    points_sum, points_avg,
+
+    exact_count,
+    pred_home_count, pred_draw_count, pred_away_count,
+    pred_total_sum, pred_absdiff_sum, pred_bigdiff_count,
+    outcome_hit_count, diff_hit_count,
+    updated_at
+  )
+  select
+    p_stage_id,
+    b.user_id,
+    b.matches_count,
+    coalesce(pa.points_sum,0),
+    coalesce(pa.points_avg,0),
+
+    b.exact_count,
+    b.pred_home_count, b.pred_draw_count, b.pred_away_count,
+    coalesce(b.pred_total_sum,0),
+    coalesce(b.pred_absdiff_sum,0),
+    b.pred_bigdiff_count,
+    b.outcome_hit_count,
+    b.diff_hit_count,
+    now()
+  from base b
+  left join pts_agg pa on pa.user_id = b.user_id;
+
+  -- momentum: очки по матчам, форма = avg(last 5) - avg(all)
+  with finished as (
+    select m.id as match_id, m.kickoff_at
+    from public.matches m
+    where m.stage_id = p_stage_id
+      and m.status='finished'
+      and m.home_score is not null
+      and m.away_score is not null
+  ),
+  pts as (
+    select
+      pl.user_id,
+      pl.match_id,
+      pl.points::numeric as points,
+      f.kickoff_at
+    from public.points_ledger pl
+    join finished f on f.match_id = pl.match_id
+    where pl.reason='prediction'
+  ),
+  ord as (
+    select
+      user_id,
+      points,
+      row_number() over (partition by user_id order by kickoff_at asc nulls last, match_id asc) as rn,
+      count(*) over (partition by user_id) as cnt
+    from pts
+  ),
+  agg as (
+    select
+      user_id,
+      count(*)::int as matches_count,
+      avg(points)::numeric as avg_all,
+      avg(points) filter (where rn > cnt - 5)::numeric as avg_last_5,
+      jsonb_agg(points order by rn) as series
+    from ord
+    group by user_id
+  )
+  insert into public.analytics_stage_user_momentum(
+    stage_id, user_id, matches_count,
+    momentum_current, momentum_series, avg_last_n, avg_all, n, k, updated_at
+  )
+  select
+    p_stage_id,
+    a.user_id,
+    a.matches_count,
+    coalesce(a.avg_last_5,0) - coalesce(a.avg_all,0),
+    coalesce(a.series,'[]'::jsonb),
+    coalesce(a.avg_last_5,0),
+    coalesce(a.avg_all,0),
+    5,
+    2,
+    now()
+  from agg a;
+
+  -- Улучшенный архетип: балльная модель по стилю + качество
+  -- метрики:
+  -- draw_rate = pred_draw_count/matches
+  -- risk = pred_absdiff_sum/matches
+  -- total = pred_total_sum/matches
+  -- exact_rate = exact_count/matches
+  -- outcome_rate = outcome_hit_count/matches
+  insert into public.analytics_stage_user_archetype(
+    stage_id, user_id, archetype_key, title_ru, summary_ru, state, updated_at
+  )
+  select
+    p_stage_id,
+    u.user_id,
+
+    case
+      when u.matches_count < 3 then 'forming'
+      else (
+        select key from (
+          select 'peacekeeper'::text as key, 0
+            + case when (u.pred_draw_count::numeric / nullif(u.matches_count,0)) >= 0.40 then 3 else 0 end
+            + case when (u.pred_absdiff_sum / nullif(u.matches_count,0)) <= 1.05 then 1 else 0 end
+            + case when (u.pred_total_sum / nullif(u.matches_count,0)) <= 2.35 then 1 else 0 end
+            as score
+          union all
+          select 'risky', 0
+            + case when (u.pred_absdiff_sum / nullif(u.matches_count,0)) >= 1.60 then 3 else 0 end
+            + case when (u.pred_bigdiff_count::numeric / nullif(u.matches_count,0)) >= 0.25 then 2 else 0 end
+            + case when (u.pred_total_sum / nullif(u.matches_count,0)) >= 2.80 then 1 else 0 end
+          union all
+          select 'sniper', 0
+            + case when u.matches_count >= 5 and (u.exact_count::numeric / nullif(u.matches_count,0)) >= 0.20 then 3 else 0 end
+            + case when (u.outcome_hit_count::numeric / nullif(u.matches_count,0)) >= 0.60 then 1 else 0 end
+          union all
+          select 'rational', 1
+            + case when (u.pred_absdiff_sum / nullif(u.matches_count,0)) between 1.05 and 1.60 then 1 else 0 end
+            + case when (u.pred_total_sum / nullif(u.matches_count,0)) between 2.30 and 2.85 then 1 else 0 end
+        ) s
+        order by s.score desc, s.key asc
+        limit 1
+      )
+    end as archetype_key,
+
+    case
+      when u.matches_count < 3 then 'Формируется'
+      when (u.pred_draw_count::numeric / nullif(u.matches_count,0)) >= 0.40 then 'Миротворец'
+      when (u.pred_absdiff_sum / nullif(u.matches_count,0)) >= 1.60 then 'Рискованный'
+      when u.matches_count >= 5 and (u.exact_count::numeric / nullif(u.matches_count,0)) >= 0.20 then 'Снайпер'
+      else 'Рациональный'
+    end as title_ru,
+
+    case
+      when u.matches_count < 3 then 'Пока мало данных: стиль станет заметнее после 3+ матчей с прогнозами.'
+      when (u.pred_draw_count::numeric / nullif(u.matches_count,0)) >= 0.40
+        then 'Склонен к осторожным исходам и чаще выбирает ничью.'
+      when (u.pred_absdiff_sum / nullif(u.matches_count,0)) >= 1.60
+        then 'Чаще выбирает смелые разницы и резкие счета.'
+      when u.matches_count >= 5 and (u.exact_count::numeric / nullif(u.matches_count,0)) >= 0.20
+        then 'Регулярно попадает в точный счёт (при достаточном объёме матчей).'
+      else 'Стабильные реалистичные прогнозы без сильных перекосов.'
+    end as summary_ru,
+
+    case
+      when u.matches_count < 3 then 'forming'
+      when u.matches_count < 8 then 'preliminary'
+      else 'final'
+    end as state,
+
+    now()
+  from public.analytics_stage_user u
+  where u.stage_id = p_stage_id;
+
+end;
+$$;
+
+
+ALTER FUNCTION "public"."recompute_stage_analytics"("p_stage_id" bigint) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."recompute_stage_analytics_for_match"("p_match_id" bigint) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+declare
+  v_stage_id bigint;
+begin
+  select stage_id into v_stage_id
+  from public.matches
+  where id = p_match_id;
+
+  if v_stage_id is null then
+    raise exception 'match % not found', p_match_id;
+  end if;
+
+  perform public.recompute_stage_analytics(v_stage_id);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."recompute_stage_analytics_for_match"("p_match_id" bigint) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."score_match"("p_match_id" bigint) RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -1124,7 +1386,9 @@ CREATE TABLE IF NOT EXISTS "public"."analytics_stage_user" (
     "pred_bigdiff_count" integer DEFAULT 0 NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "outcome_hit_count" integer DEFAULT 0 NOT NULL,
-    "diff_hit_count" integer DEFAULT 0 NOT NULL
+    "diff_hit_count" integer DEFAULT 0 NOT NULL,
+    "points_sum" numeric DEFAULT 0 NOT NULL,
+    "points_avg" numeric DEFAULT 0 NOT NULL
 );
 
 
@@ -1271,7 +1535,7 @@ CREATE TABLE IF NOT EXISTS "public"."points_ledger" (
     "user_id" "uuid" NOT NULL,
     "match_id" bigint NOT NULL,
     "points" numeric(6,2) NOT NULL,
-    "reason" "text",
+    "reason" "text" DEFAULT 'prediction'::"text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "points_outcome" numeric(6,2) DEFAULT 0 NOT NULL,
     "points_diff" numeric(6,2) DEFAULT 0 NOT NULL,
@@ -1652,6 +1916,18 @@ ALTER TABLE ONLY "public"."tours"
 
 ALTER TABLE ONLY "public"."tours"
     ADD CONSTRAINT "tours_stage_id_tour_no_key" UNIQUE ("stage_id", "tour_no");
+
+
+
+CREATE INDEX "idx_analytics_arch_stage" ON "public"."analytics_stage_user_archetype" USING "btree" ("stage_id");
+
+
+
+CREATE INDEX "idx_analytics_momentum_stage" ON "public"."analytics_stage_user_momentum" USING "btree" ("stage_id");
+
+
+
+CREATE INDEX "idx_analytics_stage_user_stage" ON "public"."analytics_stage_user" USING "btree" ("stage_id");
 
 
 
@@ -2353,6 +2629,18 @@ GRANT ALL ON FUNCTION "public"."recalculate_stage_analytics"("p_stage_id" bigint
 GRANT ALL ON FUNCTION "public"."recalculate_stage_momentum"("p_stage_id" bigint, "p_n" integer, "p_k" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."recalculate_stage_momentum"("p_stage_id" bigint, "p_n" integer, "p_k" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."recalculate_stage_momentum"("p_stage_id" bigint, "p_n" integer, "p_k" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recompute_stage_analytics"("p_stage_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."recompute_stage_analytics"("p_stage_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recompute_stage_analytics"("p_stage_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."recompute_stage_analytics_for_match"("p_match_id" bigint) TO "anon";
+GRANT ALL ON FUNCTION "public"."recompute_stage_analytics_for_match"("p_match_id" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."recompute_stage_analytics_for_match"("p_match_id" bigint) TO "service_role";
 
 
 
