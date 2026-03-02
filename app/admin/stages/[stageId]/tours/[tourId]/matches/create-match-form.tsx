@@ -6,6 +6,20 @@ import { createClient } from "@/lib/supabase/client";
 
 type Team = { id: number; name: string };
 
+function toIsoUtcFromLocal(dtLocal: string): string {
+  // dtLocal из <input type="datetime-local"> в формате "YYYY-MM-DDTHH:mm"
+  // JS интерпретирует это как локальное время браузера и переводит в UTC через toISOString()
+  const d = new Date(dtLocal);
+  if (Number.isNaN(d.getTime())) throw new Error("Некорректная дата/время");
+  return d.toISOString();
+}
+
+function addMinutesIso(isoUtc: string, minutes: number): string {
+  const d = new Date(isoUtc);
+  d.setMinutes(d.getMinutes() + minutes);
+  return d.toISOString();
+}
+
 export default function CreateMatchForm(props: { stageId: number; tourId: number }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -16,6 +30,13 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
   const [teams, setTeams] = useState<Team[] | null>(null);
   const [homeTeamId, setHomeTeamId] = useState<string>("");
   const [awayTeamId, setAwayTeamId] = useState<string>("");
+
+  // ✅ обязательное поле
+  const [kickoffLocal, setKickoffLocal] = useState<string>("");
+
+  // опционально: если хочешь ручной дедлайн — можно добавить второй инпут,
+  // но пока делаем дедлайн = kickoff - 1 минута
+  const DEADLINE_MINUTES_BEFORE = 1;
 
   async function ensureTeams() {
     if (teams) return;
@@ -33,11 +54,21 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
     const hId = Number(homeTeamId);
     const aId = Number(awayTeamId);
 
-    if (!Number.isFinite(sId)) return setMsg("Некорректный этап");
-    if (!Number.isFinite(tId)) return setMsg("Некорректный тур");
     if (!Number.isFinite(hId)) return setMsg("Выберите хозяев");
     if (!Number.isFinite(aId)) return setMsg("Выберите гостей");
     if (hId === aId) return setMsg("Команды должны быть разными");
+
+    if (!kickoffLocal.trim()) return setMsg("Укажите дату и время начала матча");
+
+    let kickoff_at: string;
+    let deadline_at: string;
+    try {
+      kickoff_at = toIsoUtcFromLocal(kickoffLocal);
+      // дедлайн = kickoff - 1 мин
+      deadline_at = addMinutesIso(kickoff_at, -DEADLINE_MINUTES_BEFORE);
+    } catch (err: any) {
+      return setMsg(err?.message ?? "Некорректная дата/время");
+    }
 
     setLoading(true);
     try {
@@ -49,8 +80,8 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
           tour_id: tId,
           home_team_id: hId,
           away_team_id: aId,
-          kickoff_at: null,
-          deadline_at: null,
+          kickoff_at,
+          deadline_at,
         }),
       });
 
@@ -64,6 +95,7 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
 
       setHomeTeamId("");
       setAwayTeamId("");
+      // kickoff оставляем (часто добавляют пачкой матчей в один день)
       setMsg(`Матч создан ✅ (№ ${json?.stage_match_no ?? "?"})`);
       router.refresh();
     } catch (e: any) {
@@ -110,6 +142,19 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
               </option>
             ))}
           </select>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>Начало матча</span>
+            <input
+              type="datetime-local"
+              value={kickoffLocal}
+              onChange={(e) => setKickoffLocal(e.target.value)}
+              disabled={loading}
+              style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 240 }}
+            />
+          </label>
 
           <button
             type="submit"
@@ -122,10 +167,16 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
               color: "#fff",
               fontWeight: 900,
               cursor: loading ? "not-allowed" : "pointer",
+              height: 42,
+              alignSelf: "end",
             }}
           >
             {loading ? "Создание..." : "Добавить"}
           </button>
+        </div>
+
+        <div style={{ fontSize: 12, opacity: 0.75 }}>
+          Дедлайн автоматически = начало − {DEADLINE_MINUTES_BEFORE} мин.
         </div>
 
         {msg ? <div style={{ fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</div> : null}
