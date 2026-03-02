@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+
 import CreateTourForm from "./create-tour-form";
 import PublishStage from "./publish-stage";
 import TourRowActions from "./tour-row-actions";
@@ -22,15 +25,43 @@ function stageStatusRu(s: string) {
   return s;
 }
 
+function mustEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
+}
+
+function decodeMaybe(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+function service() {
+  return createClient(
+    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    { auth: { persistSession: false } }
+  );
+}
+
 export default async function AdminStageToursPage({
   params,
 }: {
   params: Promise<{ stageId: string }>;
 }) {
+  // ✅ admin guard (как у тебя в других местах)
+  const cs = await cookies();
+  const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
+  if (!fpLogin) redirect("/");
+  if (fpLogin !== "ADMIN") redirect("/dashboard");
+
   const { stageId } = await params;
   const sid = Number(stageId);
 
-  const supabase = await createClient();
+  const supabase = service();
 
   const { data: stage, error: stageErr } = await supabase
     .from("stages")

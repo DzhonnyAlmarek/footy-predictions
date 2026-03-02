@@ -81,9 +81,10 @@ export default function CreateMatchForm() {
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
+if (!res.ok || !json?.ok) {
   const m = json?.message ? ` — ${json.message}` : "";
-  throw new Error(`${json?.error ?? `Ошибка создания матча (${res.status})`}${m}`);
+  const d = json?.details ? ` (${json.details})` : "";
+  throw new Error(`${json?.error ?? `Ошибка создания матча (${res.status})`}${m}${d}`);
 }
 
       setHomeTeamId("");
