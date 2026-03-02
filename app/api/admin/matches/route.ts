@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -27,377 +27,110 @@ function service() {
   );
 }
 
-async function readLogin() {
-  const cs = await cookies();
-  const rawLogin = cs.get("fp_login")?.value ?? "";
-  const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
-  return { rawLogin, fpLogin };
-}
-
-async function requireAdmin(): Promise<
-  { ok: true; user_id: string } | { ok: false; res: NextResponse }
-> {
-  const { rawLogin, fpLogin } = await readLogin();
-
-  if (!fpLogin) {
-    return {
-      ok: false,
-      res: NextResponse.json(
-        { ok: false, error: "not_auth", where: "cookies", rawLogin, fpLogin },
-        { status: 401 }
-      ),
-    };
-  }
-
-  const sb = service();
-
-  const { data: acc, error: accErr } = await sb
-    .from("login_accounts")
-    .select("user_id")
-    .eq("login", fpLogin)
-    .maybeSingle();
-
-  if (accErr) {
-    return {
-      ok: false,
-      res: NextResponse.json({ ok: false, error: accErr.message }, { status: 500 }),
-    };
-  }
-
-  if (!acc?.user_id) {
-    return {
-      ok: false,
-      res: NextResponse.json(
-        { ok: false, error: "not_auth", where: "login_accounts", rawLogin, fpLogin },
-        { status: 401 }
-      ),
-    };
-  }
-
-  const { data: profile, error: profErr } = await sb
-    .from("profiles")
-    .select("role")
-    .eq("id", acc.user_id)
-    .maybeSingle();
-
-  if (profErr) {
-    return {
-      ok: false,
-      res: NextResponse.json({ ok: false, error: profErr.message }, { status: 500 }),
-    };
-  }
-
-  if (profile?.role !== "admin") {
-    return {
-      ok: false,
-      res: NextResponse.json({ ok: false, error: "admin_only" }, { status: 403 }),
-    };
-  }
-
-  return { ok: true, user_id: acc.user_id };
-}
-
-/* ================= scoring helpers (prediction_scores) ================= */
-
-function signOutcome(h: number, a: number): -1 | 0 | 1 {
-  if (h === a) return 0;
-  return h > a ? 1 : -1;
-}
-
-function multByCount(cnt: number): number {
-  if (cnt === 1) return 1.75;
-  if (cnt === 2) return 1.5;
-  if (cnt === 3) return 1.25;
-  return 1;
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function computeBreakdown(params: {
-  predH: number;
-  predA: number;
-  resH: number;
-  resA: number;
-  outcomeGuessed: number;
-  diffGuessed: number;
-}): {
-  total: number;
-  team_goals: number;
-  outcome: number;
-  diff: number;
-  near_bonus: number;
-  outcome_mult: number;
-  diff_mult: number;
-  pred_text: string;
-  res_text: string;
-} {
-  const { predH, predA, resH, resA, outcomeGuessed, diffGuessed } = params;
-
-  const outcome_mult = multByCount(outcomeGuessed);
-  const diff_mult = multByCount(diffGuessed);
-
-  let team_goals = 0;
-  let outcome = 0;
-  let diff = 0;
-  let near_bonus = 0;
-
-  if (predH === resH) team_goals += 0.5;
-  if (predA === resA) team_goals += 0.5;
-
-  const outOk = signOutcome(predH, predA) === signOutcome(resH, resA);
-  if (outOk) outcome = round2(2 * outcome_mult);
-
-  const diffOk = predH - predA === resH - resA;
-  if (diffOk) diff = round2(1 * diff_mult);
-
-  const dist = Math.abs(predH - resH) + Math.abs(predA - resA);
-  if (dist === 1) near_bonus = 0.5;
-
-  const total = round2(team_goals + outcome + diff + near_bonus);
-
-  return {
-    total,
-    team_goals,
-    outcome,
-    diff,
-    near_bonus,
-    outcome_mult,
-    diff_mult,
-    pred_text: `${predH}:${predA}`,
-    res_text: `${resH}:${resA}`,
-  };
-}
-
-async function recomputePredictionScores(sb: ReturnType<typeof service>, matchId: number) {
-  const { data: match, error: mErr } = await sb
-    .from("matches")
-    .select("id,home_score,away_score")
-    .eq("id", matchId)
-    .maybeSingle();
-
-  if (mErr) throw new Error(mErr.message);
-  if (!match?.id) throw new Error("match_not_found");
-
-  const resH = match.home_score;
-  const resA = match.away_score;
-
-  // если результат очищен — удаляем breakdown
-  if (resH == null || resA == null) {
-    const { error: delErr } = await sb.from("prediction_scores").delete().eq("match_id", matchId);
-    if (delErr) throw new Error(delErr.message);
-    return;
-  }
-
-  const { data: preds, error: pErr } = await sb
-    .from("predictions")
-    .select("id,match_id,user_id,home_pred,away_pred")
-    .eq("match_id", matchId);
-
-  if (pErr) throw new Error(pErr.message);
-
-  const predRows = (preds ?? []).filter((p: any) => p.home_pred != null && p.away_pred != null);
-
-  let outcomeGuessed = 0;
-  let diffGuessed = 0;
-
-  for (const p of predRows) {
-    const ph = Number(p.home_pred);
-    const pa = Number(p.away_pred);
-
-    if (signOutcome(ph, pa) === signOutcome(resH, resA)) outcomeGuessed++;
-    if (ph - pa === resH - resA) diffGuessed++;
-  }
-
-  const upserts = predRows.map((p: any) => {
-    const ph = Number(p.home_pred);
-    const pa = Number(p.away_pred);
-
-    const bd = computeBreakdown({
-      predH: ph,
-      predA: pa,
-      resH,
-      resA,
-      outcomeGuessed,
-      diffGuessed,
-    });
-
-    return {
-      prediction_id: Number(p.id),
-      match_id: Number(p.match_id),
-      user_id: p.user_id,
-
-      total: bd.total,
-      team_goals: bd.team_goals,
-      outcome: bd.outcome,
-      diff: bd.diff,
-      near_bonus: bd.near_bonus,
-
-      outcome_guessed: outcomeGuessed,
-      outcome_mult: bd.outcome_mult,
-      diff_guessed: diffGuessed,
-      diff_mult: bd.diff_mult,
-
-      pred_text: bd.pred_text,
-      res_text: bd.res_text,
-
-      rule_version: "v1",
-      computed_at: new Date().toISOString(),
-    };
-  });
-
-  if (upserts.length > 0) {
-    const { error: uErr } = await sb
-      .from("prediction_scores")
-      .upsert(upserts, { onConflict: "prediction_id" });
-
-    if (uErr) throw new Error(uErr.message);
-  } else {
-    const { error: delErr } = await sb.from("prediction_scores").delete().eq("match_id", matchId);
-    if (delErr) throw new Error(delErr.message);
-  }
-}
-
-/** GET /api/admin/matches?stage_id=123 */
-export async function GET(req: Request) {
-  const adm = await requireAdmin();
-  if (!adm.ok) return adm.res;
-
-  const url = new URL(req.url);
-  const stageIdRaw = url.searchParams.get("stage_id");
-
-  const sb = service();
-
-  let q = sb.from("matches").select(`
-    id,
-    stage_id,
-    stage_match_no,
-    kickoff_at,
-    deadline_at,
-    status,
-    home_score,
-    away_score,
-    home_team_id,
-    away_team_id,
-    home_team:teams!matches_home_team_id_fkey ( name ),
-    away_team:teams!matches_away_team_id_fkey ( name )
-  `);
-
-  if (stageIdRaw) q = q.eq("stage_id", Number(stageIdRaw));
-
-  const { data, error } = await q
-    .order("stage_match_no", { ascending: true, nullsFirst: false })
-    .order("kickoff_at", { ascending: true });
-
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, matches: data ?? [] });
-}
-
-type PatchBody = {
-  id?: number;
-  match_id?: number;
-
-  home_score?: number | null;
-  away_score?: number | null;
-  status?: string | null;
-
-  kickoff_at?: string | null;
-  deadline_at?: string | null;
-
+type CreateBody = {
+  stage_id?: number;
+  tour_id?: number;
   home_team_id?: number;
   away_team_id?: number;
+  kickoff_at?: string | null;
+  deadline_at?: string | null;
 };
 
-export async function PATCH(req: Request) {
-  const adm = await requireAdmin();
-  if (!adm.ok) return adm.res;
-
-  const body = (await req.json().catch(() => null)) as PatchBody | null;
-  const id = Number(body?.id ?? body?.match_id);
-
-  if (!Number.isFinite(id) || id <= 0) {
-    return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
+export async function POST(req: Request) {
+  const cs = await cookies();
+  const login = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
+  if (login !== "ADMIN") {
+    return NextResponse.json({ ok: false, error: "admin_only" }, { status: 403 });
   }
 
-  const sb = service();
-  const upd: any = {};
-
-  const has = (k: keyof PatchBody) => Object.prototype.hasOwnProperty.call(body ?? {}, k);
-
-  if (has("home_score")) upd.home_score = body?.home_score ?? null;
-  if (has("away_score")) upd.away_score = body?.away_score ?? null;
-  if (has("status")) upd.status = body?.status ?? null;
-
-  if (has("kickoff_at")) upd.kickoff_at = body?.kickoff_at ?? null;
-  if (has("deadline_at")) upd.deadline_at = body?.deadline_at ?? null;
-
-  if (has("home_team_id")) upd.home_team_id = body?.home_team_id;
-  if (has("away_team_id")) upd.away_team_id = body?.away_team_id;
-
-  if (Object.keys(upd).length === 0) {
-    return NextResponse.json({ ok: false, error: "nothing_to_update" }, { status: 400 });
+  const body = (await req.json().catch(() => null)) as CreateBody | null;
+  if (!body) {
+    return NextResponse.json({ ok: false, error: "bad_json" }, { status: 400 });
   }
 
-  // Если админ ввёл счёт — разумно автоматически ставить finished (если статус не прислали явно)
-  const scoresTouched = has("home_score") || has("away_score");
-  const scoreNowComplete =
-    (has("home_score") ? body?.home_score != null : true) &&
-    (has("away_score") ? body?.away_score != null : true);
+  const stage_id = Number(body.stage_id);
+  const tour_id = Number(body.tour_id);
+  const home_team_id = Number(body.home_team_id);
+  const away_team_id = Number(body.away_team_id);
 
-  if (scoresTouched && !has("status") && scoreNowComplete) {
-    upd.status = "finished";
+  if (!stage_id) return NextResponse.json({ ok: false, error: "bad_stage_id" }, { status: 400 });
+  if (!tour_id) return NextResponse.json({ ok: false, error: "bad_tour_id" }, { status: 400 });
+  if (!home_team_id) return NextResponse.json({ ok: false, error: "bad_home_team_id" }, { status: 400 });
+  if (!away_team_id) return NextResponse.json({ ok: false, error: "bad_away_team_id" }, { status: 400 });
+  if (home_team_id === away_team_id) {
+    return NextResponse.json({ ok: false, error: "teams_must_differ" }, { status: 400 });
   }
 
-  const { data, error } = await sb
-    .from("matches")
-    .update(upd)
-    .eq("id", id)
-    .select("id,stage_id,home_score,away_score,status,kickoff_at,deadline_at,home_team_id,away_team_id")
-    .maybeSingle();
+  const kickoff_at = body.kickoff_at ?? null;
+  const deadline_at = body.deadline_at ?? null;
 
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  if (!data?.id) return NextResponse.json({ ok: false, error: "not_updated" }, { status: 400 });
+  try {
+    const sb = service();
 
-  // ✅ пересчёты делаем ТОЛЬКО если менялся счёт
-  if (scoresTouched) {
-    try {
-      // 1) breakdown для UI
-      await recomputePredictionScores(sb, id);
+    // 1) Проверим, что тур принадлежит этапу (чтобы не ловить "тихие" триггеры)
+    const { data: tour, error: tourErr } = await sb
+      .from("tours")
+      .select("id,stage_id")
+      .eq("id", tour_id)
+      .maybeSingle();
 
-      // 2) начисление очков в points_ledger (ВАЖНО: core, а не score_match)
-      const { error: scoreErr } = await sb.rpc("score_match_core", { p_match_id: id });
-      if (scoreErr) throw new Error(`score_match_core_failed: ${scoreErr.message}`);
-
-      // 3) аналитика этапа (если нужна)
-      const stageId = Number((data as any).stage_id);
-      if (Number.isFinite(stageId)) {
-        const { error: aErr } = await sb.rpc("recalculate_stage_analytics", { p_stage_id: stageId });
-        if (aErr) throw new Error(`analytics_failed: ${aErr.message}`);
-      }
-    } catch (e: any) {
+    if (tourErr) {
       return NextResponse.json(
-        { ok: false, error: "post_update_failed", detail: String(e?.message ?? e) },
+        { ok: false, error: "tour_check_failed", message: tourErr.message },
         { status: 500 }
       );
     }
+
+    if (!tour) {
+      return NextResponse.json({ ok: false, error: "tour_not_found" }, { status: 404 });
+    }
+
+    if (Number(tour.stage_id) !== stage_id) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "tour_stage_mismatch",
+          message: `Tour ${tour_id} belongs to stage ${tour.stage_id}, but request stage_id=${stage_id}`,
+        },
+        { status: 409 }
+      );
+    }
+
+    // 2) Вставка матча (service role)
+    const { data: inserted, error: insErr } = await sb
+      .from("matches")
+      .insert({
+        stage_id,
+        tour_id,
+        home_team_id,
+        away_team_id,
+        kickoff_at,
+        deadline_at,
+        status: "scheduled",
+      })
+      .select("id,stage_match_no")
+      .maybeSingle();
+
+    if (insErr) {
+      // Тут чаще всего прилетает:
+      // - stage locked (trigger block_match_write_when_stage_locked)
+      // - prevent_team_duplicate_in_tour
+      // - enforce_match_stage
+      return NextResponse.json(
+        { ok: false, error: "insert_failed", message: insErr.message, details: insErr.details },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      matchId: inserted?.id ?? null,
+      stage_match_no: inserted?.stage_match_no ?? null,
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, error: "server_error", message: String(e?.message ?? e) },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ ok: true, match: data });
-}
-
-/** POST /api/admin/matches — создание матча */
-export async function POST(req: Request) {
-  const adm = await requireAdmin();
-  if (!adm.ok) return adm.res;
-
-  const payload = await req.json().catch(() => null);
-  if (!payload) return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
-
-  const sb = service();
-
-  const { data, error } = await sb.from("matches").insert(payload).select("*").maybeSingle();
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-
-  return NextResponse.json({ ok: true, data });
 }
