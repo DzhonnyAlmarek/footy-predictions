@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function TourRowActions(props: {
   tourId: number;
@@ -10,9 +9,7 @@ export default function TourRowActions(props: {
   initialNo: number;
   initialName: string | null;
 }) {
-  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
-
   const locked = props.stageStatus === "locked";
 
   const [editing, setEditing] = useState(false);
@@ -30,12 +27,21 @@ export default function TourRowActions(props: {
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from("tours")
-        .update({ tour_no: no, name: name.trim() ? name.trim() : null })
-        .eq("id", props.tourId);
+      const res = await fetch("/api/admin/tours/update", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tourId: props.tourId,
+          tour_no: no,
+          name: name,
+        }),
+      });
 
-      if (error) throw error;
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) {
+        const m = j?.message ? ` — ${j.message}` : "";
+        throw new Error(`${j?.error ?? `Ошибка (${res.status})`}${m}`);
+      }
 
       setEditing(false);
       router.refresh();
@@ -50,15 +56,24 @@ export default function TourRowActions(props: {
     setMsg(null);
     if (locked) return setMsg("Этап закрыт — удаление тура запрещено");
 
-    if (!confirm("Удалить тур? Сначала будут удалены матчи тура.")) return;
+    if (!confirm("Удалить тур? (Если в туре есть матчи — они тоже будут удалены)")) return;
 
     setLoading(true);
     try {
-      const { error: mErr } = await supabase.from("matches").delete().eq("tour_id", props.tourId);
-      if (mErr) throw mErr;
+      const res = await fetch("/api/admin/tours/delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tourId: props.tourId,
+          cascadeMatches: true,
+        }),
+      });
 
-      const { error } = await supabase.from("tours").delete().eq("id", props.tourId);
-      if (error) throw error;
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) {
+        const m = j?.message ? ` — ${j.message}` : "";
+        throw new Error(`${j?.error ?? `Ошибка (${res.status})`}${m}`);
+      }
 
       router.refresh();
     } catch (e: any) {
@@ -97,6 +112,7 @@ export default function TourRowActions(props: {
               background: "#111",
               color: "#fff",
               opacity: locked ? 0.6 : 1,
+              cursor: loading ? "not-allowed" : "pointer",
             }}
           >
             {loading ? "..." : "Сохранить"}
@@ -109,7 +125,13 @@ export default function TourRowActions(props: {
               setMsg(null);
             }}
             disabled={loading}
-            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#fff" }}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid #111",
+              background: "#fff",
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
           >
             Отмена
           </button>
@@ -126,7 +148,13 @@ export default function TourRowActions(props: {
         onClick={() => setEditing(true)}
         disabled={locked}
         title={locked ? "Этап закрыт — редактирование запрещено" : "Редактировать тур"}
-        style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#fff", opacity: locked ? 0.6 : 1 }}
+        style={{
+          padding: "10px 12px",
+          borderRadius: 10,
+          border: "1px solid #111",
+          background: "#fff",
+          opacity: locked ? 0.6 : 1,
+        }}
       >
         Редактировать
       </button>
@@ -135,9 +163,16 @@ export default function TourRowActions(props: {
         onClick={remove}
         disabled={locked || loading}
         title={locked ? "Этап закрыт — удаление запрещено" : "Удалить тур"}
-        style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#fff", opacity: locked ? 0.6 : 1 }}
+        style={{
+          padding: "10px 12px",
+          borderRadius: 10,
+          border: "1px solid #111",
+          background: "#fff",
+          opacity: locked ? 0.6 : 1,
+          cursor: loading ? "not-allowed" : "pointer",
+        }}
       >
-        Удалить
+        {loading ? "..." : "Удалить"}
       </button>
 
       {msg && <div style={{ color: "crimson" }}>{msg}</div>}
