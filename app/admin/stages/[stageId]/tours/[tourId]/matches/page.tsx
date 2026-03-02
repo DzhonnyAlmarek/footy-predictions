@@ -45,7 +45,6 @@ export default async function AdminTourMatchesPage({
 }: {
   params: Promise<{ stageId: string; tourId: string }>;
 }) {
-  // admin guard
   const cs = await cookies();
   const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
   if (!fpLogin) redirect("/");
@@ -134,7 +133,7 @@ export default async function AdminTourMatchesPage({
 
       {/* ✅ Форма добавления матча */}
       <section style={{ marginTop: 18 }}>
-        <CreateMatchForm />
+        <CreateMatchForm stageId={sid} tourId={tid} />
       </section>
 
       {/* Список матчей */}
