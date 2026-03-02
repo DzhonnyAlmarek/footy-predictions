@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import RestoreStageBackup from "./restore-stage-backup";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -220,3 +221,6 @@ export default async function AdminBackupsPage() {
     </main>
   );
 }
+<section style={{ marginTop: 18 }}>
+  <RestoreStageBackup />
+</section>
