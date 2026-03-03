@@ -1,14 +1,9 @@
-import { ReactNode } from "react";
+import Link from "next/link";
 import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-import AppHeader from "@/app/_components/AppHeader";
-import BottomBar from "@/app/_components/BottomBar";
+import { redirect } from "next/navigation";
 
-function mustEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function decodeMaybe(v: string): string {
   try {
@@ -18,52 +13,44 @@ function decodeMaybe(v: string): string {
   }
 }
 
-function service() {
-  return createClient(
-    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false } }
-  );
-}
+const adminLinks: Array<{ href: string; label: string }> = [
+  { href: "/admin", label: "Админ" },
+  { href: "/admin/current-table", label: "Таблица" },
+  { href: "/admin/results", label: "Результаты" },
+  { href: "/admin/stages", label: "Этапы" },
+  { href: "/admin/users", label: "Участники" },
+  { href: "/admin/telegram-test", label: "Telegram тест" },
 
-export default async function AdminLayout({ children }: { children: ReactNode }) {
+  // ✅ НОВОЕ
+  { href: "/admin/backups", label: "💾 Бэкапы" },
+];
+
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const cs = await cookies();
-  const rawLogin = cs.get("fp_login")?.value ?? "";
-  const login = decodeMaybe(rawLogin).trim().toUpperCase();
+  const login = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
 
-  const sb = service();
-  const { data: stage } = await sb
-    .from("stages")
-    .select("name,status")
-    .eq("is_current", true)
-    .maybeSingle();
-
-  const nav = [
-    { href: "/admin", label: "Админ" },
-    { href: "/admin/current-table", label: "Таблица" },
-    { href: "/admin/results", label: "Результаты" },
-    { href: "/admin/stages", label: "Этапы" },
-    { href: "/admin/users", label: "Участники" },
-
-    // ✅ Telegram тест
-    { href: "/admin/telegram-test", label: "Telegram тест" },
-
-    { href: "/logout", label: "Выйти" },
-  ];
+  if (!login) redirect("/");
+  if (login !== "ADMIN") redirect("/dashboard");
 
   return (
-    <>
-      <AppHeader
-        title="Клуб им. А.Н. Мурашева"
-        login={login || "ADMIN"}
-        stageName={stage?.name ?? null}
-        stageStatus={stage?.status ?? null}
-        nav={nav}
-      />
+    <div className="page">
+      <div className="adminTopNav" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        {adminLinks.map((l) => (
+          <Link key={l.href} href={l.href} className="pill">
+            {l.label}
+          </Link>
+        ))}
 
-      {children}
+        <a className="pill" href="/logout">
+          Выйти
+        </a>
+      </div>
 
-      <BottomBar variant="admin" />
-    </>
+      <div style={{ marginTop: 16 }}>{children}</div>
+    </div>
   );
 }
