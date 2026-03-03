@@ -27,19 +27,40 @@ function service() {
   );
 }
 
-function fileSafeName(s: string) {
-  return String(s)
-    .trim()
-    .replace(/[^\p{L}\p{N}\-_ .]/gu, "_")
-    .replace(/\s+/g, " ")
-    .slice(0, 140);
+/**
+ * Для заголовка Content-Disposition нужен ASCII filename,
+ * иначе Node/undici падают ("character ... > 255").
+ */
+function fileSafeNameAscii(s: string) {
+  return (
+    String(s)
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 140) || "backup"
+  );
+}
+
+/**
+ * RFC5987: filename* для UTF-8 (чтобы браузер сохранил красивое имя),
+ * и обычный filename (ASCII) для совместимости.
+ */
+function contentDisposition(filenameAscii: string, filenameUtf8: string) {
+  const encoded = encodeURIComponent(filenameUtf8)
+    .replace(/['()]/g, escape)
+    .replace(/\*/g, "%2A");
+  return `attachment; filename="${filenameAscii}"; filename*=UTF-8''${encoded}`;
 }
 
 async function assertAdmin() {
   const cs = await cookies();
   const login = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
   if (login !== "ADMIN") {
-    return { ok: false as const, res: NextResponse.json({ ok: false, error: "admin_only" }, { status: 403 }) };
+    return {
+      ok: false as const,
+      res: NextResponse.json({ ok: false, error: "admin_only" }, { status: 403 }),
+    };
   }
   return { ok: true as const };
 }
@@ -73,7 +94,9 @@ async function buildBackup(stageId: number, includeLedger: boolean) {
 
   if (mErr) throw new Error(`matches_load_failed: ${mErr.message}`);
 
-  const matchIds = (matches ?? []).map((m: any) => Number(m.id)).filter((x) => Number.isFinite(x));
+  const matchIds = (matches ?? [])
+    .map((m: any) => Number(m.id))
+    .filter((x) => Number.isFinite(x));
 
   const { data: predictions, error: pErr } = await sb
     .from("predictions")
@@ -132,10 +155,14 @@ async function buildBackup(stageId: number, includeLedger: boolean) {
     teams: teams ?? [],
   };
 
-  const filename = fileSafeName(`stage-${stageId}-${stage?.name ?? "backup"}-${exportedAt}.json`);
+  // UTF-8 имя (красивое) + ASCII имя (безопасное для заголовков)
+  const filenameUtf8 = `stage-${stageId}-${stage?.name ?? "backup"}-${exportedAt}.json`;
+  const baseAscii = fileSafeNameAscii(filenameUtf8);
+  const filenameAscii = baseAscii.toLowerCase().endsWith(".json") ? baseAscii : `${baseAscii}.json`;
+
   const json = JSON.stringify(payload, null, 2);
 
-  return { filename, json };
+  return { filenameAscii, filenameUtf8, json };
 }
 
 /**
@@ -154,13 +181,13 @@ export async function GET(req: Request) {
   }
 
   try {
-    const { filename, json } = await buildBackup(stageId, includeLedger);
+    const { filenameAscii, filenameUtf8, json } = await buildBackup(stageId, includeLedger);
 
     return new NextResponse(json, {
       status: 200,
       headers: {
         "content-type": "application/json; charset=utf-8",
-        "content-disposition": `attachment; filename="${filename}"`,
+        "content-disposition": contentDisposition(filenameAscii, filenameUtf8),
         "cache-control": "no-store",
       },
     });
@@ -188,13 +215,13 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { filename, json } = await buildBackup(stageId, includeLedger);
+    const { filenameAscii, filenameUtf8, json } = await buildBackup(stageId, includeLedger);
 
     return new NextResponse(json, {
       status: 200,
       headers: {
         "content-type": "application/json; charset=utf-8",
-        "content-disposition": `attachment; filename="${filename}"`,
+        "content-disposition": contentDisposition(filenameAscii, filenameUtf8),
         "cache-control": "no-store",
       },
     });
