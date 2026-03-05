@@ -33,8 +33,3 @@ jobs:
           path: _backups/*.json.gz
           if-no-files-found: error
                 - name: Upload to Supabase Storage
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_STORAGE_BUCKET: ${{ secrets.SUPABASE_STORAGE_BUCKET }}
-        run: node scripts/upload-backup-to-storage.mjs
