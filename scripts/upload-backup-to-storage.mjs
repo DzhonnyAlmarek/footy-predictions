@@ -8,6 +8,16 @@ function mustEnv(name) {
   return v;
 }
 
+function safeKeySegment(s) {
+  return s
+    .normalize("NFKD")
+    .replace(/[^\x00-\x7F]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Za-z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 const SUPABASE_URL = mustEnv("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = mustEnv("SUPABASE_SERVICE_ROLE_KEY");
 const BUCKET = mustEnv("SUPABASE_STORAGE_BUCKET");
@@ -28,7 +38,8 @@ const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
 for (const file of files) {
   const base = path.basename(file);
-  const objectPath = `stage/${day}/${base}`;
+  const safeBase = safeKeySegment(base) || "backup.json.gz";
+  const objectPath = `stage/${day}/${safeBase}`;
 
   const buf = fs.readFileSync(file);
 
