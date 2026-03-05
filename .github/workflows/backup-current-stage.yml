@@ -26,10 +26,16 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/backup-current-stage.mjs
 
+      - name: Upload to Supabase Storage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_STORAGE_BUCKET: ${{ secrets.SUPABASE_STORAGE_BUCKET }}
+        run: node scripts/upload-backup-to-storage.mjs
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: stage-backup
           path: _backups/*.json.gz
           if-no-files-found: error
-                - name: Upload to Supabase Storage
