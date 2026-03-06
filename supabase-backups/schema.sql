@@ -17,6 +17,12 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
+CREATE SCHEMA IF NOT EXISTS "restore_tmp";
+
+
+ALTER SCHEMA "restore_tmp" OWNER TO "postgres";
+
+
 CREATE EXTENSION IF NOT EXISTS "pg_graphql" WITH SCHEMA "graphql";
 
 
@@ -1342,6 +1348,190 @@ $$;
 
 ALTER FUNCTION "public"."set_updated_at"() OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "restore_tmp"."apply_run"("p_run_id" bigint, "p_force" boolean DEFAULT false) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+declare
+  v_stage_id bigint;
+  v_status text;
+begin
+  select stage_id, status into v_stage_id, v_status
+  from restore_tmp.restore_runs
+  where id = p_run_id;
+
+  if v_stage_id is null then
+    raise exception 'run not found: %', p_run_id;
+  end if;
+
+  if v_status <> 'validated' and not p_force then
+    raise exception 'run status must be validated (current: %)', v_status;
+  end if;
+
+  -- Применяем в правильном порядке (FK)
+  -- 1) stages
+  insert into public.stages as t (id, name, created_at)
+  select x.id, x.name, coalesce(x.created_at, now())
+  from json_to_recordset((
+    select jsonb_agg(row) from restore_tmp.inbox
+    where run_id=p_run_id and table_name='stages'
+  )) as x(id bigint, name text, created_at timestamptz)
+  on conflict (id) do update
+    set name = excluded.name;
+
+  -- 2) tours
+  insert into public.tours as t (id, stage_id, name, sort_order, created_at)
+  select x.id, x.stage_id, x.name, x.sort_order, coalesce(x.created_at, now())
+  from json_to_recordset((
+    select jsonb_agg(row) from restore_tmp.inbox
+    where run_id=p_run_id and table_name='tours'
+  )) as x(id bigint, stage_id bigint, name text, sort_order int, created_at timestamptz)
+  on conflict (id) do update
+    set name = excluded.name,
+        sort_order = excluded.sort_order;
+
+  -- 3) matches
+  insert into public.matches as t (
+    id, stage_id, tour_id, kickoff_at,
+    home_team_id, away_team_id,
+    home_score, away_score,
+    status, created_at
+  )
+  select
+    x.id, x.stage_id, x.tour_id, x.kickoff_at,
+    x.home_team_id, x.away_team_id,
+    x.home_score, x.away_score,
+    x.status, coalesce(x.created_at, now())
+  from json_to_recordset((
+    select jsonb_agg(row) from restore_tmp.inbox
+    where run_id=p_run_id and table_name='matches'
+  )) as x(
+    id bigint, stage_id bigint, tour_id bigint, kickoff_at timestamptz,
+    home_team_id bigint, away_team_id bigint,
+    home_score int, away_score int,
+    status text, created_at timestamptz
+  )
+  on conflict (id) do update
+    set kickoff_at = excluded.kickoff_at,
+        home_score = excluded.home_score,
+        away_score = excluded.away_score,
+        status = excluded.status;
+
+  -- 4) predictions
+  insert into public.predictions as t (
+    id, match_id, user_id, home_pred, away_pred, created_at, updated_at
+  )
+  select
+    x.id, x.match_id, x.user_id, x.home_pred, x.away_pred,
+    coalesce(x.created_at, now()),
+    coalesce(x.updated_at, now())
+  from json_to_recordset((
+    select jsonb_agg(row) from restore_tmp.inbox
+    where run_id=p_run_id and table_name='predictions'
+  )) as x(
+    id bigint, match_id bigint, user_id uuid,
+    home_pred int, away_pred int,
+    created_at timestamptz, updated_at timestamptz
+  )
+  on conflict (id) do update
+    set home_pred = excluded.home_pred,
+        away_pred = excluded.away_pred,
+        updated_at = excluded.updated_at;
+
+  -- 5) points_ledger
+  insert into public.points_ledger as t (
+    id, stage_id, match_id, user_id, points, reason, created_at
+  )
+  select
+    x.id, x.stage_id, x.match_id, x.user_id, x.points, x.reason,
+    coalesce(x.created_at, now())
+  from json_to_recordset((
+    select jsonb_agg(row) from restore_tmp.inbox
+    where run_id=p_run_id and table_name='points_ledger'
+  )) as x(
+    id bigint, stage_id bigint, match_id bigint, user_id uuid,
+    points numeric, reason text, created_at timestamptz
+  )
+  on conflict (id) do update
+    set points = excluded.points,
+        reason = excluded.reason;
+
+  update restore_tmp.restore_runs
+    set status = 'applied',
+        dry_run = false,
+        details = jsonb_set(details, '{applied_at}', to_jsonb(now()), true)
+  where id = p_run_id;
+
+  return jsonb_build_object('ok', true, 'run_id', p_run_id, 'stage_id', v_stage_id);
+exception when others then
+  update restore_tmp.restore_runs
+    set status = 'failed',
+        details = jsonb_set(details, '{error}', to_jsonb(sqlerrm), true)
+  where id = p_run_id;
+  raise;
+end;
+$$;
+
+
+ALTER FUNCTION "restore_tmp"."apply_run"("p_run_id" bigint, "p_force" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "restore_tmp"."validate_run"("p_run_id" bigint) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+declare
+  v_stage_id bigint;
+  v_counts jsonb;
+begin
+  select stage_id into v_stage_id
+  from restore_tmp.restore_runs
+  where id = p_run_id;
+
+  if v_stage_id is null then
+    raise exception 'run not found: %', p_run_id;
+  end if;
+
+  v_counts := (
+    select jsonb_object_agg(table_name, cnt)
+    from (
+      select table_name, count(*) as cnt
+      from restore_tmp.inbox
+      where run_id = p_run_id
+      group by table_name
+    ) s
+  );
+
+  -- пример: если в matches/predictions/ledger есть stage_id — проверим что не смешано
+  -- (если у тебя в row нет stage_id, этот блок можно удалить)
+  if exists (
+    select 1
+    from restore_tmp.inbox
+    where run_id = p_run_id
+      and table_name in ('matches','predictions','points_ledger','tours')
+      and (row ? 'stage_id')
+      and (row->>'stage_id')::bigint <> v_stage_id
+    limit 1
+  ) then
+    raise exception 'stage_id mismatch inside inbox rows';
+  end if;
+
+  update restore_tmp.restore_runs
+    set status = 'validated',
+        details = jsonb_set(details, '{counts}', coalesce(v_counts,'{}'::jsonb), true)
+  where id = p_run_id;
+
+  return jsonb_build_object(
+    'ok', true,
+    'run_id', p_run_id,
+    'stage_id', v_stage_id,
+    'counts', coalesce(v_counts,'{}'::jsonb)
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "restore_tmp"."validate_run"("p_run_id" bigint) OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -1768,6 +1958,45 @@ ALTER SEQUENCE "public"."tours_id_seq" OWNED BY "public"."tours"."id";
 
 
 
+CREATE TABLE IF NOT EXISTS "restore_tmp"."inbox" (
+    "run_id" bigint NOT NULL,
+    "table_name" "text" NOT NULL,
+    "row" "jsonb" NOT NULL
+);
+
+
+ALTER TABLE "restore_tmp"."inbox" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "restore_tmp"."restore_runs" (
+    "id" bigint NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "stage_id" bigint NOT NULL,
+    "snapshot_path" "text" NOT NULL,
+    "dry_run" boolean DEFAULT true NOT NULL,
+    "status" "text" DEFAULT 'inbox'::"text" NOT NULL,
+    "details" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL
+);
+
+
+ALTER TABLE "restore_tmp"."restore_runs" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "restore_tmp"."restore_runs_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "restore_tmp"."restore_runs_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "restore_tmp"."restore_runs_id_seq" OWNED BY "restore_tmp"."restore_runs"."id";
+
+
+
 ALTER TABLE ONLY "public"."audit_log" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."audit_log_id_seq"'::"regclass");
 
 
@@ -1801,6 +2030,10 @@ ALTER TABLE ONLY "public"."tournaments" ALTER COLUMN "id" SET DEFAULT "nextval"(
 
 
 ALTER TABLE ONLY "public"."tours" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."tours_id_seq"'::"regclass");
+
+
+
+ALTER TABLE ONLY "restore_tmp"."restore_runs" ALTER COLUMN "id" SET DEFAULT "nextval"('"restore_tmp"."restore_runs_id_seq"'::"regclass");
 
 
 
@@ -1919,6 +2152,16 @@ ALTER TABLE ONLY "public"."tours"
 
 
 
+ALTER TABLE ONLY "restore_tmp"."inbox"
+    ADD CONSTRAINT "inbox_pkey" PRIMARY KEY ("run_id", "table_name", "row");
+
+
+
+ALTER TABLE ONLY "restore_tmp"."restore_runs"
+    ADD CONSTRAINT "restore_runs_pkey" PRIMARY KEY ("id");
+
+
+
 CREATE INDEX "idx_analytics_arch_stage" ON "public"."analytics_stage_user_archetype" USING "btree" ("stage_id");
 
 
@@ -2028,6 +2271,10 @@ CREATE UNIQUE INDEX "uq_predictions_match_user" ON "public"."predictions" USING 
 
 
 CREATE UNIQUE INDEX "uq_stages_only_one_current" ON "public"."stages" USING "btree" ("is_current") WHERE ("is_current" = true);
+
+
+
+CREATE INDEX "inbox_run_table_idx" ON "restore_tmp"."inbox" USING "btree" ("run_id", "table_name");
 
 
 
@@ -2162,6 +2409,11 @@ ALTER TABLE ONLY "public"."telegram_broadcast_log"
 
 ALTER TABLE ONLY "public"."tours"
     ADD CONSTRAINT "tours_stage_id_fkey" FOREIGN KEY ("stage_id") REFERENCES "public"."stages"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "restore_tmp"."inbox"
+    ADD CONSTRAINT "inbox_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "restore_tmp"."restore_runs"("id") ON DELETE CASCADE;
 
 
 
