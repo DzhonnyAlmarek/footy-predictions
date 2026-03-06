@@ -8,23 +8,23 @@
     "start": "next start"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.98.0",
     "next": "15.5.10",
     "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.91.1"
+    "react-dom": "18.2.0"
   },
   "overrides": {
     "react": "18.2.0",
     "react-dom": "18.2.0"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@tailwindcss/postcss": "^4",
     "@types/react": "18.2.79",
     "@types/react-dom": "18.2.25",
-    "tailwindcss": "^4",
-    "@tailwindcss/postcss": "^4",
+    "autoprefixer": "^10",
     "postcss": "^8",
-    "autoprefixer": "^10"
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }

@@ -60,7 +60,7 @@ const nav = [
         nav={nav}
       />
 
-      <div className="hasBottomBar">{children}</div>
+ <div className="hasBottomBar pb-28 md:pb-6">{children}</div>
 
       <BottomBar variant="user" />
     </>

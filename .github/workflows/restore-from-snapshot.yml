@@ -1,0 +1,40 @@
+name: Restore from snapshot (INBOX first)
+
+on:
+  workflow_dispatch:
+    inputs:
+      snapshot_path:
+        description: "Storage path, e.g. stage/2026-03-05/xxx.json.gz"
+        required: true
+      stage_id:
+        description: "Stage ID"
+        required: true
+      dry_run:
+        description: "true = only validate, false = apply"
+        required: true
+        default: "true"
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Restore snapshot to inbox (and validate/apply)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_STORAGE_BUCKET: ${{ secrets.SUPABASE_STORAGE_BUCKET }}
+          SNAPSHOT_PATH: ${{ inputs.snapshot_path }}
+          STAGE_ID: ${{ inputs.stage_id }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: node scripts/restore-snapshot-to-inbox.mjs
