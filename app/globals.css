@@ -52,10 +52,11 @@ p{ color:var(--muted) }
 .cardBody{ padding:16px }
 
 /* =========================================================
-   SiteHeader
+   Header
 ========================================================= */
 
-.siteHeader{
+.siteHeader,
+.appHeader{
   position:sticky;
   top:0;
   z-index:300;
@@ -64,16 +65,31 @@ p{ color:var(--muted) }
   border-bottom:1px solid rgba(17,24,39,.10);
 }
 
-.siteHeaderInner{
+.siteHeaderInner,
+.appHeaderInner{
   max-width:1200px;
   margin:0 auto;
+}
+
+.siteHeaderInner{
   padding:14px 16px;
   display:flex;
   justify-content:center;
   align-items:center;
 }
 
-.clubTitleLink{
+.appHeaderInner{
+  padding:12px 16px;
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  grid-template-rows:auto auto;
+  column-gap:14px;
+  row-gap:6px;
+  align-items:center;
+}
+
+.clubTitleLink,
+.brandLink{
   display:inline-flex;
   align-items:center;
   gap:10px;
@@ -84,35 +100,7 @@ p{ color:var(--muted) }
   font-size:20px;
 }
 
-.clubTitleLink:hover{ text-decoration:none !important; opacity:.92 }
-
-.clubIcon{ font-size:22px; line-height:1 }
-
-/* =========================================================
-   AppHeader
-========================================================= */
-
-.appHeader{
-  position:sticky;
-  top:0;
-  z-index:300;
-  background:rgba(246,247,251,.86);
-  backdrop-filter:blur(10px);
-  border-bottom:1px solid rgba(17,24,39,.10);
-}
-
-.appHeaderInner{
-  max-width:1200px;
-  margin:0 auto;
-  padding:12px 16px;
-
-  display:grid;
-  grid-template-columns:1fr auto 1fr;
-  grid-template-rows:auto auto;
-  column-gap:14px;
-  row-gap:6px;
-  align-items:center;
-}
+.brandLink:hover{ opacity:.92 }
 
 .appBrand{
   grid-column:2;
@@ -123,19 +111,6 @@ p{ color:var(--muted) }
   text-align:center;
   gap:6px;
 }
-
-.brandLink{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  font-weight:950;
-  letter-spacing:-.02em;
-  color:#111827 !important;
-  text-decoration:none !important;
-  font-size:20px;
-}
-
-.brandLink:hover{ opacity:.92 }
 
 .brandMeta{
   display:flex;
@@ -154,20 +129,14 @@ p{ color:var(--muted) }
   border:1px solid rgba(17,24,39,.12);
   font-size:12px;
   font-weight:800;
-  color:rgba(17,24,39,.75);
 }
-
-.metaPill b{ color:#111827 }
 
 .appNav{
   grid-column:3;
   grid-row:1;
   justify-self:end;
-
   display:flex;
   gap:8px;
-  flex-wrap:wrap;
-  align-items:center;
 }
 
 .appNavLink{
@@ -179,11 +148,8 @@ p{ color:var(--muted) }
   background:rgba(255,255,255,.85);
   border:1px solid rgba(17,24,39,.12);
   font-weight:900;
-  color:rgba(17,24,39,.85);
   text-decoration:none !important;
 }
-
-.appNavLink:hover{ background:#fff }
 
 .navActive{
   border-color:rgba(37,99,235,.28);
@@ -223,10 +189,8 @@ p{ color:var(--muted) }
   font-size:12px;
   text-transform:uppercase;
   letter-spacing:.06em;
-  color:rgba(17,24,39,.7);
   padding:12px 10px;
   white-space:nowrap;
-  text-align:left;
 }
 
 .table tbody td{
@@ -236,7 +200,41 @@ p{ color:var(--muted) }
 }
 
 .table tbody tr:nth-child(odd) td{ background:rgba(17,24,39,.015) }
-.table tbody tr:hover td{ background:rgba(37,99,235,.06) }
+
+/* =========================================================
+   Prediction inputs (FIXED)
+========================================================= */
+
+.predCell{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:nowrap;
+  white-space:nowrap;
+}
+
+.predInput,
+.scoreInput,
+.resultInput{
+  width:34px;
+  min-width:34px;
+  max-width:34px;
+  flex:0 0 34px;
+  padding:6px;
+  border-radius:10px;
+  border:1px solid rgba(17,24,39,.16);
+  font-weight:900;
+  text-align:center;
+  outline:none;
+  background:#fff;
+  font-size:13px;
+}
+
+.predSep{
+  font-weight:900;
+  opacity:.65;
+  flex:0 0 auto;
+}
 
 /* =========================================================
    BottomBar
@@ -249,10 +247,7 @@ p{ color:var(--muted) }
   gap:8px;
   padding:10px 12px;
   overflow-x:auto;
-  scrollbar-width:none;
 }
-
-.bottomBarInner::-webkit-scrollbar{ display:none }
 
 .bbItem{
   flex:0 0 auto;
@@ -264,12 +259,8 @@ p{ color:var(--muted) }
   border:1px solid rgba(17,24,39,.12);
   background:rgba(255,255,255,.9);
   font-weight:900;
-  color:rgba(17,24,39,.85);
   text-decoration:none;
-  white-space:nowrap;
 }
-
-.bbItem:hover{ background:#fff }
 
 .bbActive{
   border-color:rgba(37,99,235,.28);
@@ -278,7 +269,7 @@ p{ color:var(--muted) }
 }
 
 /* =========================================================
-   BottomBar Mobile Fix
+   BottomBar mobile spacing fix
 ========================================================= */
 
 .hasBottomBar{
@@ -309,7 +300,7 @@ p{ color:var(--muted) }
 }
 
 /* =========================================================
-   Legacy menus off
+   Legacy off
 ========================================================= */
 
 .mobileBottomBar,
