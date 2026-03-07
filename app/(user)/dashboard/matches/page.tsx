@@ -63,6 +63,7 @@ function fmtTimeMsk(iso?: string | null) {
 type MatchRow = {
   id: string;
   kickoff_at: string | null;
+  status: string | null;
   home_team: { name: string; slug: string } | null;
   away_team: { name: string; slug: string } | null;
 };
@@ -97,16 +98,21 @@ export default async function DashboardMatchesPage() {
       `
       id,
       kickoff_at,
+      status,
       home_team:teams!matches_home_team_id_fkey ( name, slug ),
       away_team:teams!matches_away_team_id_fkey ( name, slug )
     `
     )
     .eq("stage_id", stage.id)
+    .or("status.is.null,status.neq.finished")
     .order("kickoff_at", { ascending: true });
 
   if (matchesErr) {
     return (
-      <main className="hasBottomBar" style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}>
+      <main
+        className="hasBottomBar"
+        style={{ maxWidth: 1100, margin: "0 auto", padding: 24, color: "crimson" }}
+      >
         Ошибка matches: {matchesErr.message}
       </main>
     );
@@ -114,11 +120,14 @@ export default async function DashboardMatchesPage() {
 
   const matchIds = (matches ?? []).map((m: any) => m.id);
 
-  const { data: preds } = await sb
-    .from("predictions")
-    .select("match_id,home_pred,away_pred")
-    .eq("user_id", acc.user_id)
-    .in("match_id", matchIds);
+  const { data: preds } =
+    matchIds.length > 0
+      ? await sb
+          .from("predictions")
+          .select("match_id,home_pred,away_pred")
+          .eq("user_id", acc.user_id)
+          .in("match_id", matchIds)
+      : { data: [] as Array<{ match_id: string; home_pred: number | null; away_pred: number | null }> };
 
   const predByMatch = new Map<string, { h: number | null; a: number | null }>();
   for (const p of preds ?? []) {
@@ -139,26 +148,33 @@ export default async function DashboardMatchesPage() {
             <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>МСК</span>
           </div>
         </div>
-        {/* ✅ больше никаких topNav / mobileBottomBar — навигация только в AppHeader + BottomBar */}
       </header>
 
       <section style={{ marginTop: 18 }}>
         {!matches || matches.length === 0 ? (
-          <p style={{ marginTop: 14 }}>Матчей нет.</p>
+          <p style={{ marginTop: 14 }}>Сейчас нет актуальных матчей для прогноза.</p>
         ) : (
           <div className="tableWrap" style={{ marginTop: 14 }}>
             <table className="table">
               <thead>
                 <tr>
-                  <th style={{ width: 170, textAlign: "center" as const, verticalAlign: "middle" as const }}>Дата (МСК)</th>
-                  <th style={{ width: 120, textAlign: "center" as const, verticalAlign: "middle" as const }}>Время (МСК)</th>
-                  <th style={{ textAlign: "center" as const, verticalAlign: "middle" as const }}>Матч</th>
-                  <th style={{ width: 170, textAlign: "center" as const, verticalAlign: "middle" as const }}>Прогноз</th>
+                  <th style={{ width: 170, textAlign: "center" as const, verticalAlign: "middle" as const }}>
+                    Дата (МСК)
+                  </th>
+                  <th style={{ width: 120, textAlign: "center" as const, verticalAlign: "middle" as const }}>
+                    Время (МСК)
+                  </th>
+                  <th style={{ textAlign: "center" as const, verticalAlign: "middle" as const }}>
+                    Матч
+                  </th>
+                  <th style={{ width: 170, textAlign: "center" as const, verticalAlign: "middle" as const }}>
+                    Прогноз
+                  </th>
                 </tr>
               </thead>
 
               <tbody>
-                {(matches as any[]).map((m: MatchRow) => {
+                {(matches as MatchRow[]).map((m) => {
                   const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
                   const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
