@@ -60,6 +60,12 @@ function fmtTimeMsk(iso?: string | null) {
   });
 }
 
+function teamName(team: any): string {
+  if (!team) return "?";
+  if (Array.isArray(team)) return team[0]?.name ?? "?";
+  return team.name ?? "?";
+}
+
 type TeamRel = {
   name: string;
   slug: string;
@@ -69,8 +75,8 @@ type MatchRow = {
   id: string;
   kickoff_at: string | null;
   status: string | null;
-  home_team: TeamRel[] | null;
-  away_team: TeamRel[] | null;
+  home_team: TeamRel | TeamRel[] | null;
+  away_team: TeamRel | TeamRel[] | null;
 };
 
 export default async function DashboardMatchesPage() {
@@ -123,7 +129,7 @@ export default async function DashboardMatchesPage() {
     );
   }
 
-  const safeMatches: MatchRow[] = (matches ?? []) as MatchRow[];
+  const safeMatches = (matches ?? []) as MatchRow[];
   const matchIds = safeMatches.map((m) => m.id);
 
   const { data: preds } =
@@ -174,10 +180,18 @@ export default async function DashboardMatchesPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th style={{ width: 170, textAlign: "center", verticalAlign: "middle" }}>Дата (МСК)</th>
-                  <th style={{ width: 120, textAlign: "center", verticalAlign: "middle" }}>Время (МСК)</th>
-                  <th style={{ textAlign: "center", verticalAlign: "middle" }}>Матч</th>
-                  <th style={{ width: 170, textAlign: "center", verticalAlign: "middle" }}>Прогноз</th>
+                  <th style={{ width: 170, textAlign: "center", verticalAlign: "middle" }}>
+                    Дата (МСК)
+                  </th>
+                  <th style={{ width: 120, textAlign: "center", verticalAlign: "middle" }}>
+                    Время (МСК)
+                  </th>
+                  <th style={{ textAlign: "center", verticalAlign: "middle" }}>
+                    Матч
+                  </th>
+                  <th style={{ width: 170, textAlign: "center", verticalAlign: "middle" }}>
+                    Прогноз
+                  </th>
                 </tr>
               </thead>
 
@@ -189,7 +203,8 @@ export default async function DashboardMatchesPage() {
                   const timeCell = kickoff
                     ? (() => {
                         const f = kickoffFlag(kickoff);
-                        const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
+                        const cls =
+                          f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
                         return <span className={`badge ${cls}`}>{fmtTimeMsk(m.kickoff_at)}</span>;
                       })()
                     : "—";
@@ -206,7 +221,7 @@ export default async function DashboardMatchesPage() {
 
                       <td>
                         <div style={{ fontWeight: 900 }}>
-                          {m.home_team?.[0]?.name ?? "?"} — {m.away_team?.[0]?.name ?? "?"}
+                          {teamName(m.home_team)} — {teamName(m.away_team)}
                         </div>
                       </td>
 
