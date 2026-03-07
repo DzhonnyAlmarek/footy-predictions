@@ -60,12 +60,17 @@ function fmtTimeMsk(iso?: string | null) {
   });
 }
 
+type TeamRel = {
+  name: string;
+  slug: string;
+};
+
 type MatchRow = {
   id: string;
   kickoff_at: string | null;
   status: string | null;
-  home_team: { name: string; slug: string } | null;
-  away_team: { name: string; slug: string } | null;
+  home_team: TeamRel[] | null;
+  away_team: TeamRel[] | null;
 };
 
 export default async function DashboardMatchesPage() {
@@ -118,7 +123,8 @@ export default async function DashboardMatchesPage() {
     );
   }
 
-  const matchIds = (matches ?? []).map((m: any) => m.id);
+  const safeMatches: MatchRow[] = (matches ?? []) as MatchRow[];
+  const matchIds = safeMatches.map((m) => m.id);
 
   const { data: preds } =
     matchIds.length > 0
@@ -127,7 +133,13 @@ export default async function DashboardMatchesPage() {
           .select("match_id,home_pred,away_pred")
           .eq("user_id", acc.user_id)
           .in("match_id", matchIds)
-      : { data: [] as Array<{ match_id: string; home_pred: number | null; away_pred: number | null }> };
+      : {
+          data: [] as Array<{
+            match_id: string;
+            home_pred: number | null;
+            away_pred: number | null;
+          }>,
+        };
 
   const predByMatch = new Map<string, { h: number | null; a: number | null }>();
   for (const p of preds ?? []) {
@@ -144,45 +156,43 @@ export default async function DashboardMatchesPage() {
           <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Матчи</h1>
           <div style={{ marginTop: 6, opacity: 0.85 }}>
             Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>{fpLogin}</span>
-            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>МСК</span>
+            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>
+              {fpLogin}
+            </span>
+            <span className="badge badgeNeutral" style={{ marginLeft: 10 }}>
+              МСК
+            </span>
           </div>
         </div>
       </header>
 
       <section style={{ marginTop: 18 }}>
-        {!matches || matches.length === 0 ? (
+        {safeMatches.length === 0 ? (
           <p style={{ marginTop: 14 }}>Сейчас нет актуальных матчей для прогноза.</p>
         ) : (
           <div className="tableWrap" style={{ marginTop: 14 }}>
             <table className="table">
               <thead>
                 <tr>
-                  <th style={{ width: 170, textAlign: "center" as const, verticalAlign: "middle" as const }}>
-                    Дата (МСК)
-                  </th>
-                  <th style={{ width: 120, textAlign: "center" as const, verticalAlign: "middle" as const }}>
-                    Время (МСК)
-                  </th>
-                  <th style={{ textAlign: "center" as const, verticalAlign: "middle" as const }}>
-                    Матч
-                  </th>
-                  <th style={{ width: 170, textAlign: "center" as const, verticalAlign: "middle" as const }}>
-                    Прогноз
-                  </th>
+                  <th style={{ width: 170, textAlign: "center", verticalAlign: "middle" }}>Дата (МСК)</th>
+                  <th style={{ width: 120, textAlign: "center", verticalAlign: "middle" }}>Время (МСК)</th>
+                  <th style={{ textAlign: "center", verticalAlign: "middle" }}>Матч</th>
+                  <th style={{ width: 170, textAlign: "center", verticalAlign: "middle" }}>Прогноз</th>
                 </tr>
               </thead>
 
               <tbody>
-                {(matches as MatchRow[]).map((m) => {
+                {safeMatches.map((m) => {
                   const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
                   const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
-                  const timeCell = kickoff ? (() => {
-                    const f = kickoffFlag(kickoff);
-                    const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
-                    return <span className={`badge ${cls}`}>{fmtTimeMsk(m.kickoff_at)}</span>;
-                  })() : "—";
+                  const timeCell = kickoff
+                    ? (() => {
+                        const f = kickoffFlag(kickoff);
+                        const cls = f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
+                        return <span className={`badge ${cls}`}>{fmtTimeMsk(m.kickoff_at)}</span>;
+                      })()
+                    : "—";
 
                   return (
                     <tr key={m.id}>
@@ -196,7 +206,7 @@ export default async function DashboardMatchesPage() {
 
                       <td>
                         <div style={{ fontWeight: 900 }}>
-                          {m.home_team?.name ?? "?"} — {m.away_team?.name ?? "?"}
+                          {m.home_team?.[0]?.name ?? "?"} — {m.away_team?.[0]?.name ?? "?"}
                         </div>
                       </td>
 
