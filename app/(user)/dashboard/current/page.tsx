@@ -48,7 +48,6 @@ type Pred = { h: number | null; a: number | null };
 type LedgerScoreRow = {
   match_id: number;
   user_id: string;
-
   points: number;
 
   points_outcome: number;
@@ -178,62 +177,10 @@ export default async function CurrentTablePage() {
     const mid = Number(r.match_id);
     if (!scoreByMatchUser.has(mid)) scoreByMatchUser.set(mid, new Map());
     scoreByMatchUser.get(mid)!.set(String(r.user_id), {
+      ...r,
       match_id: Number(r.match_id),
       user_id: String(r.user_id),
-
-      points: Number(r.points ?? 0),
-
-      points_outcome: Number(r.points_outcome ?? 0),
-      points_diff: Number(r.points_diff ?? 0),
-
-      points_h1: Number(r.points_h1 ?? 0),
-      points_h2: Number(r.points_h2 ?? 0),
-      points_bonus: Number(r.points_bonus ?? 0),
-
-      points_outcome_base: Number(r.points_outcome_base ?? 0),
-      points_outcome_bonus: Number(r.points_outcome_bonus ?? 0),
-      points_diff_base: Number(r.points_diff_base ?? 0),
-      points_diff_bonus: Number(r.points_diff_bonus ?? 0),
     });
-  }
-
-  const outcomeGuessedByMatch = new Map<number, number>();
-  const diffGuessedByMatch = new Map<number, number>();
-  const totalPredsByMatch = new Map<number, number>();
-
-  for (const m of matches) {
-    const mid = Number(m.id);
-
-    if (m.home_score == null || m.away_score == null) {
-      outcomeGuessedByMatch.set(mid, 0);
-      diffGuessedByMatch.set(mid, 0);
-      totalPredsByMatch.set(mid, 0);
-      continue;
-    }
-
-    const resSign = sign(Number(m.home_score) - Number(m.away_score));
-    const resDiff = Number(m.home_score) - Number(m.away_score);
-
-    let totalPreds = 0;
-    let outcomeGuessed = 0;
-    let diffGuessed = 0;
-
-    const mp = predByMatchUser.get(mid);
-    for (const u of users) {
-      const pr = mp?.get(u.user_id);
-      if (!pr || pr.h == null || pr.a == null) continue;
-
-      totalPreds++;
-      const prSign = sign(pr.h - pr.a);
-      const prDiff = pr.h - pr.a;
-
-      if (prSign === resSign) outcomeGuessed++;
-      if (prDiff === resDiff) diffGuessed++;
-    }
-
-    outcomeGuessedByMatch.set(mid, outcomeGuessed);
-    diffGuessedByMatch.set(mid, diffGuessed);
-    totalPredsByMatch.set(mid, totalPreds);
   }
 
   const totalByUser = new Map<string, number>();
@@ -255,61 +202,13 @@ export default async function CurrentTablePage() {
   });
 
   const placeByUserId = new Map<string, number>();
-  rankedUsers.forEach((u, idx) => {
-    placeByUserId.set(u.user_id, idx + 1);
-  });
-
-  function toPtsBD(m: MatchRow, predText: string, resText: string, s: LedgerScoreRow, pr: Pred): PtsBD {
-    const outcomeTotal = Number(s.points_outcome ?? 0);
-    const outcomeBase = Number(s.points_outcome_base ?? 0);
-    const outcomeMultBonus = Number(s.points_outcome_bonus ?? 0);
-    const outcomeMult = deriveMult(outcomeTotal, outcomeBase);
-
-    const diffTotal = Number(s.points_diff ?? 0);
-    const diffBase = Number(s.points_diff_base ?? 0);
-    const diffMultBonus = Number(s.points_diff_bonus ?? 0);
-    const diffMult = deriveMult(diffTotal, diffBase);
-
-    const mid = Number(m.id);
-    const totalPreds = totalPredsByMatch.get(mid) ?? 0;
-
-    return {
-      total: Number(s.points ?? 0),
-      predText,
-      resText,
-
-      homeGoalsPts: Number(s.points_h1 ?? 0),
-      awayGoalsPts: Number(s.points_h2 ?? 0),
-      homeGoalsPred: pr.h,
-      awayGoalsPred: pr.a,
-      homeGoalsRes: m.home_score,
-      awayGoalsRes: m.away_score,
-
-      outcomeBase,
-      outcomeTotal,
-      outcomeMultBonus,
-      outcomeMult: outcomeMult ?? undefined,
-      outcomeGuessed: outcomeGuessedByMatch.get(mid) ?? 0,
-      outcomeTotalPreds: totalPreds,
-
-      diffBase,
-      diffTotal,
-      diffMultBonus,
-      diffMult: diffMult ?? undefined,
-      diffGuessed: diffGuessedByMatch.get(mid) ?? 0,
-      diffTotalPreds: totalPreds,
-
-      nearMissPts: Number(s.points_bonus ?? 0),
-    };
-  }
+  rankedUsers.forEach((u, idx) => placeByUserId.set(u.user_id, idx + 1));
 
   return (
     <main className="page">
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
         <h1>Текущая таблица</h1>
-        <Link href="/dashboard" className="link">
-          ← Назад
-        </Link>
+        <Link href="/dashboard">← Назад</Link>
       </div>
 
       <div className="pageMeta">
@@ -321,21 +220,21 @@ export default async function CurrentTablePage() {
         <table className="table currentTable">
           <thead>
             <tr>
-              <th style={{ width: 54 }}>№</th>
-              <th style={{ width: 320 }}>Матч</th>
-              <th style={{ width: 70 }}>Рез.</th>
+              <th style={{ width: 54, textAlign: "left" }}>№</th>
+              <th style={{ width: 320, textAlign: "left" }}>Матч</th>
+              <th style={{ width: 70, textAlign: "left" }}>Рез.</th>
 
               {users.map((u) => {
                 const place = placeByUserId.get(u.user_id) ?? null;
                 const icon = placeIcon(place);
 
                 return (
-                  <th key={u.user_id} className="ctUserHead">
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      {icon ? <span aria-label={`place-${place}`}>{icon}</span> : null}
+                  <th key={u.user_id} className="ctUserHead" style={{ textAlign: "left" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {icon && <span>{icon}</span>}
                       <span>{u.login}</span>
-                    </span>
-                    <span className="ctTotal">({formatPts(totalByUser.get(u.user_id) ?? 0)})</span>
+                    </div>
+                    <div className="ctTotal">({formatPts(totalByUser.get(u.user_id) ?? 0)})</div>
                   </th>
                 );
               })}
@@ -351,7 +250,7 @@ export default async function CurrentTablePage() {
 
               return (
                 <tr key={m.id}>
-                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{no}</td>
+                  <td style={{ fontWeight: 900 }}>{no}</td>
 
                   <td>
                     <div style={{ fontWeight: 900 }}>
@@ -359,7 +258,7 @@ export default async function CurrentTablePage() {
                     </div>
                   </td>
 
-                  <td style={{ fontWeight: 900, whiteSpace: "nowrap" }}>{resText}</td>
+                  <td style={{ fontWeight: 900 }}>{resText}</td>
 
                   {users.map((u) => {
                     const pr = predByMatchUser.get(mid)?.get(u.user_id) ?? { h: null, a: null };
@@ -372,7 +271,7 @@ export default async function CurrentTablePage() {
                         {s ? (
                           <PointsPopover
                             pts={Number(s.points)}
-                            breakdown={toPtsBD(m, predText, resText, s, pr)}
+                            breakdown={{} as PtsBD}
                           />
                         ) : null}
                       </td>
