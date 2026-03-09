@@ -54,9 +54,9 @@ type LedgerScoreRow = {
   points_outcome: number;
   points_diff: number;
 
-  points_h1: number; // баллы за голы хозяев
-  points_h2: number; // баллы за голы гостей
-  points_bonus: number; // промах на 1 мяч
+  points_h1: number;
+  points_h2: number;
+  points_bonus: number;
 
   points_outcome_base: number;
   points_outcome_bonus: number;
@@ -93,13 +93,17 @@ function deriveMult(totalPart: number, base: number): number | null {
   return Number.isFinite(r) ? r : null;
 }
 
+function placeIcon(place: number | null): string | null {
+  if (place === 1) return "🥇";
+  if (place === 2) return "🥈";
+  if (place === 3) return "🥉";
+  return null;
+}
+
 export default async function CurrentTablePage() {
   const cs = await cookies();
   const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
   if (!fpLogin) redirect("/");
-
-  // если у тебя есть отдельная логика "не пускать ADMIN сюда" — можно оставить/убрать
-  // if (fpLogin === "ADMIN") redirect("/admin/current-table");
 
   const sb = service();
 
@@ -145,7 +149,6 @@ export default async function CurrentTablePage() {
   const matches = (matchesRaw ?? []) as MatchRow[];
   const matchIds = matches.map((m) => Number(m.id));
 
-  // прогнозы (текст в ячейке + подсчёт "угадали X из Y")
   const { data: predsRaw } = await sb
     .from("predictions")
     .select("match_id,user_id,home_pred,away_pred")
@@ -162,7 +165,6 @@ export default async function CurrentTablePage() {
     });
   }
 
-  // начисления (источник истины) — из points_ledger
   const { data: ledgerRaw } = await sb
     .from("points_ledger")
     .select(
@@ -195,7 +197,6 @@ export default async function CurrentTablePage() {
     });
   }
 
-  // "угадали X из Y" — считаем по прогнозам на матч (только заполненные прогнозы)
   const outcomeGuessedByMatch = new Map<number, number>();
   const diffGuessedByMatch = new Map<number, number>();
   const totalPredsByMatch = new Map<number, number>();
@@ -235,7 +236,6 @@ export default async function CurrentTablePage() {
     totalPredsByMatch.set(mid, totalPreds);
   }
 
-  // totals по пользователю из ledger
   const totalByUser = new Map<string, number>();
   for (const u of users) totalByUser.set(u.user_id, 0);
 
@@ -246,6 +246,18 @@ export default async function CurrentTablePage() {
       if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.points)));
     }
   }
+
+  const rankedUsers = [...users].sort((a, b) => {
+    const tb = totalByUser.get(b.user_id) ?? 0;
+    const ta = totalByUser.get(a.user_id) ?? 0;
+    if (tb !== ta) return tb - ta;
+    return a.login.localeCompare(b.login, "ru");
+  });
+
+  const placeByUserId = new Map<string, number>();
+  rankedUsers.forEach((u, idx) => {
+    placeByUserId.set(u.user_id, idx + 1);
+  });
 
   function toPtsBD(m: MatchRow, predText: string, resText: string, s: LedgerScoreRow, pr: Pred): PtsBD {
     const outcomeTotal = Number(s.points_outcome ?? 0);
@@ -266,7 +278,6 @@ export default async function CurrentTablePage() {
       predText,
       resText,
 
-      // голы команд — из ledger
       homeGoalsPts: Number(s.points_h1 ?? 0),
       awayGoalsPts: Number(s.points_h2 ?? 0),
       homeGoalsPred: pr.h,
@@ -274,7 +285,6 @@ export default async function CurrentTablePage() {
       homeGoalsRes: m.home_score,
       awayGoalsRes: m.away_score,
 
-      // исход
       outcomeBase,
       outcomeTotal,
       outcomeMultBonus,
@@ -282,7 +292,6 @@ export default async function CurrentTablePage() {
       outcomeGuessed: outcomeGuessedByMatch.get(mid) ?? 0,
       outcomeTotalPreds: totalPreds,
 
-      // разница
       diffBase,
       diffTotal,
       diffMultBonus,
@@ -290,7 +299,6 @@ export default async function CurrentTablePage() {
       diffGuessed: diffGuessedByMatch.get(mid) ?? 0,
       diffTotalPreds: totalPreds,
 
-      // промах на 1 мяч — отдельно
       nearMissPts: Number(s.points_bonus ?? 0),
     };
   }
@@ -317,12 +325,20 @@ export default async function CurrentTablePage() {
               <th style={{ width: 320 }}>Матч</th>
               <th style={{ width: 70 }}>Рез.</th>
 
-              {users.map((u) => (
-                <th key={u.user_id} className="ctUserHead">
-                  {u.login}
-                  <span className="ctTotal">({formatPts(totalByUser.get(u.user_id) ?? 0)})</span>
-                </th>
-              ))}
+              {users.map((u) => {
+                const place = placeByUserId.get(u.user_id) ?? null;
+                const icon = placeIcon(place);
+
+                return (
+                  <th key={u.user_id} className="ctUserHead">
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      {icon ? <span aria-label={`place-${place}`}>{icon}</span> : null}
+                      <span>{u.login}</span>
+                    </span>
+                    <span className="ctTotal">({formatPts(totalByUser.get(u.user_id) ?? 0)})</span>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
 
