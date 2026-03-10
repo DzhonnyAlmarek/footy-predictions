@@ -1,127 +1,260 @@
-import Link from "next/link";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-import EditMatchForm from "./edit-match-form";
+"use client";
 
-function mustEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-function decodeMaybe(v: string) {
-  try {
-    return decodeURIComponent(v);
-  } catch {
-    return v;
-  }
-}
+type Team = { id: number; name: string };
+type Tour = { id: number; tour_no: number; name: string | null };
 
-function service() {
-  return createClient(
-    mustEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false } }
-  );
-}
-
-function teamNameRel(rel: any): string {
-  if (!rel) return "?";
-  if (Array.isArray(rel)) return rel[0]?.name ?? "?";
-  return rel.name ?? "?";
-}
-
-export default async function AdminEditMatchPage({
-  params,
+export default function EditMatchForm({
+  stageId,
+  tourId,
+  matchId,
+  teams,
+  tours,
+  initialTourId,
+  initialStageMatchNo,
+  initialKickoffAt,
+  initialDeadlineAt,
+  initialStatus,
+  initialHomeTeamId,
+  initialAwayTeamId,
 }: {
-  params: Promise<{ stageId: string; tourId: string; matchId: string }>;
+  stageId: number;
+  tourId: number;
+  matchId: number;
+  teams: Team[];
+  tours: Tour[];
+  initialTourId: number;
+  initialStageMatchNo: number | null;
+  initialKickoffAt: string;
+  initialDeadlineAt: string;
+  initialStatus: string;
+  initialHomeTeamId: number;
+  initialAwayTeamId: number;
 }) {
-  const cs = await cookies();
-  const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
-  if (!fpLogin) redirect("/");
-  if (fpLogin !== "ADMIN") redirect("/dashboard");
+  const router = useRouter();
 
-  const { stageId, tourId, matchId } = await params;
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const sid = Number(stageId);
-  const tid = Number(tourId);
-  const mid = Number(matchId);
+  const [nextTourId, setNextTourId] = useState(String(initialTourId));
+  const [stageMatchNo, setStageMatchNo] = useState(
+    initialStageMatchNo == null ? "" : String(initialStageMatchNo)
+  );
+  const [kickoffAt, setKickoffAt] = useState(initialKickoffAt ? initialKickoffAt.slice(0, 16) : "");
+  const [deadlineAt, setDeadlineAt] = useState(initialDeadlineAt ? initialDeadlineAt.slice(0, 16) : "");
+  const [status, setStatus] = useState(initialStatus ?? "draft");
+  const [homeTeamId, setHomeTeamId] = useState(String(initialHomeTeamId));
+  const [awayTeamId, setAwayTeamId] = useState(String(initialAwayTeamId));
 
-  const supabase = service();
+  async function onSave(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
 
-  const { data: match, error } = await supabase
-    .from("matches")
-    .select(`
-      id,
-      stage_id,
-      tour_id,
-      stage_match_no,
-      kickoff_at,
-      deadline_at,
-      status,
-      home_team_id,
-      away_team_id,
-      home_team:teams!matches_home_team_id_fkey ( name ),
-      away_team:teams!matches_away_team_id_fkey ( name )
-    `)
-    .eq("id", mid)
-    .single();
+    const hId = Number(homeTeamId);
+    const aId = Number(awayTeamId);
+    const tId = Number(nextTourId);
 
-  if (error || !match) {
-    return (
-      <main style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
-        <p style={{ color: "crimson" }}>
-          Матч не найден{error ? `: ${error.message}` : ""}
-        </p>
-        <p style={{ marginTop: 12 }}>
-          <Link href={`/admin/stages/${sid}`}>← Назад к этапу</Link>
-        </p>
-      </main>
-    );
+    if (!Number.isFinite(tId)) return setMsg("Выберите тур");
+    if (!Number.isFinite(hId)) return setMsg("Выберите хозяев");
+    if (!Number.isFinite(aId)) return setMsg("Выберите гостей");
+    if (hId === aId) return setMsg("Команды должны быть разными");
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/matches/${matchId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tour_id: tId,
+          stage_match_no: stageMatchNo === "" ? null : Number(stageMatchNo),
+          kickoff_at: kickoffAt ? new Date(kickoffAt).toISOString() : null,
+          deadline_at: deadlineAt ? new Date(deadlineAt).toISOString() : null,
+          status,
+          home_team_id: hId,
+          away_team_id: aId,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? `Ошибка обновления матча (${res.status})`);
+      }
+
+      setMsg("Матч сохранён ✅");
+      router.push(`/admin/stages/${stageId}`);
+      router.refresh();
+    } catch (e: any) {
+      setMsg(e?.message ?? "Ошибка обновления матча");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const { data: teams } = await supabase
-    .from("teams")
-    .select("id,name")
-    .order("name", { ascending: true });
+  async function onDelete() {
+    if (!confirm("Удалить этот матч?")) return;
 
-  const { data: tours } = await supabase
-    .from("tours")
-    .select("id,tour_no,name")
-    .eq("stage_id", sid)
-    .order("tour_no", { ascending: true });
+    setLoading(true);
+    setMsg(null);
+
+    try {
+      const res = await fetch(`/api/admin/matches/${matchId}`, {
+        method: "DELETE",
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? `Ошибка удаления матча (${res.status})`);
+      }
+
+      router.push(`/admin/stages/${stageId}`);
+      router.refresh();
+    } catch (e: any) {
+      setMsg(e?.message ?? "Ошибка удаления матча");
+      setLoading(false);
+    }
+  }
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
-      <p>
-        <Link href={`/admin/stages/${sid}`}>← К этапу</Link>
-      </p>
+    <form
+      onSubmit={onSave}
+      style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 16 }}
+    >
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <select
+            value={nextTourId}
+            onChange={(e) => setNextTourId(e.target.value)}
+            disabled={loading}
+            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 220 }}
+          >
+            {tours.map((t) => (
+              <option key={t.id} value={t.id}>
+                Тур {t.tour_no}{t.name ? ` — ${t.name}` : ""}
+              </option>
+            ))}
+          </select>
 
-      <h1 style={{ fontSize: 28, fontWeight: 800, marginTop: 12 }}>
-        Редактировать матч #{match.id}
-      </h1>
+          <input
+            type="number"
+            value={stageMatchNo}
+            onChange={(e) => setStageMatchNo(e.target.value)}
+            placeholder="№ матча этапа"
+            disabled={loading}
+            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", width: 180 }}
+          />
+        </div>
 
-      <p style={{ marginTop: 8, opacity: 0.8 }}>
-        {teamNameRel(match.home_team)} — {teamNameRel(match.away_team)}
-      </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <select
+            value={homeTeamId}
+            onChange={(e) => setHomeTeamId(e.target.value)}
+            disabled={loading}
+            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 240 }}
+          >
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
 
-      <div style={{ marginTop: 20 }}>
-        <EditMatchForm
-          stageId={sid}
-          tourId={tid}
-          matchId={mid}
-          teams={(teams ?? []) as Array<{ id: number; name: string }>}
-          tours={(tours ?? []) as Array<{ id: number; tour_no: number; name: string | null }>}
-          initialTourId={Number(match.tour_id)}
-          initialStageMatchNo={match.stage_match_no ?? null}
-          initialKickoffAt={match.kickoff_at ?? ""}
-          initialDeadlineAt={match.deadline_at ?? ""}
-          initialStatus={match.status ?? "draft"}
-          initialHomeTeamId={Number((match as any).home_team_id)}
-          initialAwayTeamId={Number((match as any).away_team_id)}
-        />
+          <select
+            value={awayTeamId}
+            onChange={(e) => setAwayTeamId(e.target.value)}
+            disabled={loading}
+            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 240 }}
+          >
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <label style={{ display: "grid", gap: 6 }}>
+            <span>Kickoff</span>
+            <input
+              type="datetime-local"
+              value={kickoffAt}
+              onChange={(e) => setKickoffAt(e.target.value)}
+              disabled={loading}
+              style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
+            />
+          </label>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span>Deadline</span>
+            <input
+              type="datetime-local"
+              value={deadlineAt}
+              onChange={(e) => setDeadlineAt(e.target.value)}
+              disabled={loading}
+              style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
+            />
+          </label>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span>Статус</span>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              disabled={loading}
+              style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 180 }}
+            >
+              <option value="draft">draft</option>
+              <option value="scheduled">scheduled</option>
+              <option value="live">live</option>
+              <option value="finished">finished</option>
+              <option value="cancelled">cancelled</option>
+            </select>
+          </label>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #111",
+              background: "#111",
+              color: "#fff",
+              fontWeight: 900,
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+          >
+            {loading ? "Сохранение..." : "Сохранить матч"}
+          </button>
+
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={loading}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #b91c1c",
+              background: "#fff",
+              color: "#b91c1c",
+              fontWeight: 900,
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+          >
+            Удалить матч
+          </button>
+        </div>
+
+        {msg ? (
+          <div style={{ fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>
+            {msg}
+          </div>
+        ) : null}
       </div>
-    </main>
+    </form>
   );
 }

@@ -6,6 +6,20 @@ import { useRouter } from "next/navigation";
 type Team = { id: number; name: string };
 type Tour = { id: number; tour_no: number; name: string | null };
 
+function toDatetimeLocalValue(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hour = String(d.getHours()).padStart(2, "0");
+  const minute = String(d.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
 export default function EditMatchForm({
   stageId,
   tourId,
@@ -38,15 +52,21 @@ export default function EditMatchForm({
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const [nextTourId, setNextTourId] = useState(String(initialTourId));
+  const [nextTourId, setNextTourId] = useState(
+    Number.isFinite(initialTourId) ? String(initialTourId) : String(tourId)
+  );
   const [stageMatchNo, setStageMatchNo] = useState(
     initialStageMatchNo == null ? "" : String(initialStageMatchNo)
   );
-  const [kickoffAt, setKickoffAt] = useState(initialKickoffAt ? initialKickoffAt.slice(0, 16) : "");
-  const [deadlineAt, setDeadlineAt] = useState(initialDeadlineAt ? initialDeadlineAt.slice(0, 16) : "");
-  const [status, setStatus] = useState(initialStatus ?? "draft");
-  const [homeTeamId, setHomeTeamId] = useState(String(initialHomeTeamId));
-  const [awayTeamId, setAwayTeamId] = useState(String(initialAwayTeamId));
+  const [kickoffAt, setKickoffAt] = useState(toDatetimeLocalValue(initialKickoffAt));
+  const [deadlineAt, setDeadlineAt] = useState(toDatetimeLocalValue(initialDeadlineAt));
+  const [status, setStatus] = useState(initialStatus || "draft");
+  const [homeTeamId, setHomeTeamId] = useState(
+    Number.isFinite(initialHomeTeamId) ? String(initialHomeTeamId) : ""
+  );
+  const [awayTeamId, setAwayTeamId] = useState(
+    Number.isFinite(initialAwayTeamId) ? String(initialAwayTeamId) : ""
+  );
 
   async function onSave(e: React.FormEvent) {
     e.preventDefault();
@@ -78,12 +98,13 @@ export default function EditMatchForm({
       });
 
       const json = await res.json().catch(() => ({}));
+
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error ?? `Ошибка обновления матча (${res.status})`);
       }
 
       setMsg("Матч сохранён ✅");
-      router.push(`/admin/stages/${stageId}`);
+      router.push(`/admin/stages/${stageId}/tours/${tId}/matches`);
       router.refresh();
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка обновления матча");
@@ -93,7 +114,8 @@ export default function EditMatchForm({
   }
 
   async function onDelete() {
-    if (!confirm("Удалить этот матч?")) return;
+    const ok = window.confirm("Удалить этот матч?");
+    if (!ok) return;
 
     setLoading(true);
     setMsg(null);
@@ -104,11 +126,12 @@ export default function EditMatchForm({
       });
 
       const json = await res.json().catch(() => ({}));
+
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error ?? `Ошибка удаления матча (${res.status})`);
       }
 
-      router.push(`/admin/stages/${stageId}`);
+      router.push(`/admin/stages/${stageId}/tours/${tourId}/matches`);
       router.refresh();
     } catch (e: any) {
       setMsg(e?.message ?? "Ошибка удаления матча");
@@ -153,6 +176,7 @@ export default function EditMatchForm({
             disabled={loading}
             style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 240 }}
           >
+            <option value="">Хозяева…</option>
             {teams.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -166,6 +190,7 @@ export default function EditMatchForm({
             disabled={loading}
             style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 240 }}
           >
+            <option value="">Гости…</option>
             {teams.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
