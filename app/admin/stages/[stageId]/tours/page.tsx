@@ -31,7 +31,7 @@ function mustEnv(name: string): string {
   return v;
 }
 
-function decodeMaybe(v: string): string {
+function decodeMaybe(v: string) {
   try {
     return decodeURIComponent(v);
   } catch {
@@ -47,12 +47,17 @@ function service() {
   );
 }
 
+function teamNameRel(rel: any): string {
+  if (!rel) return "?";
+  if (Array.isArray(rel)) return rel[0]?.name ?? "?";
+  return rel.name ?? "?";
+}
+
 export default async function AdminStageToursPage({
   params,
 }: {
   params: Promise<{ stageId: string }>;
 }) {
-  // ✅ admin guard (как у тебя в других местах)
   const cs = await cookies();
   const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
   if (!fpLogin) redirect("/");
@@ -111,12 +116,12 @@ export default async function AdminStageToursPage({
 
   const matchList: MatchRow[] =
     (matches ?? []).map((m: any) => ({
-      id: m.id,
-      tour_id: m.tour_id,
+      id: Number(m.id),
+      tour_id: Number(m.tour_id),
       stage_match_no: m.stage_match_no ?? null,
       kickoff_at: m.kickoff_at,
-      home: m.home_team?.name ?? "?",
-      away: m.away_team?.name ?? "?",
+      home: teamNameRel(m.home_team),
+      away: teamNameRel(m.away_team),
     })) ?? [];
 
   const matchesByTour = new Map<number, MatchRow[]>();
@@ -267,10 +272,10 @@ export default async function AdminStageToursPage({
 
                               <div style={{ alignSelf: "center" }}>
                                 <Link
-                                  href={`/admin/stages/${sid}/tours/${t.id}/matches`}
+                                  href={`/admin/stages/${sid}/tours/${t.id}/matches/${m.id}`}
                                   style={{ textDecoration: "underline" }}
                                 >
-                                  редактировать →
+                                  редактировать матч →
                                 </Link>
                               </div>
                             </div>
