@@ -1,74 +1,120 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
-type Team = { id: number; name: string };
+function mskToUtcIso(local: string | null): string | null {
+  if (!local) return null;
 
-function toIsoUtcFromLocal(dtLocal: string): string {
-  // dtLocal из <input type="datetime-local"> в формате "YYYY-MM-DDTHH:mm"
-  // JS интерпретирует это как локальное время браузера и переводит в UTC через toISOString()
-  const d = new Date(dtLocal);
-  if (Number.isNaN(d.getTime())) throw new Error("Некорректная дата/время");
-  return d.toISOString();
+  const [date, time] = local.split("T");
+  if (!date || !time) return null;
+
+  const [y, m, d] = date.split("-").map(Number);
+  const [hh, mm] = time.split(":").map(Number);
+
+  if (
+    !Number.isFinite(y) ||
+    !Number.isFinite(m) ||
+    !Number.isFinite(d) ||
+    !Number.isFinite(hh) ||
+    !Number.isFinite(mm)
+  ) {
+    return null;
+  }
+
+  // МСК = UTC+3 → для хранения в UTC вычитаем 3 часа
+  const utc = new Date(Date.UTC(y, m - 1, d, hh - 3, mm));
+  return utc.toISOString();
 }
 
-function addMinutesIso(isoUtc: string, minutes: number): string {
-  const d = new Date(isoUtc);
-  d.setMinutes(d.getMinutes() + minutes);
-  return d.toISOString();
+function minusOneMinute(local: string): string {
+  if (!local) return "";
+
+  const [date, time] = local.split("T");
+  if (!date || !time) return "";
+
+  const [y, m, d] = date.split("-").map(Number);
+  const [hh, mm] = time.split(":").map(Number);
+
+  if (
+    !Number.isFinite(y) ||
+    !Number.isFinite(m) ||
+    !Number.isFinite(d) ||
+    !Number.isFinite(hh) ||
+    !Number.isFinite(mm)
+  ) {
+    return "";
+  }
+
+  const dt = new Date(y, m - 1, d, hh, mm);
+  dt.setMinutes(dt.getMinutes() - 1);
+
+  const year = dt.getFullYear();
+  const month = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  const hour = String(dt.getHours()).padStart(2, "0");
+  const minute = String(dt.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
-export default function CreateMatchForm(props: { stageId: number; tourId: number }) {
+export default function CreateMatchForm({
+  stageId,
+  tourId,
+}: {
+  stageId: number;
+  tourId: number;
+}) {
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const [teams, setTeams] = useState<Team[] | null>(null);
-  const [homeTeamId, setHomeTeamId] = useState<string>("");
-  const [awayTeamId, setAwayTeamId] = useState<string>("");
+  const [homeTeamId, setHomeTeamId] = useState("");
+  const [awayTeamId, setAwayTeamId] = useState("");
+  const [kickoffAt, setKickoffAt] = useState("");
+  const [deadlineAt, setDeadlineAt] = useState("");
+  const [autoDeadline, setAutoDeadline] = useState(true);
 
-  // ✅ обязательное поле
-  const [kickoffLocal, setKickoffLocal] = useState<string>("");
-
-  // опционально: если хочешь ручной дедлайн — можно добавить второй инпут,
-  // но пока делаем дедлайн = kickoff - 1 минута
-  const DEADLINE_MINUTES_BEFORE = 1;
+  const [teams, setTeams] = useState<Array<{ id: number; name: string }> | null>(null);
 
   async function ensureTeams() {
     if (teams) return;
-    const { data, error } = await supabase.from("teams").select("id,name").order("name", { ascending: true });
-    if (error) return setMsg(error.message);
-    setTeams(data ?? []);
+
+    try {
+      const res = await fetch("/api/admin/teams-lite", { method: "GET" });
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}));
+        if (Array.isArray(json?.teams)) {
+          setTeams(json.teams);
+          return;
+        }
+      }
+    } catch {}
+
+    setMsg("Не удалось загрузить команды");
+  }
+
+  function onKickoffChange(v: string) {
+    setKickoffAt(v);
+
+    if (autoDeadline) {
+      setDeadlineAt(v ? minusOneMinute(v) : "");
+    }
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
 
-    const sId = Number(props.stageId);
-    const tId = Number(props.tourId);
     const hId = Number(homeTeamId);
     const aId = Number(awayTeamId);
 
+    if (!Number.isFinite(stageId)) return setMsg("Некорректный этап");
+    if (!Number.isFinite(tourId)) return setMsg("Некорректный тур");
     if (!Number.isFinite(hId)) return setMsg("Выберите хозяев");
     if (!Number.isFinite(aId)) return setMsg("Выберите гостей");
     if (hId === aId) return setMsg("Команды должны быть разными");
-
-    if (!kickoffLocal.trim()) return setMsg("Укажите дату и время начала матча");
-
-    let kickoff_at: string;
-    let deadline_at: string;
-    try {
-      kickoff_at = toIsoUtcFromLocal(kickoffLocal);
-      // дедлайн = kickoff - 1 мин
-      deadline_at = addMinutesIso(kickoff_at, -DEADLINE_MINUTES_BEFORE);
-    } catch (err: any) {
-      return setMsg(err?.message ?? "Некорректная дата/время");
-    }
 
     setLoading(true);
     try {
@@ -76,12 +122,12 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          stage_id: sId,
-          tour_id: tId,
+          stage_id: stageId,
+          tour_id: tourId,
           home_team_id: hId,
           away_team_id: aId,
-          kickoff_at,
-          deadline_at,
+          kickoff_at: mskToUtcIso(kickoffAt),
+          deadline_at: mskToUtcIso(deadlineAt),
         }),
       });
 
@@ -95,7 +141,8 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
 
       setHomeTeamId("");
       setAwayTeamId("");
-      // kickoff оставляем (часто добавляют пачкой матчей в один день)
+      setKickoffAt("");
+      setDeadlineAt("");
       setMsg(`Матч создан ✅ (№ ${json?.stage_match_no ?? "?"})`);
       router.refresh();
     } catch (e: any) {
@@ -106,8 +153,11 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
   }
 
   return (
-    <form onSubmit={submit} style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14 }}>
-      <div style={{ fontWeight: 900 }}>Добавить матч в этот тур</div>
+    <form
+      onSubmit={submit}
+      style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14 }}
+    >
+      <div style={{ fontWeight: 900 }}>Создать матч</div>
 
       <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -144,16 +194,48 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
           </select>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
           <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>Начало матча</span>
+            <span>Kickoff (МСК)</span>
             <input
               type="datetime-local"
-              value={kickoffLocal}
-              onChange={(e) => setKickoffLocal(e.target.value)}
+              value={kickoffAt}
+              onChange={(e) => onKickoffChange(e.target.value)}
               disabled={loading}
-              style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 240 }}
+              style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
             />
+          </label>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span>Deadline (МСК)</span>
+            <input
+              type="datetime-local"
+              value={deadlineAt}
+              onChange={(e) => {
+                setAutoDeadline(false);
+                setDeadlineAt(e.target.value);
+              }}
+              disabled={loading}
+              style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
+            />
+          </label>
+
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              paddingBottom: 10,
+              userSelect: "none",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={autoDeadline}
+              onChange={(e) => setAutoDeadline(e.target.checked)}
+              disabled={loading}
+            />
+            <span>Дедлайн = kickoff − 1 минута</span>
           </label>
 
           <button
@@ -167,22 +249,20 @@ export default function CreateMatchForm(props: { stageId: number; tourId: number
               color: "#fff",
               fontWeight: 900,
               cursor: loading ? "not-allowed" : "pointer",
-              height: 42,
-              alignSelf: "end",
             }}
           >
             {loading ? "Создание..." : "Добавить"}
           </button>
         </div>
 
-        <div style={{ fontSize: 12, opacity: 0.75 }}>
-          Дедлайн автоматически = начало − {DEADLINE_MINUTES_BEFORE} мин.
-        </div>
+        {msg ? (
+          <div style={{ fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>
+            {msg}
+          </div>
+        ) : null}
 
-        {msg ? <div style={{ fontWeight: 800, color: msg.includes("✅") ? "inherit" : "crimson" }}>{msg}</div> : null}
-
         <div style={{ fontSize: 12, opacity: 0.75 }}>
-          Этап #{props.stageId} • Тур #{props.tourId}
+          Время в форме вводится в <b>МСК</b>, в базе сохраняется в <b>UTC</b>.
         </div>
       </div>
     </form>
