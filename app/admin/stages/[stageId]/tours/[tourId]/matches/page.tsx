@@ -14,7 +14,7 @@ function mustEnv(name: string): string {
   return v;
 }
 
-function decodeMaybe(v: string): string {
+function decodeMaybe(v: string) {
   try {
     return decodeURIComponent(v);
   } catch {
@@ -39,6 +39,12 @@ type MatchRow = {
   home: string;
   away: string;
 };
+
+function teamNameRel(rel: any): string {
+  if (!rel) return "?";
+  if (Array.isArray(rel)) return rel[0]?.name ?? "?";
+  return rel.name ?? "?";
+}
 
 export default async function AdminTourMatchesPage({
   params,
@@ -103,13 +109,13 @@ export default async function AdminTourMatchesPage({
 
   const matches: MatchRow[] =
     (matchesRaw ?? []).map((m: any) => ({
-      id: m.id,
+      id: Number(m.id),
       kickoff_at: m.kickoff_at ?? null,
       stage_match_no: m.stage_match_no ?? null,
       home_score: m.home_score ?? null,
       away_score: m.away_score ?? null,
-      home: m.home_team?.name ?? "?",
-      away: m.away_team?.name ?? "?",
+      home: teamNameRel(m.home_team),
+      away: teamNameRel(m.away_team),
     })) ?? [];
 
   return (
@@ -131,24 +137,27 @@ export default async function AdminTourMatchesPage({
         </div>
       </header>
 
-      {/* ✅ Форма добавления матча */}
       <section style={{ marginTop: 18 }}>
         <CreateMatchForm stageId={sid} tourId={tid} />
       </section>
 
-      {/* Список матчей */}
       <section style={{ marginTop: 18 }}>
         <h2 style={{ fontSize: 18, fontWeight: 900 }}>Матчи тура</h2>
 
         {mErr ? (
-          <p style={{ color: "crimson", fontWeight: 800 }}>Ошибка загрузки матчей: {mErr.message}</p>
+          <p style={{ color: "crimson", fontWeight: 800 }}>
+            Ошибка загрузки матчей: {mErr.message}
+          </p>
         ) : matches.length === 0 ? (
           <p style={{ opacity: 0.85 }}>Матчей пока нет — добавь через форму выше.</p>
         ) : (
           <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
             {matches.map((m) => {
               const kickoff = m.kickoff_at
-                ? new Date(m.kickoff_at).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })
+                ? new Date(m.kickoff_at).toLocaleString("ru-RU", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })
                 : "—";
 
               const res =
@@ -175,10 +184,49 @@ export default async function AdminTourMatchesPage({
                     <div style={{ marginTop: 4, opacity: 0.75, fontSize: 12 }}>{kickoff}</div>
                   </div>
 
-                  <div style={{ alignSelf: "center" }}>
+                  <div
+                    style={{
+                      alignSelf: "center",
+                      display: "flex",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <Link href={`/match/${m.id}`} style={{ textDecoration: "underline" }}>
-                      открыть →
+                      открыть
                     </Link>
+
+                    <Link
+                      href={`/admin/stages/${sid}/tours/${tid}/matches/${m.id}`}
+                      style={{ textDecoration: "underline", fontWeight: 800 }}
+                    >
+                      редактировать
+                    </Link>
+
+                    <form
+                      action={`/api/admin/matches/${m.id}`}
+                      method="post"
+                      onSubmit={(e) => {
+                        const ok = window.confirm("Удалить этот матч?");
+                        if (!ok) e.preventDefault();
+                      }}
+                    >
+                      <input type="hidden" name="_method" value="DELETE" />
+                      <button
+                        type="submit"
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: "#b91c1c",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          padding: 0,
+                          fontWeight: 800,
+                        }}
+                      >
+                        удалить
+                      </button>
+                    </form>
                   </div>
                 </div>
               );
