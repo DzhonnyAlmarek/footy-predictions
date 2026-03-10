@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 import CreateMatchForm from "./create-match-form";
+import TourMatchesEditor from "./tour-matches-editor";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -36,12 +37,21 @@ function teamNameRel(rel: any): string {
   return rel.name ?? "?";
 }
 
+type TeamRow = {
+  id: number;
+  name: string;
+};
+
 type MatchRow = {
   id: number;
   kickoff_at: string | null;
+  deadline_at: string | null;
   stage_match_no: number | null;
   home_score: number | null;
   away_score: number | null;
+  status: string | null;
+  home_team_id: number | null;
+  away_team_id: number | null;
   home: string;
   away: string;
 };
@@ -88,16 +98,24 @@ export default async function AdminTourMatchesPage({
     );
   }
 
+  const { data: teamsRaw, error: teamsErr } = await sb
+    .from("teams")
+    .select("id,name")
+    .order("name", { ascending: true });
+
   const { data: matchesRaw, error: mErr } = await sb
     .from("matches")
     .select(
       `
       id,
-      tour_id,
       kickoff_at,
+      deadline_at,
       stage_match_no,
       home_score,
       away_score,
+      status,
+      home_team_id,
+      away_team_id,
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `
@@ -107,19 +125,28 @@ export default async function AdminTourMatchesPage({
     .order("kickoff_at", { ascending: true })
     .order("id", { ascending: true });
 
+  const teams: TeamRow[] = ((teamsRaw ?? []) as any[]).map((t) => ({
+    id: Number(t.id),
+    name: String(t.name),
+  }));
+
   const matches: MatchRow[] =
     (matchesRaw ?? []).map((m: any) => ({
       id: Number(m.id),
       kickoff_at: m.kickoff_at ?? null,
+      deadline_at: m.deadline_at ?? null,
       stage_match_no: m.stage_match_no ?? null,
       home_score: m.home_score ?? null,
       away_score: m.away_score ?? null,
+      status: m.status ?? null,
+      home_team_id: m.home_team_id == null ? null : Number(m.home_team_id),
+      away_team_id: m.away_team_id == null ? null : Number(m.away_team_id),
       home: teamNameRel(m.home_team),
       away: teamNameRel(m.away_team),
     })) ?? [];
 
   return (
-    <main className="page" style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+    <main className="page" style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
       <p>
         <Link href={`/admin/stages/${sid}/tours`}>← Назад к турам</Link>
       </p>
@@ -141,71 +168,27 @@ export default async function AdminTourMatchesPage({
         <CreateMatchForm stageId={sid} tourId={tid} />
       </section>
 
-      <section style={{ marginTop: 18 }}>
+      <section style={{ marginTop: 22 }}>
         <h2 style={{ fontSize: 18, fontWeight: 900 }}>Матчи тура</h2>
 
-        {mErr ? (
+        {teamsErr ? (
+          <p style={{ color: "crimson", fontWeight: 800 }}>
+            Ошибка загрузки команд: {teamsErr.message}
+          </p>
+        ) : mErr ? (
           <p style={{ color: "crimson", fontWeight: 800 }}>
             Ошибка загрузки матчей: {mErr.message}
           </p>
         ) : matches.length === 0 ? (
-          <p style={{ opacity: 0.85 }}>Матчей пока нет — добавь через форму выше.</p>
+          <p style={{ opacity: 0.85, marginTop: 10 }}>Матчей пока нет — добавь через форму выше.</p>
         ) : (
-          <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-            {matches.map((m) => {
-              const kickoff = m.kickoff_at
-                ? new Date(m.kickoff_at).toLocaleString("ru-RU", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })
-                : "—";
-
-              const res =
-                m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
-
-              return (
-                <div
-                  key={m.id}
-                  style={{
-                    border: "1px solid #e5e5e5",
-                    borderRadius: 12,
-                    padding: 12,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 900 }}>
-                      {m.stage_match_no ?? "—"}. {m.home} — {m.away}{" "}
-                      <span style={{ opacity: 0.7 }}>({res})</span>
-                    </div>
-                    <div style={{ marginTop: 4, opacity: 0.75, fontSize: 12 }}>{kickoff}</div>
-                  </div>
-
-                  <div
-                    style={{
-                      alignSelf: "center",
-                      display: "flex",
-                      gap: 12,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <Link href={`/match/${m.id}`} style={{ textDecoration: "underline" }}>
-                      открыть
-                    </Link>
-
-                    <Link
-                      href={`/admin/stages/${sid}/tours/${tid}/matches/${m.id}`}
-                      style={{ textDecoration: "underline", fontWeight: 800 }}
-                    >
-                      редактировать
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+          <div style={{ marginTop: 12 }}>
+            <TourMatchesEditor
+              stageId={sid}
+              tourId={tid}
+              teams={teams}
+              initialMatches={matches}
+            />
           </div>
         )}
       </section>
