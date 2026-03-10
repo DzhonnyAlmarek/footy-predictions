@@ -14,7 +14,7 @@ function mustEnv(name: string): string {
   return v;
 }
 
-function decodeMaybe(v: string) {
+function decodeMaybe(v: string): string {
   try {
     return decodeURIComponent(v);
   } catch {
@@ -30,6 +30,12 @@ function service() {
   );
 }
 
+function teamNameRel(rel: any): string {
+  if (!rel) return "?";
+  if (Array.isArray(rel)) return rel[0]?.name ?? "?";
+  return rel.name ?? "?";
+}
+
 type MatchRow = {
   id: number;
   kickoff_at: string | null;
@@ -39,12 +45,6 @@ type MatchRow = {
   home: string;
   away: string;
 };
-
-function teamNameRel(rel: any): string {
-  if (!rel) return "?";
-  if (Array.isArray(rel)) return rel[0]?.name ?? "?";
-  return rel.name ?? "?";
-}
 
 export default async function AdminTourMatchesPage({
   params,
@@ -202,31 +202,6 @@ export default async function AdminTourMatchesPage({
                     >
                       редактировать
                     </Link>
-
-                    <form
-                      action={`/api/admin/matches/${m.id}`}
-                      method="post"
-                      onSubmit={(e) => {
-                        const ok = window.confirm("Удалить этот матч?");
-                        if (!ok) e.preventDefault();
-                      }}
-                    >
-                      <input type="hidden" name="_method" value="DELETE" />
-                      <button
-                        type="submit"
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          color: "#b91c1c",
-                          cursor: "pointer",
-                          textDecoration: "underline",
-                          padding: 0,
-                          fontWeight: 800,
-                        }}
-                      >
-                        удалить
-                      </button>
-                    </form>
                   </div>
                 </div>
               );
