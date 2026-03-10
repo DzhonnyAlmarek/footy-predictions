@@ -38,26 +38,55 @@ type EditableMatch = {
   msg: string | null;
 };
 
-function toDatetimeLocalValue(iso?: string | null): string {
+function toDatetimeLocalValueMsk(iso?: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
 
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const hour = String(d.getHours()).padStart(2, "0");
-  const minute = String(d.getMinutes()).padStart(2, "0");
+  const utc = new Date(iso);
+  if (Number.isNaN(utc.getTime())) return "";
+
+  const msk = new Date(
+    utc.toLocaleString("sv-SE", { timeZone: "Europe/Moscow" })
+  );
+
+  const year = msk.getFullYear();
+  const month = String(msk.getMonth() + 1).padStart(2, "0");
+  const day = String(msk.getDate()).padStart(2, "0");
+  const hour = String(msk.getHours()).padStart(2, "0");
+  const minute = String(msk.getMinutes()).padStart(2, "0");
 
   return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+function mskToUtcIso(local: string | null): string | null {
+  if (!local) return null;
+
+  const [date, time] = local.split("T");
+  if (!date || !time) return null;
+
+  const [y, m, d] = date.split("-").map(Number);
+  const [hh, mm] = time.split(":").map(Number);
+
+  if (
+    !Number.isFinite(y) ||
+    !Number.isFinite(m) ||
+    !Number.isFinite(d) ||
+    !Number.isFinite(hh) ||
+    !Number.isFinite(mm)
+  ) {
+    return null;
+  }
+
+  // МСК = UTC+3, значит для хранения в UTC вычитаем 3 часа
+  const utc = new Date(Date.UTC(y, m - 1, d, hh - 3, mm));
+  return utc.toISOString();
 }
 
 function toInitialRow(m: MatchRow): EditableMatch {
   return {
     id: m.id,
     stage_match_no: m.stage_match_no == null ? "" : String(m.stage_match_no),
-    kickoff_at: toDatetimeLocalValue(m.kickoff_at),
-    deadline_at: toDatetimeLocalValue(m.deadline_at),
+    kickoff_at: toDatetimeLocalValueMsk(m.kickoff_at),
+    deadline_at: toDatetimeLocalValueMsk(m.deadline_at),
     status: m.status ?? "draft",
     home_team_id: m.home_team_id == null ? "" : String(m.home_team_id),
     away_team_id: m.away_team_id == null ? "" : String(m.away_team_id),
@@ -125,8 +154,8 @@ export default function TourMatchesEditor({
         body: JSON.stringify({
           tour_id: tourId,
           stage_match_no: row.stage_match_no === "" ? null : Number(row.stage_match_no),
-          kickoff_at: row.kickoff_at ? new Date(row.kickoff_at).toISOString() : null,
-          deadline_at: row.deadline_at ? new Date(row.deadline_at).toISOString() : null,
+          kickoff_at: mskToUtcIso(row.kickoff_at),
+          deadline_at: mskToUtcIso(row.deadline_at),
           status: row.status || "draft",
           home_team_id: homeId,
           away_team_id: awayId,
@@ -279,7 +308,7 @@ export default function TourMatchesEditor({
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <label style={{ display: "grid", gap: 6 }}>
-                <span>Kickoff</span>
+                <span>Kickoff (МСК)</span>
                 <input
                   type="datetime-local"
                   value={row.kickoff_at}
@@ -294,7 +323,7 @@ export default function TourMatchesEditor({
               </label>
 
               <label style={{ display: "grid", gap: 6 }}>
-                <span>Deadline</span>
+                <span>Deadline (МСК)</span>
                 <input
                   type="datetime-local"
                   value={row.deadline_at}
