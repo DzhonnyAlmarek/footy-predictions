@@ -2,7 +2,9 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import EditMatchForm from "./edit-match-form";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function mustEnv(name: string) {
   const v = process.env[name];
@@ -115,28 +117,6 @@ export default async function AdminEditMatchPage({
     );
   }
 
-  if (Number(match.stage_id) !== sid || Number(match.tour_id) !== tid) {
-    return (
-      <main style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
-        <p style={{ color: "crimson" }}>Этот матч не принадлежит выбранному этапу/туру.</p>
-        <p style={{ marginTop: 12 }}>
-          <Link href={`/admin/stages/${sid}/tours/${tid}/matches`}>← Назад к матчам тура</Link>
-        </p>
-      </main>
-    );
-  }
-
-  const { data: teams } = await supabase
-    .from("teams")
-    .select("id,name")
-    .order("name", { ascending: true });
-
-  const { data: tours } = await supabase
-    .from("tours")
-    .select("id,tour_no,name")
-    .eq("stage_id", sid)
-    .order("tour_no", { ascending: true });
-
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
       <p>
@@ -144,33 +124,34 @@ export default async function AdminEditMatchPage({
       </p>
 
       <h1 style={{ fontSize: 28, fontWeight: 800, marginTop: 12 }}>
-        Редактировать матч #{match.id}
+        Матч #{match.id}
       </h1>
 
-      <p style={{ marginTop: 8, opacity: 0.8 }}>
-        Этап #{stage.id}: <b>{stage.name}</b> • Тур <b>{tour.tour_no}{tour.name ? ` — ${tour.name}` : ""}</b>
+      <p style={{ marginTop: 8 }}>
+        Этап: <b>{stage.name}</b>
       </p>
 
-      <p style={{ marginTop: 8, opacity: 0.8 }}>
-        {teamNameRel(match.home_team)} — {teamNameRel(match.away_team)}
+      <p style={{ marginTop: 8 }}>
+        Тур: <b>{tour.tour_no}{tour.name ? ` — ${tour.name}` : ""}</b>
       </p>
 
-      <div style={{ marginTop: 20 }}>
-        <EditMatchForm
-          stageId={sid}
-          tourId={tid}
-          matchId={mid}
-          teams={(teams ?? []) as Array<{ id: number; name: string }>}
-          tours={(tours ?? []) as Array<{ id: number; tour_no: number; name: string | null }>}
-          initialTourId={Number(match.tour_id)}
-          initialStageMatchNo={match.stage_match_no == null ? null : Number(match.stage_match_no)}
-          initialKickoffAt={typeof match.kickoff_at === "string" ? match.kickoff_at : ""}
-          initialDeadlineAt={typeof match.deadline_at === "string" ? match.deadline_at : ""}
-          initialStatus={typeof match.status === "string" ? match.status : "draft"}
-          initialHomeTeamId={Number(match.home_team_id)}
-          initialAwayTeamId={Number(match.away_team_id)}
-        />
-      </div>
+      <p style={{ marginTop: 8 }}>
+        Команды: <b>{teamNameRel(match.home_team)} — {teamNameRel(match.away_team)}</b>
+      </p>
+
+      <pre
+        style={{
+          marginTop: 16,
+          padding: 16,
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          background: "#fafafa",
+          overflowX: "auto",
+          fontSize: 13,
+        }}
+      >
+        {JSON.stringify(match, null, 2)}
+      </pre>
     </main>
   );
 }
