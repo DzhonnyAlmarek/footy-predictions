@@ -2446,6 +2446,9 @@ CREATE POLICY "analytics_stage_user_archetype_select_public" ON "public"."analyt
 
 
 
+ALTER TABLE "public"."analytics_stage_user_momentum" ENABLE ROW LEVEL SECURITY;
+
+
 CREATE POLICY "analytics_stage_user_select_public" ON "public"."analytics_stage_user" FOR SELECT USING (true);
 
 
@@ -2461,6 +2464,9 @@ CREATE POLICY "audit_select_admin" ON "public"."audit_log" FOR SELECT TO "authen
 
 
 
+ALTER TABLE "public"."import_rpl_matches" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."login_accounts" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2470,6 +2476,9 @@ CREATE POLICY "login_accounts_select_all" ON "public"."login_accounts" FOR SELEC
 
 CREATE POLICY "login_accounts_update_own" ON "public"."login_accounts" FOR UPDATE TO "authenticated" USING (("user_id" = "auth"."uid"())) WITH CHECK (("user_id" = "auth"."uid"()));
 
+
+
+ALTER TABLE "public"."match_scores" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."matches" ENABLE ROW LEVEL SECURITY;
@@ -2486,6 +2495,18 @@ CREATE POLICY "matches_select_all" ON "public"."matches" FOR SELECT TO "authenti
 CREATE POLICY "matches_select_current_stage" ON "public"."matches" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."stages" "s"
   WHERE (("s"."id" = "matches"."stage_id") AND ("s"."is_current" = true)))));
+
+
+
+CREATE POLICY "no access" ON "public"."analytics_stage_user_momentum" TO "authenticated", "anon" USING (false) WITH CHECK (false);
+
+
+
+CREATE POLICY "no access" ON "public"."import_rpl_matches" TO "authenticated", "anon" USING (false) WITH CHECK (false);
+
+
+
+CREATE POLICY "no access" ON "public"."match_scores" TO "authenticated", "anon" USING (false) WITH CHECK (false);
 
 
 
