@@ -43,8 +43,9 @@ export default async function UserLayout({ children }: { children: ReactNode }) 
     .maybeSingle();
 
 const nav = [
-  { href: "/dashboard/matches", label: "Мои", icon: "✍️" },
-  { href: "/dashboard/current", label: "Текущая таблица", icon: "📊" }, // ✅
+  { href: "/dashboard/matches", label: "Прогнозы", icon: "✍️" },
+  { href: "/dashboard/current", label: "Текущая таблица", icon: "📊" },
+  { href: "/dashboard/archive", label: "Архив", icon: "🗂️" },
   { href: "/analytics", label: "Аналитика", icon: "📈" },
   { href: "/golden-boot", label: "Бутса", icon: "🥇" },
   { href: "/logout", label: "Выйти", icon: "🚪" },
