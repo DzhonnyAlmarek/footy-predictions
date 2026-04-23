@@ -10,7 +10,7 @@ type Item = {
   isLogout?: boolean;
 };
 
-const userItems = [
+const userItems: Item[] = [
   { href: "/dashboard/matches", label: "Прогнозы", icon: "✍️" },
   { href: "/dashboard/current", label: "Таблица", icon: "📊" },
   { href: "/dashboard/archive", label: "Архив", icon: "🗂️" },
@@ -32,9 +32,13 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-export default function BottomBar({ variant = "user" }: { variant?: "user" | "admin" }) {
+export default function BottomBar({
+  variant = "user",
+}: {
+  variant?: "user" | "admin";
+}) {
   const pathname = usePathname() ?? "";
-  const items = variant === "admin" ? adminItems : userItems;
+  const items: Item[] = variant === "admin" ? adminItems : userItems;
 
   return (
     <nav className="bottomBar" aria-label="Нижнее меню">
@@ -46,7 +50,9 @@ export default function BottomBar({ variant = "user" }: { variant?: "user" | "ad
           if (i.isLogout) {
             return (
               <a key={i.href} href={i.href} className={cls}>
-                <span className="bbIcon" aria-hidden="true">{i.icon}</span>
+                <span className="bbIcon" aria-hidden="true">
+                  {i.icon}
+                </span>
                 <span className="bbLabel">{i.label}</span>
               </a>
             );
@@ -54,7 +60,9 @@ export default function BottomBar({ variant = "user" }: { variant?: "user" | "ad
 
           return (
             <Link key={i.href} href={i.href} className={cls}>
-              <span className="bbIcon" aria-hidden="true">{i.icon}</span>
+              <span className="bbIcon" aria-hidden="true">
+                {i.icon}
+              </span>
               <span className="bbLabel">{i.label}</span>
             </Link>
           );
