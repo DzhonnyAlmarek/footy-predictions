@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function PublishStage(props: {
   stageId: number;
@@ -10,109 +9,111 @@ export default function PublishStage(props: {
   matchCount: number;
   required: number;
 }) {
-  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
-
-  const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState<"publish" | "lock" | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const diff = props.required - props.matchCount;
-
-  async function publish() {
+  async function publishStage() {
     setMsg(null);
     setLoading("publish");
     try {
-      const { error } = await supabase.rpc("publish_stage", { p_stage_id: props.stageId });
-      if (error) throw error;
+      const res = await fetch("/api/admin/stages/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stageId: props.stageId }),
+      });
 
-      setMsg("Этап опубликован ✅");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? `Ошибка публикации (${res.status})`);
+      }
+
       router.refresh();
     } catch (e: any) {
-      setMsg(e?.message ?? "Ошибка публикации");
+      setMsg(e?.message ?? "Ошибка публикации этапа");
     } finally {
       setLoading(null);
     }
   }
 
-  async function lock() {
+  async function lockStage() {
     setMsg(null);
     setLoading("lock");
     try {
-      const { error } = await supabase.rpc("lock_stage", { p_stage_id: props.stageId });
-      if (error) throw error;
+      const res = await fetch("/api/admin/stages/lock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stageId: props.stageId }),
+      });
 
-      setMsg("Этап закрыт ✅");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? `Ошибка закрытия (${res.status})`);
+      }
+
       router.refresh();
     } catch (e: any) {
-      setMsg(e?.message ?? "Ошибка закрытия");
+      setMsg(e?.message ?? "Ошибка закрытия этапа");
     } finally {
       setLoading(null);
     }
   }
 
-  const canPublish = props.stageStatus !== "locked";
-  const canLock = props.stageStatus !== "locked" && diff === 0;
+  const canPublish = props.stageStatus === "draft";
+  const canLock = props.stageStatus === "published";
 
   return (
-    <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 14 }}>
-      <div style={{ fontWeight: 900 }}>Статус этапа</div>
+    <div
+      style={{
+        border: "1px solid #e5e5e5",
+        borderRadius: 12,
+        padding: 14,
+        display: "grid",
+        gap: 10,
+      }}
+    >
+      <div style={{ fontWeight: 900 }}>Публикация и закрытие этапа</div>
 
-      <div style={{ marginTop: 8, opacity: 0.85 }}>
-        Матчей: <b>{props.matchCount}</b> / {props.required} • статус: <b>{props.stageStatus}</b>
+      <div style={{ fontSize: 14, opacity: 0.85 }}>
+        Матчей в этапе: <b>{props.matchCount}</b> / {props.required}
       </div>
 
-      {diff === 0 ? (
-        <div style={{ marginTop: 8 }}>Матчей ровно {props.required} — можно закрывать этап.</div>
-      ) : diff > 0 ? (
-        <div style={{ marginTop: 8, color: "#b58900", fontWeight: 800 }}>
-          До закрытия не хватает матчей: {diff}
-        </div>
-      ) : (
-        <div style={{ marginTop: 8, color: "crimson", fontWeight: 900 }}>
-          Лишних матчей: {Math.abs(diff)}
-        </div>
-      )}
-
-      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button
-          onClick={publish}
-          disabled={!canPublish || loading !== null}
+          type="button"
+          onClick={publishStage}
+          disabled={!canPublish || !!loading}
           style={{
-            padding: "12px 14px",
-            borderRadius: 12,
+            padding: "10px 12px",
+            borderRadius: 10,
             border: "1px solid #111",
-            background: !canPublish ? "#777" : "#111",
+            background: "#111",
             color: "#fff",
-            cursor: !canPublish ? "not-allowed" : "pointer",
-            width: 220,
+            opacity: !canPublish ? 0.6 : 1,
+            cursor: !canPublish || loading ? "not-allowed" : "pointer",
           }}
-          title="Публикация НЕ требует 56 матчей"
         >
-          {loading === "publish" ? "..." : "Опубликовать этап"}
+          {loading === "publish" ? "Публикация..." : "Опубликовать этап"}
         </button>
 
         <button
-          onClick={lock}
-          disabled={!canLock || loading !== null}
+          type="button"
+          onClick={lockStage}
+          disabled={!canLock || !!loading}
           style={{
-            padding: "12px 14px",
-            borderRadius: 12,
+            padding: "10px 12px",
+            borderRadius: 10,
             border: "1px solid #111",
-            background: !canLock ? "#777" : "#fff",
-            cursor: !canLock ? "not-allowed" : "pointer",
-            width: 220,
+            background: "#fff",
+            opacity: !canLock ? 0.6 : 1,
+            cursor: !canLock || loading ? "not-allowed" : "pointer",
           }}
-          title="Закрыть можно только при 56 матчах и номерах 1..56"
         >
-          {loading === "lock" ? "..." : "Закрыть этап"}
+          {loading === "lock" ? "Закрытие..." : "Закрыть этап"}
         </button>
       </div>
 
-      {msg && (
-        <div style={{ marginTop: 10, color: msg.includes("✅") ? "inherit" : "crimson" }}>
-          {msg}
-        </div>
-      )}
+      {msg ? <div style={{ color: "crimson", fontWeight: 800 }}>{msg}</div> : null}
     </div>
   );
 }

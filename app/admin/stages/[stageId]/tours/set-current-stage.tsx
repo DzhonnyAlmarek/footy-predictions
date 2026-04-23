@@ -1,58 +1,65 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
-export default function SetCurrentStageButton({
-  stageId,
-  isCurrent,
-}: {
+export default function SetCurrentStageButton(props: {
   stageId: number;
   isCurrent: boolean;
 }) {
-  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  async function makeCurrent() {
-    setError(null);
+  async function setCurrent() {
+    setMsg(null);
     setLoading(true);
+
     try {
-      const { error } = await supabase.rpc("set_current_stage", {
-        p_stage_id: stageId,
+      const res = await fetch("/api/admin/stages/set-current", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stageId: props.stageId }),
       });
-      if (error) throw error;
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? `Ошибка установки текущего этапа (${res.status})`);
+      }
 
       router.refresh();
     } catch (e: any) {
-      setError(e?.message ?? "Ошибка");
+      setMsg(e?.message ?? "Ошибка установки текущего этапа");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+    <div style={{ display: "grid", gap: 8 }}>
       <button
         type="button"
-        onClick={makeCurrent}
-        disabled={isCurrent || loading}
+        onClick={setCurrent}
+        disabled={loading || props.isCurrent}
         style={{
-          padding: "10px 14px",
+          padding: "10px 12px",
           borderRadius: 10,
           border: "1px solid #111",
-          background: isCurrent ? "#111" : "#fff",
-          color: isCurrent ? "#fff" : "#111",
-          cursor: isCurrent ? "default" : "pointer",
-          fontWeight: 700,
+          background: props.isCurrent ? "#f3f4f6" : "#111",
+          color: props.isCurrent ? "#111" : "#fff",
+          opacity: props.isCurrent ? 0.8 : 1,
+          cursor: loading || props.isCurrent ? "not-allowed" : "pointer",
+          fontWeight: 900,
         }}
       >
-        {isCurrent ? "Текущий этап" : loading ? "..." : "Сделать текущим"}
+        {props.isCurrent
+          ? "Текущий этап"
+          : loading
+          ? "Установка..."
+          : "Сделать текущим"}
       </button>
 
-      {error && <span style={{ color: "crimson" }}>{error}</span>}
+      {msg ? <div style={{ color: "crimson", fontWeight: 800 }}>{msg}</div> : null}
     </div>
   );
 }
