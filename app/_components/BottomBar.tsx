@@ -10,12 +10,12 @@ type Item = {
   isLogout?: boolean;
 };
 
-const userItems: Item[] = [
-  { href: "/dashboard/matches", label: "Мои", icon: "✍️" },
-  { href: "/dashboard/current", label: "Текущая", icon: "📊" },
+const userItems = [
+  { href: "/dashboard/matches", label: "Прогнозы", icon: "✍️" },
+  { href: "/dashboard/current", label: "Таблица", icon: "📊" },
+  { href: "/dashboard/archive", label: "Архив", icon: "🗂️" },
   { href: "/analytics", label: "Аналитика", icon: "📈" },
   { href: "/golden-boot", label: "Бутса", icon: "🥇" },
-  { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
 
 const adminItems: Item[] = [
