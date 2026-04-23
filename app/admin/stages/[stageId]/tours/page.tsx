@@ -18,6 +18,12 @@ type MatchRow = {
   away: string;
 };
 
+type StageOption = {
+  id: number;
+  name: string;
+  status: string;
+};
+
 function stageStatusRu(s: string) {
   if (s === "draft") return "Черновик";
   if (s === "published") return "Опубликован";
@@ -84,6 +90,17 @@ export default async function AdminStageToursPage({
       </main>
     );
   }
+
+  const { data: allStagesRaw } = await supabase
+    .from("stages")
+    .select("id,name,status")
+    .order("id", { ascending: true });
+
+  const allStages: StageOption[] = ((allStagesRaw ?? []) as any[]).map((s) => ({
+    id: Number(s.id),
+    name: String(s.name),
+    status: String(s.status),
+  }));
 
   const { data: tours, error } = await supabase
     .from("tours")
@@ -224,12 +241,14 @@ export default async function AdminStageToursPage({
                       </div>
                     </div>
 
-                    <div style={{ minWidth: 320 }}>
+                    <div style={{ minWidth: 360 }}>
                       <TourRowActions
                         tourId={t.id}
+                        stageId={sid}
                         stageStatus={stage.status}
                         initialNo={t.tour_no}
                         initialName={t.name ?? null}
+                        stages={allStages}
                       />
                     </div>
                   </div>
