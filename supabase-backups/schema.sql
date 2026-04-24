@@ -349,8 +349,7 @@ ALTER FUNCTION "public"."is_admin"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."lock_stage"("p_stage_id" bigint) RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    LANGUAGE "plpgsql"
     AS $$
 declare
   cnt int;
@@ -359,14 +358,18 @@ declare
   mn int;
   mx int;
 begin
-  if auth.uid() is null or not public.is_admin() then
+  if auth.role() <> 'service_role' and (auth.uid() is null or not public.is_admin()) then
     raise exception 'admin only';
   end if;
 
   select matches_required into req from public.stages where id = p_stage_id;
-  if req is null then raise exception 'stage not found'; end if;
+  if req is null then
+    raise exception 'stage not found';
+  end if;
 
-  select count(*) into cnt from public.matches where stage_id = p_stage_id;
+  select count(*) into cnt
+  from public.matches
+  where stage_id = p_stage_id;
 
   if cnt <> req then
     raise exception 'stage must have exactly % matches to lock, but has %', req, cnt;
@@ -384,12 +387,88 @@ begin
     raise exception 'stage match numbers must be 1..% with no gaps', req;
   end if;
 
-  update public.stages set status = 'locked' where id = p_stage_id;
+  update public.stages
+  set status = 'locked'
+  where id = p_stage_id;
 end;
 $$;
 
 
 ALTER FUNCTION "public"."lock_stage"("p_stage_id" bigint) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."move_tour_to_stage"("p_tour_id" bigint, "p_target_stage_id" bigint, "p_renumber" boolean DEFAULT true) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+declare
+  v_source_stage_id bigint;
+  v_matches_moved int := 0;
+  v_next_no int := 0;
+begin
+  select stage_id
+    into v_source_stage_id
+  from public.tours
+  where id = p_tour_id;
+
+  if v_source_stage_id is null then
+    raise exception 'tour not found: %', p_tour_id;
+  end if;
+
+  if not exists (
+    select 1 from public.stages where id = p_target_stage_id
+  ) then
+    raise exception 'target stage not found: %', p_target_stage_id;
+  end if;
+
+  if v_source_stage_id = p_target_stage_id then
+    raise exception 'tour is already in target stage';
+  end if;
+
+  -- переносим сам тур
+  update public.tours
+  set stage_id = p_target_stage_id
+  where id = p_tour_id;
+
+  -- переносим все матчи тура
+  update public.matches
+  set stage_id = p_target_stage_id
+  where tour_id = p_tour_id;
+
+  get diagnostics v_matches_moved = row_count;
+
+  -- при необходимости перенумеровываем матчи в новом этапе
+  if p_renumber then
+    select coalesce(max(stage_match_no), 0)
+      into v_next_no
+    from public.matches
+    where stage_id = p_target_stage_id
+      and tour_id <> p_tour_id;
+
+    with moved as (
+      select id,
+             row_number() over (order by kickoff_at, id) as rn
+      from public.matches
+      where tour_id = p_tour_id
+    )
+    update public.matches m
+    set stage_match_no = v_next_no + moved.rn
+    from moved
+    where moved.id = m.id;
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'tour_id', p_tour_id,
+    'from_stage_id', v_source_stage_id,
+    'to_stage_id', p_target_stage_id,
+    'matches_moved', v_matches_moved,
+    'renumbered', p_renumber
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."move_tour_to_stage"("p_tour_id" bigint, "p_target_stage_id" bigint, "p_renumber" boolean) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."prevent_role_change"() RETURNS "trigger"
@@ -449,11 +528,10 @@ ALTER FUNCTION "public"."prevent_team_duplicate_in_tour"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."publish_stage"("p_stage_id" bigint) RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    LANGUAGE "plpgsql"
     AS $$
 begin
-  if auth.uid() is null or not public.is_admin() then
+  if auth.role() <> 'service_role' and (auth.uid() is null or not public.is_admin()) then
     raise exception 'admin only';
   end if;
 
@@ -1312,19 +1390,20 @@ ALTER FUNCTION "public"."score_match_debug"("p_match_id" bigint) OWNER TO "postg
 
 
 CREATE OR REPLACE FUNCTION "public"."set_current_stage"("p_stage_id" bigint) RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
+    LANGUAGE "plpgsql"
     AS $$
 begin
-  if auth.uid() is null or not public.is_admin() then
+  if auth.role() <> 'service_role' and (auth.uid() is null or not public.is_admin()) then
     raise exception 'admin only';
   end if;
 
-  -- снимаем флаг со всех
-  update public.stages set is_current = false where is_current = true;
+  update public.stages
+  set is_current = false
+  where is_current = true;
 
-  -- ставим выбранному
-  update public.stages set is_current = true where id = p_stage_id;
+  update public.stages
+  set is_current = true
+  where id = p_stage_id;
 
   if not found then
     raise exception 'stage not found';
@@ -2872,6 +2951,12 @@ GRANT ALL ON FUNCTION "public"."is_admin"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."lock_stage"("p_stage_id" bigint) TO "anon";
 GRANT ALL ON FUNCTION "public"."lock_stage"("p_stage_id" bigint) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."lock_stage"("p_stage_id" bigint) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."move_tour_to_stage"("p_tour_id" bigint, "p_target_stage_id" bigint, "p_renumber" boolean) TO "anon";
+GRANT ALL ON FUNCTION "public"."move_tour_to_stage"("p_tour_id" bigint, "p_target_stage_id" bigint, "p_renumber" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."move_tour_to_stage"("p_tour_id" bigint, "p_target_stage_id" bigint, "p_renumber" boolean) TO "service_role";
 
 
 
