@@ -40,18 +40,12 @@ type MatchRow = {
 };
 
 type UserRow = { login: string; user_id: string };
-
 type Pred = { h: number | null; a: number | null };
 
 function teamName(t: TeamMaybeArray): string {
   if (!t) return "?";
   if (Array.isArray(t)) return t[0]?.name ?? "?";
   return t.name ?? "?";
-}
-
-function formatPts(n: number): string {
-  const x = Math.round(n * 100) / 100;
-  return Number.isInteger(x) ? String(x) : String(x);
 }
 
 export default async function ArchiveStagePage({
@@ -117,6 +111,7 @@ export default async function ArchiveStagePage({
     .in("user_id", userIds);
 
   const predByMatchUser = new Map<number, Map<string, Pred>>();
+
   for (const p of predsRaw ?? []) {
     const mid = Number((p as any).match_id);
     if (!predByMatchUser.has(mid)) predByMatchUser.set(mid, new Map());
@@ -126,52 +121,16 @@ export default async function ArchiveStagePage({
     });
   }
 
-  const totalByUser = new Map<string, number>();
-  for (const u of users) totalByUser.set(u.user_id, 0);
-
-  for (const m of matches) {
-    if (m.home_score == null || m.away_score == null) continue;
-
-    const mid = Number(m.id);
-
-    for (const u of users) {
-      const pr = predByMatchUser.get(mid)?.get(u.user_id);
-      if (!pr || pr.h == null || pr.a == null) continue;
-
-      let pts = 0;
-
-      if (pr.h === m.home_score && pr.a === m.away_score) pts += 3;
-      else {
-        const resSign = Math.sign(m.home_score - m.away_score);
-        const prSign = Math.sign(pr.h - pr.a);
-        if (resSign === prSign) pts += 2;
-
-        const resDiff = m.home_score - m.away_score;
-        const prDiff = pr.h - pr.a;
-        if (resDiff === prDiff) pts += 1;
-      }
-
-      totalByUser.set(u.user_id, (totalByUser.get(u.user_id) ?? 0) + pts);
-    }
-  }
-
-  const sortedUsers = [...users].sort(
-    (a, b) =>
-      (totalByUser.get(b.user_id) ?? 0) -
-      (totalByUser.get(a.user_id) ?? 0)
-  );
-
   return (
     <main className="page">
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <h1>Архивная таблица</h1>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 12 }}>
           <Link href={`/dashboard/archive/${sid}/golden-boot`}>
             Золотая бутса →
           </Link>
-
-          <Link href="/dashboard/archive">← Назад к архиву</Link>
+          <Link href="/dashboard/archive">← Назад</Link>
         </div>
       </div>
 
@@ -184,21 +143,49 @@ export default async function ArchiveStagePage({
           <thead>
             <tr>
               <th style={{ width: 60 }}>№</th>
-              <th>Участник</th>
-              <th style={{ textAlign: "right" }}>Очки</th>
+              <th style={{ width: 320 }}>Матч</th>
+              <th style={{ width: 70 }}>Рез.</th>
+
+              {users.map((u) => (
+                <th key={u.user_id}>{u.login}</th>
+              ))}
             </tr>
           </thead>
 
           <tbody>
-            {sortedUsers.map((u, idx) => (
-              <tr key={u.user_id}>
-                <td style={{ fontWeight: 900 }}>{idx + 1}</td>
-                <td>{u.login}</td>
-                <td style={{ textAlign: "right", fontWeight: 900 }}>
-                  {formatPts(totalByUser.get(u.user_id) ?? 0)}
-                </td>
-              </tr>
-            ))}
+            {matches.map((m, idx) => {
+              const no = m.stage_match_no ?? idx + 1;
+              const res =
+                m.home_score == null || m.away_score == null
+                  ? "—"
+                  : `${m.home_score}:${m.away_score}`;
+
+              const mid = Number(m.id);
+
+              return (
+                <tr key={m.id}>
+                  <td style={{ fontWeight: 900 }}>{no}</td>
+
+                  <td>
+                    <b>
+                      {teamName(m.home_team)} — {teamName(m.away_team)}
+                    </b>
+                  </td>
+
+                  <td style={{ fontWeight: 900 }}>{res}</td>
+
+                  {users.map((u) => {
+                    const pr = predByMatchUser.get(mid)?.get(u.user_id);
+                    const text =
+                      pr && pr.h != null && pr.a != null
+                        ? `${pr.h}:${pr.a}`
+                        : "—";
+
+                    return <td key={u.user_id}>{text}</td>;
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
