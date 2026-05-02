@@ -31,6 +31,10 @@ function service() {
 }
 
 type TeamMaybeArray = { name: string } | { name: string }[] | null;
+type TourMaybeArray =
+  | { tour_no: string | number | null; name: string | null }
+  | { tour_no: string | number | null; name: string | null }[]
+  | null;
 
 type MatchRow = {
   id: string;
@@ -38,6 +42,7 @@ type MatchRow = {
   stage_match_no?: number | null;
   home_score: number | null;
   away_score: number | null;
+  tour: TourMaybeArray;
   home_team: TeamMaybeArray;
   away_team: TeamMaybeArray;
 };
@@ -49,14 +54,11 @@ type LedgerScoreRow = {
   match_id: number;
   user_id: string;
   points: number;
-
   points_outcome: number;
   points_diff: number;
-
   points_h1: number;
   points_h2: number;
   points_bonus: number;
-
   points_outcome_base: number;
   points_outcome_bonus: number;
   points_diff_base: number;
@@ -69,6 +71,17 @@ function teamName(t: TeamMaybeArray): string {
   return t.name ?? "?";
 }
 
+function tourTitle(tour: TourMaybeArray): string {
+  if (!tour) return "—";
+  const t = Array.isArray(tour) ? tour[0] : tour;
+  if (!t) return "—";
+
+  const no = t.tour_no == null ? "" : String(t.tour_no);
+  const name = t.name ? ` — ${t.name}` : "";
+
+  return no ? `Тур ${no}${name}` : name.replace(/^ — /, "") || "—";
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -77,19 +90,6 @@ function formatPts(n: number | null): string {
   if (n == null) return "";
   const x = Math.round(n * 100) / 100;
   return Number.isInteger(x) ? String(x) : String(x);
-}
-
-function sign(n: number) {
-  if (n > 0) return 1;
-  if (n < 0) return -1;
-  return 0;
-}
-
-function deriveMult(totalPart: number, base: number): number | null {
-  if (!base || base <= 0) return null;
-  const m = totalPart / base;
-  const r = Math.round(m * 100) / 100;
-  return Number.isFinite(r) ? r : null;
 }
 
 function placeIcon(place: number | null): string | null {
@@ -138,6 +138,7 @@ export default async function CurrentTablePage() {
       stage_match_no,
       home_score,
       away_score,
+      tour:tours!matches_tour_id_fkey ( tour_no, name ),
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `)
@@ -148,11 +149,14 @@ export default async function CurrentTablePage() {
   const matches = (matchesRaw ?? []) as MatchRow[];
   const matchIds = matches.map((m) => Number(m.id));
 
-  const { data: predsRaw } = await sb
-    .from("predictions")
-    .select("match_id,user_id,home_pred,away_pred")
-    .in("match_id", matchIds)
-    .in("user_id", userIds);
+  const { data: predsRaw } =
+    matchIds.length > 0 && userIds.length > 0
+      ? await sb
+          .from("predictions")
+          .select("match_id,user_id,home_pred,away_pred")
+          .in("match_id", matchIds)
+          .in("user_id", userIds)
+      : { data: [] as any[] };
 
   const predByMatchUser = new Map<number, Map<string, Pred>>();
   for (const p of predsRaw ?? []) {
@@ -164,22 +168,34 @@ export default async function CurrentTablePage() {
     });
   }
 
-  const { data: ledgerRaw } = await sb
-    .from("points_ledger")
-    .select(
-      "match_id,user_id,points,points_outcome,points_diff,points_h1,points_h2,points_bonus,points_outcome_base,points_outcome_bonus,points_diff_base,points_diff_bonus"
-    )
-    .in("match_id", matchIds)
-    .in("user_id", userIds);
+  const { data: ledgerRaw } =
+    matchIds.length > 0 && userIds.length > 0
+      ? await sb
+          .from("points_ledger")
+          .select(
+            "match_id,user_id,points,points_outcome,points_diff,points_h1,points_h2,points_bonus,points_outcome_base,points_outcome_bonus,points_diff_base,points_diff_bonus"
+          )
+          .in("match_id", matchIds)
+          .in("user_id", userIds)
+      : { data: [] as any[] };
 
   const scoreByMatchUser = new Map<number, Map<string, LedgerScoreRow>>();
   for (const r of (ledgerRaw ?? []) as any[]) {
     const mid = Number(r.match_id);
     if (!scoreByMatchUser.has(mid)) scoreByMatchUser.set(mid, new Map());
     scoreByMatchUser.get(mid)!.set(String(r.user_id), {
-      ...r,
       match_id: Number(r.match_id),
       user_id: String(r.user_id),
+      points: Number(r.points ?? 0),
+      points_outcome: Number(r.points_outcome ?? 0),
+      points_diff: Number(r.points_diff ?? 0),
+      points_h1: Number(r.points_h1 ?? 0),
+      points_h2: Number(r.points_h2 ?? 0),
+      points_bonus: Number(r.points_bonus ?? 0),
+      points_outcome_base: Number(r.points_outcome_base ?? 0),
+      points_outcome_bonus: Number(r.points_outcome_bonus ?? 0),
+      points_diff_base: Number(r.points_diff_base ?? 0),
+      points_diff_bonus: Number(r.points_diff_bonus ?? 0),
     });
   }
 
@@ -190,7 +206,12 @@ export default async function CurrentTablePage() {
     const mid = Number(m.id);
     for (const u of users) {
       const s = scoreByMatchUser.get(mid)?.get(u.user_id);
-      if (s) totalByUser.set(u.user_id, round2((totalByUser.get(u.user_id) ?? 0) + Number(s.points)));
+      if (s) {
+        totalByUser.set(
+          u.user_id,
+          round2((totalByUser.get(u.user_id) ?? 0) + Number(s.points))
+        );
+      }
     }
   }
 
@@ -221,6 +242,7 @@ export default async function CurrentTablePage() {
           <thead>
             <tr>
               <th style={{ width: 54, textAlign: "left" }}>№</th>
+              <th style={{ width: 160, textAlign: "left" }}>Тур</th>
               <th style={{ width: 320, textAlign: "left" }}>Матч</th>
               <th style={{ width: 70, textAlign: "left" }}>Рез.</th>
 
@@ -251,6 +273,10 @@ export default async function CurrentTablePage() {
               return (
                 <tr key={m.id}>
                   <td style={{ fontWeight: 900 }}>{no}</td>
+
+                  <td style={{ fontWeight: 800, whiteSpace: "nowrap" }}>
+                    {tourTitle(m.tour)}
+                  </td>
 
                   <td>
                     <div style={{ fontWeight: 900 }}>

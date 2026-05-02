@@ -66,15 +66,32 @@ function teamName(team: any): string {
   return team.name ?? "?";
 }
 
+function tourTitle(tour: any): string {
+  if (!tour) return "—";
+  const t = Array.isArray(tour) ? tour[0] : tour;
+  if (!t) return "—";
+
+  const no = t.tour_no == null ? "" : String(t.tour_no);
+  const name = t.name ? ` — ${t.name}` : "";
+
+  return no ? `Тур ${no}${name}` : name.replace(/^ — /, "") || "—";
+}
+
 type TeamRel = {
   name: string;
   slug: string;
+};
+
+type TourRel = {
+  tour_no: string | number | null;
+  name: string | null;
 };
 
 type MatchRow = {
   id: string;
   kickoff_at: string | null;
   status: string | null;
+  tour: TourRel | TourRel[] | null;
   home_team: TeamRel | TeamRel[] | null;
   away_team: TeamRel | TeamRel[] | null;
 };
@@ -110,6 +127,7 @@ export default async function DashboardMatchesPage() {
       id,
       kickoff_at,
       status,
+      tour:tours!matches_tour_id_fkey ( tour_no, name ),
       home_team:teams!matches_home_team_id_fkey ( name, slug ),
       away_team:teams!matches_away_team_id_fkey ( name, slug )
     `
@@ -156,7 +174,7 @@ export default async function DashboardMatchesPage() {
   }
 
   return (
-    <main className="hasBottomBar" style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+    <main className="hasBottomBar" style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
       <header style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Матчи</h1>
@@ -185,6 +203,9 @@ export default async function DashboardMatchesPage() {
                   </th>
                   <th style={{ width: 120, textAlign: "center", verticalAlign: "middle" }}>
                     Время (МСК)
+                  </th>
+                  <th style={{ width: 160, textAlign: "center", verticalAlign: "middle" }}>
+                    Тур
                   </th>
                   <th style={{ textAlign: "center", verticalAlign: "middle" }}>
                     Матч
@@ -217,6 +238,10 @@ export default async function DashboardMatchesPage() {
 
                       <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
                         {timeCell}
+                      </td>
+
+                      <td style={{ textAlign: "center", fontWeight: 800, whiteSpace: "nowrap" }}>
+                        {tourTitle(m.tour)}
                       </td>
 
                       <td>
