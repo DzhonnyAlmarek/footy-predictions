@@ -36,6 +36,7 @@ async function readLogin() {
 
 async function requireAdmin() {
   const { rawLogin, fpLogin } = await readLogin();
+
   if (!fpLogin) {
     return {
       ok: false as const,
@@ -99,26 +100,33 @@ export async function POST(req: Request) {
   if (!gate.ok) return gate.res;
 
   const body = await req.json().catch(() => ({}));
+
   const stageId = Number(body.stage_id);
-  const tourNo = Number(body.tour_no);
+  const tourNo = String(body.tour_no ?? "").trim().toUpperCase();
   const name = body.name === undefined ? null : String(body.name ?? "").trim() || null;
 
   if (!Number.isFinite(stageId)) {
     return NextResponse.json({ ok: false, error: "stage_id_required" }, { status: 400 });
   }
-  if (!Number.isFinite(tourNo)) {
-    return NextResponse.json({ ok: false, error: "tour_no_required" }, { status: 400 });
+
+  if (!tourNo) {
+    return NextResponse.json(
+      { ok: false, error: "tour_no_required", message: "Укажите номер или код тура" },
+      { status: 400 }
+    );
   }
 
   const svc = getServiceSupabase();
 
-  // ⚠️ Важно: у вас колонка называется tour_no (как было)
   const { data, error } = await svc
     .from("tours")
     .insert({ stage_id: stageId, tour_no: tourNo, name })
     .select("id")
     .single();
 
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+  }
+
   return NextResponse.json({ ok: true, id: data.id });
 }
