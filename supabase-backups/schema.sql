@@ -2005,10 +2005,9 @@ ALTER SEQUENCE "public"."tournaments_id_seq" OWNED BY "public"."tournaments"."id
 CREATE TABLE IF NOT EXISTS "public"."tours" (
     "id" bigint NOT NULL,
     "stage_id" bigint NOT NULL,
-    "tour_no" integer NOT NULL,
+    "tour_no" "text" NOT NULL,
     "name" "text",
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "tours_tour_no_check" CHECK (("tour_no" >= 1))
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
 
 
