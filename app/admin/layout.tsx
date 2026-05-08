@@ -19,9 +19,11 @@ const adminLinks: Array<{ href: string; label: string }> = [
   { href: "/admin/results", label: "Результаты" },
   { href: "/admin/stages", label: "Этапы" },
   { href: "/admin/users", label: "Участники" },
-  { href: "/admin/telegram-test", label: "Telegram тест" },
 
-  // ✅ НОВОЕ
+  // 👇 новый раздел
+  { href: "/admin/grand-prix", label: "🏆 Гран-при" },
+
+  { href: "/admin/telegram-test", label: "Telegram тест" },
   { href: "/admin/backups", label: "💾 Бэкапы" },
 ];
 
