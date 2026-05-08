@@ -16,6 +16,10 @@ const userItems: Item[] = [
   { href: "/dashboard/archive", label: "Архив", icon: "🗂️" },
   { href: "/analytics", label: "Аналитика", icon: "📈" },
   { href: "/golden-boot", label: "Бутса", icon: "🥇" },
+
+  // 👇 новый раздел
+  { href: "/grand-prix", label: "Гран-при", icon: "🏆" },
+
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];
 
