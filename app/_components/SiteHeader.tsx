@@ -3,7 +3,14 @@ import Link from "next/link";
 export default function SiteHeader() {
   return (
     <header className="siteHeader">
-      <div className="siteHeaderInner">
+      <div
+        className="siteHeaderInner"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
         <Link
           href="/"
           className="clubTitleLink"
@@ -20,7 +27,7 @@ export default function SiteHeader() {
 
         <div
           style={{
-            marginTop: 8,
+            marginTop: 6,
             textAlign: "center",
             fontSize: 14,
             fontWeight: 500,
