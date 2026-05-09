@@ -1719,6 +1719,91 @@ ALTER SEQUENCE "public"."audit_log_id_seq" OWNED BY "public"."audit_log"."id";
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."grand_prix_manual_scores" (
+    "id" bigint NOT NULL,
+    "round_id" bigint NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "points" numeric(10,2) DEFAULT 0 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."grand_prix_manual_scores" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."grand_prix_manual_scores_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."grand_prix_manual_scores_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "public"."grand_prix_manual_scores_id_seq" OWNED BY "public"."grand_prix_manual_scores"."id";
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."grand_prix_rounds" (
+    "id" bigint NOT NULL,
+    "season_id" bigint NOT NULL,
+    "round_no" integer NOT NULL,
+    "name" "text" NOT NULL,
+    "source_type" "text" NOT NULL,
+    "stage_id" bigint,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "grand_prix_rounds_round_no_check" CHECK ((("round_no" >= 1) AND ("round_no" <= 5))),
+    CONSTRAINT "grand_prix_rounds_source_type_check" CHECK (("source_type" = ANY (ARRAY['manual'::"text", 'stage'::"text"])))
+);
+
+
+ALTER TABLE "public"."grand_prix_rounds" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."grand_prix_rounds_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."grand_prix_rounds_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "public"."grand_prix_rounds_id_seq" OWNED BY "public"."grand_prix_rounds"."id";
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."grand_prix_seasons" (
+    "id" bigint NOT NULL,
+    "name" "text" NOT NULL,
+    "slug" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."grand_prix_seasons" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."grand_prix_seasons_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."grand_prix_seasons_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "public"."grand_prix_seasons_id_seq" OWNED BY "public"."grand_prix_seasons"."id";
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."import_rpl_matches" (
     "competition" "text",
     "season" "text",
@@ -2072,6 +2157,18 @@ ALTER TABLE ONLY "public"."audit_log" ALTER COLUMN "id" SET DEFAULT "nextval"('"
 
 
 
+ALTER TABLE ONLY "public"."grand_prix_manual_scores" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."grand_prix_manual_scores_id_seq"'::"regclass");
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_rounds" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."grand_prix_rounds_id_seq"'::"regclass");
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_seasons" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."grand_prix_seasons_id_seq"'::"regclass");
+
+
+
 ALTER TABLE ONLY "public"."matches" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."matches_id_seq"'::"regclass");
 
 
@@ -2130,6 +2227,36 @@ ALTER TABLE ONLY "public"."analytics_stage_user"
 
 ALTER TABLE ONLY "public"."audit_log"
     ADD CONSTRAINT "audit_log_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_manual_scores"
+    ADD CONSTRAINT "grand_prix_manual_scores_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_manual_scores"
+    ADD CONSTRAINT "grand_prix_manual_scores_round_id_user_id_key" UNIQUE ("round_id", "user_id");
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_rounds"
+    ADD CONSTRAINT "grand_prix_rounds_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_rounds"
+    ADD CONSTRAINT "grand_prix_rounds_season_id_round_no_key" UNIQUE ("season_id", "round_no");
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_seasons"
+    ADD CONSTRAINT "grand_prix_seasons_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_seasons"
+    ADD CONSTRAINT "grand_prix_seasons_slug_key" UNIQUE ("slug");
 
 
 
@@ -2398,6 +2525,26 @@ ALTER TABLE ONLY "public"."audit_log"
 
 
 
+ALTER TABLE ONLY "public"."grand_prix_manual_scores"
+    ADD CONSTRAINT "grand_prix_manual_scores_round_id_fkey" FOREIGN KEY ("round_id") REFERENCES "public"."grand_prix_rounds"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_manual_scores"
+    ADD CONSTRAINT "grand_prix_manual_scores_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_rounds"
+    ADD CONSTRAINT "grand_prix_rounds_season_id_fkey" FOREIGN KEY ("season_id") REFERENCES "public"."grand_prix_seasons"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."grand_prix_rounds"
+    ADD CONSTRAINT "grand_prix_rounds_stage_id_fkey" FOREIGN KEY ("stage_id") REFERENCES "public"."stages"("id") ON DELETE SET NULL;
+
+
+
 ALTER TABLE ONLY "public"."login_accounts"
     ADD CONSTRAINT "login_accounts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
@@ -2533,6 +2680,27 @@ ALTER TABLE "public"."audit_log" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "audit_select_admin" ON "public"."audit_log" FOR SELECT TO "authenticated" USING ("public"."is_admin"());
 
+
+
+CREATE POLICY "grand prix manual scores select authenticated" ON "public"."grand_prix_manual_scores" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "grand prix rounds select authenticated" ON "public"."grand_prix_rounds" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "grand prix seasons select authenticated" ON "public"."grand_prix_seasons" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "public"."grand_prix_manual_scores" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."grand_prix_rounds" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."grand_prix_seasons" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."import_rpl_matches" ENABLE ROW LEVEL SECURITY;
@@ -3069,6 +3237,42 @@ GRANT ALL ON TABLE "public"."audit_log" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."audit_log_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."audit_log_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."audit_log_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."grand_prix_manual_scores" TO "anon";
+GRANT ALL ON TABLE "public"."grand_prix_manual_scores" TO "authenticated";
+GRANT ALL ON TABLE "public"."grand_prix_manual_scores" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."grand_prix_manual_scores_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."grand_prix_manual_scores_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."grand_prix_manual_scores_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."grand_prix_rounds" TO "anon";
+GRANT ALL ON TABLE "public"."grand_prix_rounds" TO "authenticated";
+GRANT ALL ON TABLE "public"."grand_prix_rounds" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."grand_prix_rounds_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."grand_prix_rounds_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."grand_prix_rounds_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."grand_prix_seasons" TO "anon";
+GRANT ALL ON TABLE "public"."grand_prix_seasons" TO "authenticated";
+GRANT ALL ON TABLE "public"."grand_prix_seasons" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."grand_prix_seasons_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."grand_prix_seasons_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."grand_prix_seasons_id_seq" TO "service_role";
 
 
 
