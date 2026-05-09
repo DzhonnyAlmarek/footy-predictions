@@ -19,7 +19,11 @@ function service() {
 }
 
 function fmt(n: number) {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  const rounded = Math.round(n * 4) / 4;
+
+  return Number.isInteger(rounded)
+    ? String(rounded)
+    : rounded.toFixed(2).replace(/\.?0+$/, "");
 }
 
 const thStyle: CSSProperties = {
