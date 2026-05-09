@@ -208,7 +208,7 @@ export default async function AdminGrandPrixPage({
                             <input
                               name="points"
                               type="number"
-                              step="0.5"
+                              step="0.25"
                               defaultValue={saved?.points ?? 0}
                               style={{
                                 width: 90,
