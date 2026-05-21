@@ -1988,7 +1988,7 @@ CREATE TABLE IF NOT EXISTS "public"."stages" (
     "matches_required" integer DEFAULT 56 NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "is_current" boolean DEFAULT false NOT NULL,
-    CONSTRAINT "stages_matches_required_check" CHECK (("matches_required" = 56)),
+    CONSTRAINT "stages_matches_required_check" CHECK ((("matches_required" > 0) AND (("matches_required" <= 56) OR ("name" = 'World Cup 2026'::"text")))),
     CONSTRAINT "stages_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'published'::"text", 'locked'::"text"])))
 );
 
