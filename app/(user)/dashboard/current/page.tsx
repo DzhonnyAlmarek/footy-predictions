@@ -76,10 +76,29 @@ function tourTitle(tour: TourMaybeArray): string {
   const t = Array.isArray(tour) ? tour[0] : tour;
   if (!t) return "—";
 
-  const no = t.tour_no == null ? "" : String(t.tour_no);
-  const name = t.name ? ` — ${t.name}` : "";
+  if (t.name?.trim()) return t.name.trim();
 
-  return no ? `Тур ${no}${name}` : name.replace(/^ — /, "") || "—";
+  const no =
+    t.tour_no == null ? "" : String(t.tour_no).replace(/[^0-9]/g, "");
+
+  return no ? `Тур ${no}` : "—";
+}
+
+function groupMatchesByTour(matches: MatchRow[]) {
+  const groups = new Map<string, MatchRow[]>();
+
+  for (const match of matches) {
+    const title = tourTitle(match.tour);
+    const group = groups.get(title);
+
+    if (group) {
+      group.push(match);
+    } else {
+      groups.set(title, [match]);
+    }
+  }
+
+  return [...groups.entries()];
 }
 
 function round2(n: number): number {
@@ -225,6 +244,8 @@ export default async function CurrentTablePage() {
   const placeByUserId = new Map<string, number>();
   rankedUsers.forEach((u, idx) => placeByUserId.set(u.user_id, idx + 1));
 
+  const matchesByTour = groupMatchesByTour(matches);
+
   return (
     <main className="page">
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
@@ -237,77 +258,116 @@ export default async function CurrentTablePage() {
         {(stage as any).status ? <span> • {(stage as any).status}</span> : null}
       </div>
 
-      <div className="tableWrap">
-        <table className="table currentTable">
-          <thead>
-            <tr>
-              <th style={{ width: 54, textAlign: "left" }}>№</th>
-              <th style={{ width: 160, textAlign: "left" }}>Тур</th>
-              <th style={{ width: 320, textAlign: "left" }}>Матч</th>
-              <th style={{ width: 70, textAlign: "left" }}>Рез.</th>
+      <div style={{ display: "grid", gap: 28, marginTop: 20 }}>
+        {matchesByTour.map(([tourName, tourMatches]) => (
+          <section
+            key={tourName}
+            style={{
+              border: "1px solid #e5e7eb",
+              borderRadius: 16,
+              overflow: "hidden",
+              background: "#fff",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.04)",
+            }}
+          >
+            <div
+              style={{
+                padding: "14px 18px",
+                borderBottom: "1px solid #e5e7eb",
+                background: "#f8fafc",
+              }}
+            >
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>
+                {tourName}
+              </h2>
+              <div style={{ marginTop: 3, fontSize: 13, opacity: 0.7 }}>
+                Матчей: {tourMatches.length}
+              </div>
+            </div>
 
-              {users.map((u) => {
-                const place = placeByUserId.get(u.user_id) ?? null;
-                const icon = placeIcon(place);
+            <div className="tableWrap" style={{ margin: 0, border: 0, borderRadius: 0 }}>
+              <table className="table currentTable">
+                <thead>
+                  <tr>
+                    <th style={{ width: 54, textAlign: "left" }}>№</th>
+                    <th style={{ width: 320, textAlign: "left" }}>Матч</th>
+                    <th style={{ width: 70, textAlign: "left" }}>Рез.</th>
 
-                return (
-                  <th key={u.user_id} className="ctUserHead" style={{ textAlign: "left" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      {icon && <span>{icon}</span>}
-                      <span>{u.login}</span>
-                    </div>
-                    <div className="ctTotal">({formatPts(totalByUser.get(u.user_id) ?? 0)})</div>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
+                    {users.map((u) => {
+                      const place = placeByUserId.get(u.user_id) ?? null;
+                      const icon = placeIcon(place);
 
-          <tbody>
-            {matches.map((m, idx) => {
-              const no = m.stage_match_no ?? idx + 1;
-              const resText =
-                m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`;
-              const mid = Number(m.id);
+                      return (
+                        <th
+                          key={u.user_id}
+                          className="ctUserHead"
+                          style={{ textAlign: "left" }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {icon && <span>{icon}</span>}
+                            <span>{u.login}</span>
+                          </div>
+                          <div className="ctTotal">
+                            ({formatPts(totalByUser.get(u.user_id) ?? 0)})
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
 
-              return (
-                <tr key={m.id}>
-                  <td style={{ fontWeight: 900 }}>{no}</td>
-
-                  <td style={{ fontWeight: 800, whiteSpace: "nowrap" }}>
-                    {tourTitle(m.tour)}
-                  </td>
-
-                  <td>
-                    <div style={{ fontWeight: 900 }}>
-                      {teamName(m.home_team)} — {teamName(m.away_team)}
-                    </div>
-                  </td>
-
-                  <td style={{ fontWeight: 900 }}>{resText}</td>
-
-                  {users.map((u) => {
-                    const pr = predByMatchUser.get(mid)?.get(u.user_id) ?? { h: null, a: null };
-                    const predText = pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
-                    const s = scoreByMatchUser.get(mid)?.get(u.user_id);
+                <tbody>
+                  {tourMatches.map((m) => {
+                    const fallbackIndex = matches.findIndex((item) => item.id === m.id);
+                    const no = m.stage_match_no ?? fallbackIndex + 1;
+                    const resText =
+                      m.home_score == null || m.away_score == null
+                        ? "—"
+                        : `${m.home_score}:${m.away_score}`;
+                    const mid = Number(m.id);
 
                     return (
-                      <td key={u.user_id} className="ctCell">
-                        <span className="predText">{predText}</span>
-                        {s ? (
-                          <PointsPopover
-                            pts={Number(s.points)}
-                            breakdown={{} as PtsBD}
-                          />
-                        ) : null}
-                      </td>
+                      <tr key={m.id}>
+                        <td style={{ fontWeight: 900 }}>{no}</td>
+
+                        <td>
+                          <div style={{ fontWeight: 900 }}>
+                            {teamName(m.home_team)} — {teamName(m.away_team)}
+                          </div>
+                        </td>
+
+                        <td style={{ fontWeight: 900 }}>{resText}</td>
+
+                        {users.map((u) => {
+                          const pr =
+                            predByMatchUser.get(mid)?.get(u.user_id) ?? {
+                              h: null,
+                              a: null,
+                            };
+                          const predText =
+                            pr.h == null || pr.a == null ? "—" : `${pr.h}:${pr.a}`;
+                          const s = scoreByMatchUser.get(mid)?.get(u.user_id);
+
+                          return (
+                            <td key={u.user_id} className="ctCell">
+                              <span className="predText">{predText}</span>
+                              {s ? (
+                                <PointsPopover
+                                  pts={Number(s.points)}
+                                  breakdown={{} as PtsBD}
+                                />
+                              ) : null}
+                            </td>
+                          );
+                        })}
+                      </tr>
                     );
                   })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ))}
       </div>
     </main>
   );

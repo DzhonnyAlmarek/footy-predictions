@@ -71,10 +71,29 @@ function tourTitle(tour: any): string {
   const t = Array.isArray(tour) ? tour[0] : tour;
   if (!t) return "—";
 
-  const no = t.tour_no == null ? "" : String(t.tour_no);
-  const name = t.name ? ` — ${t.name}` : "";
+  if (t.name?.trim()) return t.name.trim();
 
-  return no ? `Тур ${no}${name}` : name.replace(/^ — /, "") || "—";
+  const no =
+    t.tour_no == null ? "" : String(t.tour_no).replace(/[^0-9]/g, "");
+
+  return no ? `Тур ${no}` : "—";
+}
+
+function groupMatchesByTour<T extends { tour: any }>(matches: T[]) {
+  const groups = new Map<string, T[]>();
+
+  for (const match of matches) {
+    const title = tourTitle(match.tour);
+    const group = groups.get(title);
+
+    if (group) {
+      group.push(match);
+    } else {
+      groups.set(title, [match]);
+    }
+  }
+
+  return [...groups.entries()];
 }
 
 type TeamRel = {
@@ -173,6 +192,8 @@ export default async function DashboardMatchesPage() {
     });
   }
 
+  const matchesByTour = groupMatchesByTour(safeMatches);
+
   return (
     <main className="hasBottomBar" style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
       <header style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -194,75 +215,107 @@ export default async function DashboardMatchesPage() {
         {safeMatches.length === 0 ? (
           <p style={{ marginTop: 14 }}>Сейчас нет актуальных матчей для прогноза.</p>
         ) : (
-          <div className="tableWrap" style={{ marginTop: 14 }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: 170, textAlign: "center", verticalAlign: "middle" }}>
-                    Дата (МСК)
-                  </th>
-                  <th style={{ width: 120, textAlign: "center", verticalAlign: "middle" }}>
-                    Время (МСК)
-                  </th>
-                  <th style={{ width: 160, textAlign: "center", verticalAlign: "middle" }}>
-                    Тур
-                  </th>
-                  <th style={{ textAlign: "center", verticalAlign: "middle" }}>
-                    Матч
-                  </th>
-                  <th style={{ width: 170, textAlign: "center", verticalAlign: "middle" }}>
-                    Прогноз
-                  </th>
-                </tr>
-              </thead>
+          <div style={{ display: "grid", gap: 28, marginTop: 14 }}>
+            {matchesByTour.map(([tourName, tourMatches]) => (
+              <section
+                key={tourName}
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  background: "#fff",
+                  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.04)",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "14px 18px",
+                    borderBottom: "1px solid #e5e7eb",
+                    background: "#f8fafc",
+                  }}
+                >
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>
+                    {tourName}
+                  </h2>
+                  <div style={{ marginTop: 3, fontSize: 13, opacity: 0.7 }}>
+                    Матчей: {tourMatches.length}
+                  </div>
+                </div>
 
-              <tbody>
-                {safeMatches.map((m) => {
-                  const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
-                  const pr = predByMatch.get(m.id) ?? { h: null, a: null };
+                <div className="tableWrap" style={{ margin: 0, border: 0, borderRadius: 0 }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 170, textAlign: "center", verticalAlign: "middle" }}>
+                          Дата (МСК)
+                        </th>
+                        <th style={{ width: 120, textAlign: "center", verticalAlign: "middle" }}>
+                          Время (МСК)
+                        </th>
+                        <th style={{ textAlign: "center", verticalAlign: "middle" }}>
+                          Матч
+                        </th>
+                        <th style={{ width: 170, textAlign: "center", verticalAlign: "middle" }}>
+                          Прогноз
+                        </th>
+                      </tr>
+                    </thead>
 
-                  const timeCell = kickoff
-                    ? (() => {
-                        const f = kickoffFlag(kickoff);
-                        const cls =
-                          f.isPast ? "badgeDanger" : f.isSoon ? "badgeWarn" : "badgeNeutral";
-                        return <span className={`badge ${cls}`}>{fmtTimeMsk(m.kickoff_at)}</span>;
-                      })()
-                    : "—";
+                    <tbody>
+                      {tourMatches.map((m) => {
+                        const kickoff = m.kickoff_at ? new Date(m.kickoff_at) : null;
+                        const pr = predByMatch.get(m.id) ?? { h: null, a: null };
 
-                  return (
-                    <tr key={m.id}>
-                      <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
-                        {fmtDateMsk(m.kickoff_at)}
-                      </td>
+                        const timeCell = kickoff
+                          ? (() => {
+                              const f = kickoffFlag(kickoff);
+                              const cls =
+                                f.isPast
+                                  ? "badgeDanger"
+                                  : f.isSoon
+                                    ? "badgeWarn"
+                                    : "badgeNeutral";
 
-                      <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
-                        {timeCell}
-                      </td>
+                              return (
+                                <span className={`badge ${cls}`}>
+                                  {fmtTimeMsk(m.kickoff_at)}
+                                </span>
+                              );
+                            })()
+                          : "—";
 
-                      <td style={{ textAlign: "center", fontWeight: 800, whiteSpace: "nowrap" }}>
-                        {tourTitle(m.tour)}
-                      </td>
+                        return (
+                          <tr key={m.id}>
+                            <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
+                              {fmtDateMsk(m.kickoff_at)}
+                            </td>
 
-                      <td>
-                        <div style={{ fontWeight: 900 }}>
-                          {teamName(m.home_team)} — {teamName(m.away_team)}
-                        </div>
-                      </td>
+                            <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>
+                              {timeCell}
+                            </td>
 
-                      <td style={{ textAlign: "center" }}>
-                        <PredCellEditable
-                          matchId={Number(m.id)}
-                          homePred={pr.h}
-                          awayPred={pr.a}
-                          canEdit={true}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                            <td>
+                              <div style={{ fontWeight: 900 }}>
+                                {teamName(m.home_team)} — {teamName(m.away_team)}
+                              </div>
+                            </td>
+
+                            <td style={{ textAlign: "center" }}>
+                              <PredCellEditable
+                                matchId={Number(m.id)}
+                                homePred={pr.h}
+                                awayPred={pr.a}
+                                canEdit={true}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ))}
           </div>
         )}
       </section>
