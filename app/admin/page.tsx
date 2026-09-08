@@ -53,6 +53,11 @@ export default async function AdminHomePage() {
           desc="Ввод результатов"
         />
         <Tile
+          href="/admin/golden-whistle"
+          title="🟨 Золотой свисток"
+          desc="Итоги номинации и место участников"
+        />
+        <Tile
           href="/admin/teams"
           title="Команды"
           desc="Создать / редактировать / удалить команды"

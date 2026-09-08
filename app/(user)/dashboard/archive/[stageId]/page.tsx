@@ -319,6 +319,9 @@ export default async function ArchiveStagePage({
           <Link href={`/dashboard/archive/${sid}/golden-boot`}>
             Золотая бутса →
           </Link>
+          <Link href={`/dashboard/archive/${sid}/golden-whistle`}>
+            Золотой свисток →
+          </Link>
           <Link href="/dashboard/archive">← Назад к архиву</Link>
         </div>
       </div>

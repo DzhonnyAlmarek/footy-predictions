@@ -12,6 +12,8 @@ type MatchVM = {
   away: string;
   home_score: number | null;
   away_score: number | null;
+  home_penalty_goals: number;
+  away_penalty_goals: number;
 };
 
 type SaveResp =
@@ -33,7 +35,7 @@ export default function ResultsClient(props: { initialMatches: MatchVM[] }) {
 
   async function saveMatch(
     matchId: number,
-    patch: Partial<Pick<MatchVM, "home_score" | "away_score">>
+    patch: Partial<Pick<MatchVM, "home_score" | "away_score" | "home_penalty_goals" | "away_penalty_goals">>
   ) {
     setSavingId(matchId);
     setMsg("");
@@ -73,7 +75,8 @@ export default function ResultsClient(props: { initialMatches: MatchVM[] }) {
               <th style={{ width: 70, textAlign: "center" as const }}>№</th>
               <th>Матч</th>
               <th style={{ width: 170, textAlign: "center" as const }}>Счёт</th>
-              <th style={{ width: 150, textAlign: "center" as const }}>Действия</th>
+          <th style={{ width: 170, textAlign: "center" as const }}>Пенальти</th>
+          <th style={{ width: 150, textAlign: "center" as const }}>Действия</th>
             </tr>
           </thead>
 
@@ -100,7 +103,7 @@ function RowEditor(props: {
   row: MatchVM;
   saving: boolean;
   onChange: (next: MatchVM) => void;
-  onSave: (patch: Partial<Pick<MatchVM, "home_score" | "away_score">>) => void;
+  onSave: (patch: Partial<Pick<MatchVM, "home_score" | "away_score" | "home_penalty_goals" | "away_penalty_goals">>) => void;
 }) {
   const { row, saving, onChange, onSave } = props;
 
@@ -110,12 +113,16 @@ function RowEditor(props: {
   const [draftAway, setDraftAway] = useState<string>(
     row.away_score == null ? "" : String(row.away_score)
   );
+  const [draftHomePen, setDraftHomePen] = useState(String(row.home_penalty_goals ?? 0));
+  const [draftAwayPen, setDraftAwayPen] = useState(String(row.away_penalty_goals ?? 0));
 
   function commitScores() {
     const hs = clampScore(draftHome);
     const as = clampScore(draftAway);
-    onChange({ ...row, home_score: hs, away_score: as });
-    onSave({ home_score: hs, away_score: as });
+    const hp = clampScore(draftHomePen) ?? 0;
+    const ap = clampScore(draftAwayPen) ?? 0;
+    onChange({ ...row, home_score: hs, away_score: as, home_penalty_goals: hp, away_penalty_goals: ap });
+    onSave({ home_score: hs, away_score: as, home_penalty_goals: hp, away_penalty_goals: ap });
   }
 
   return (
@@ -164,6 +171,18 @@ function RowEditor(props: {
             title="Счёт гостей"
             disabled={saving}
           />
+        </div>
+      </td>
+
+      <td style={{ textAlign: "center" }}>
+        <div className="resultInputs" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <input className="scoreInput" inputMode="numeric" value={draftHomePen}
+            onChange={(e) => setDraftHomePen(e.target.value.replace(/[^\d]/g, "").slice(0, 2))}
+            title="Голы хозяев с пенальти" disabled={saving} />
+          <span className="scoreSep">:</span>
+          <input className="scoreInput" inputMode="numeric" value={draftAwayPen}
+            onChange={(e) => setDraftAwayPen(e.target.value.replace(/[^\d]/g, "").slice(0, 2))}
+            title="Голы гостей с пенальти" disabled={saving} />
         </div>
       </td>
 

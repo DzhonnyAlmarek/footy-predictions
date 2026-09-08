@@ -17,6 +17,7 @@ const adminLinks: Array<{ href: string; label: string }> = [
   { href: "/admin", label: "Админ" },
   { href: "/admin/current-table", label: "Таблица" },
   { href: "/admin/results", label: "Результаты" },
+  { href: "/admin/golden-whistle", label: "🟨 Золотой свисток" },
   { href: "/admin/stages", label: "Этапы" },
   { href: "/admin/users", label: "Участники" },
 

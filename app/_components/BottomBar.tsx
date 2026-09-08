@@ -16,6 +16,7 @@ const userItems: Item[] = [
   { href: "/dashboard/archive", label: "Архив", icon: "🗂️" },
   { href: "/analytics", label: "Аналитика", icon: "📈" },
   { href: "/golden-boot", label: "Бутса", icon: "🥇" },
+  { href: "/golden-whistle", label: "Свисток", icon: "🟨" },
 
   // 👇 новый раздел
   { href: "/grand-prix", label: "Гран-при", icon: "🏆" },
@@ -27,6 +28,7 @@ const adminItems: Item[] = [
   { href: "/admin", label: "Админ", icon: "🛠️" },
   { href: "/admin/current-table", label: "Таблица", icon: "📊" },
   { href: "/admin/results", label: "Рез-ты", icon: "✅" },
+  { href: "/admin/golden-whistle", label: "Свисток", icon: "🟨" },
   { href: "/admin/users", label: "Юзеры", icon: "👥" },
   { href: "/logout", label: "Выйти", icon: "🚪", isLogout: true },
 ];

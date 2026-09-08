@@ -48,6 +48,8 @@ type MatchRow = {
   stage_match_no: number | null;
   home_score: number | null;
   away_score: number | null;
+  home_penalty_goals: number | null;
+  away_penalty_goals: number | null;
   home_team: { name: string } | { name: string }[] | null;
   away_team: { name: string } | { name: string }[] | null;
 };
@@ -106,6 +108,8 @@ export default async function AdminResultsPage() {
       stage_match_no,
       home_score,
       away_score,
+      home_penalty_goals,
+      away_penalty_goals,
       home_team:teams!matches_home_team_id_fkey ( name ),
       away_team:teams!matches_away_team_id_fkey ( name )
     `
@@ -134,6 +138,8 @@ export default async function AdminResultsPage() {
       away: teamName(row.away_team),
       home_score: row.home_score == null ? null : Number(row.home_score),
       away_score: row.away_score == null ? null : Number(row.away_score),
+      home_penalty_goals: row.home_penalty_goals == null ? 0 : Number(row.home_penalty_goals),
+      away_penalty_goals: row.away_penalty_goals == null ? 0 : Number(row.away_penalty_goals),
     };
   });
 

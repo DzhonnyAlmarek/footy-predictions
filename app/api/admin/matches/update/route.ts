@@ -54,6 +54,8 @@ export async function POST(req: Request) {
   const patch: any = {};
   if ("home_score" in body) patch.home_score = body.home_score;
   if ("away_score" in body) patch.away_score = body.away_score;
+  if ("home_penalty_goals" in body) patch.home_penalty_goals = body.home_penalty_goals;
+  if ("away_penalty_goals" in body) patch.away_penalty_goals = body.away_penalty_goals;
   if ("kickoff_at" in body) patch.kickoff_at = body.kickoff_at;
 
   if (Object.keys(patch).length === 0) {
@@ -65,6 +67,12 @@ export async function POST(req: Request) {
   const hasAway = "away_score" in patch && patch.away_score != null;
   if (hasHome && hasAway) {
     patch.status = "finished";
+    const hp = Number(patch.home_penalty_goals ?? 0);
+    const ap = Number(patch.away_penalty_goals ?? 0);
+    if (!Number.isInteger(hp) || hp < 0 || hp > Number(patch.home_score) ||
+        !Number.isInteger(ap) || ap < 0 || ap > Number(patch.away_score)) {
+      return NextResponse.json({ ok: false, error: "bad_penalty_goals", message: "Голов с пенальти не может быть больше итогового счёта" }, { status: 400 });
+    }
   }
 
   try {
