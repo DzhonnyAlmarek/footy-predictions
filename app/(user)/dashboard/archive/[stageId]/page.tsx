@@ -126,6 +126,26 @@ export default async function ArchiveStagePage({
     );
   }
 
+  const { data: grandPrixRound } = await sb
+    .from("grand_prix_rounds")
+    .select("season_id")
+    .eq("stage_id", sid)
+    .order("round_no", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: grandPrixSeason } = grandPrixRound?.season_id
+    ? await sb
+        .from("grand_prix_seasons")
+        .select("slug,name")
+        .eq("id", grandPrixRound.season_id)
+        .maybeSingle()
+    : { data: null };
+
+  const grandPrixHref = grandPrixSeason?.slug
+    ? `/grand-prix?season=${encodeURIComponent(String(grandPrixSeason.slug))}`
+    : "/grand-prix";
+
   const { data: usersRaw } = await sb
     .from("login_accounts")
     .select("login,user_id")
@@ -321,6 +341,9 @@ export default async function ArchiveStagePage({
           </Link>
           <Link href={`/dashboard/archive/${sid}/golden-whistle`}>
             Золотой свисток →
+          </Link>
+          <Link href={grandPrixHref}>
+            Гран-при{grandPrixSeason?.name ? `: ${grandPrixSeason.name}` : ""} →
           </Link>
           <Link href="/dashboard/archive">← Назад к архиву</Link>
         </div>

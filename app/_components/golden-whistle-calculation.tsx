@@ -112,7 +112,7 @@ export default async function GoldenWhistleCalculation({ stageId }: { stageId: n
   });
 
   return (
-    <details className="card" style={{ marginTop: 20 }}>
+    <details className="cardSoft" style={{ marginTop: 20 }}>
       <summary style={{ cursor: "pointer", padding: 16, fontWeight: 950, fontSize: 18 }}>
         Расчёт «Золотого свистка» · матчей с пенальти: {matchRows.length}
       </summary>

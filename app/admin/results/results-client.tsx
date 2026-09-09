@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 type MatchVM = {
@@ -30,7 +29,6 @@ function clampScore(v: string): number | null {
 }
 
 export default function ResultsClient(props: { initialMatches: MatchVM[] }) {
-  const router = useRouter();
   const [rows, setRows] = useState<MatchVM[]>(props.initialMatches);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [msg, setMsg] = useState<string>("");
@@ -53,7 +51,6 @@ export default function ResultsClient(props: { initialMatches: MatchVM[] }) {
       if (!json.ok) throw new Error(json.message ?? json.error);
 
       setMsg(`✅ Сохранено (матч #${matchId})`);
-      router.refresh();
     } catch (e: any) {
       setMsg(`❌ ${String(e?.message ?? e)}`);
     } finally {

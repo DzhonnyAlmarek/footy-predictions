@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { basePredictionPoints, formatWhistlePoints, goldenWhistlePoints } from "@/lib/golden-whistle";
+import GoldenWhistleCalculation from "@/app/_components/golden-whistle-calculation";
 
 function mustEnv(name: string) {
   const value = process.env[name];
@@ -107,6 +108,7 @@ export default async function GoldenWhistleStage({
             <thead><tr style={{ textAlign: "left" }}><th style={{ padding: "8px 10px", width: 80 }}>#</th><th style={{ padding: "8px 10px" }}>Участник</th><th style={{ padding: "8px 10px", textAlign: "right" }}>Баллы</th><th style={{ padding: "8px 10px", textAlign: "right" }}>Место в основном конкурсе</th></tr></thead>
             <tbody>{rows.map((row, index) => <tr key={row.userId} style={{ borderTop: "1px solid rgba(0,0,0,.08)", background: index < 3 ? "rgba(0,0,0,.03)" : "transparent" }}><td style={{ padding: "8px 10px", fontWeight: 900 }}>{index + 1} {medal(index)}</td><td style={{ padding: "8px 10px", fontWeight: 900 }}>{row.login}</td><td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 900 }}>{formatWhistlePoints(row.points)}</td><td style={{ padding: "8px 10px", textAlign: "right" }}>{row.mainPlace}</td></tr>)}</tbody>
           </table>
+          <GoldenWhistleCalculation stageId={stageId} />
           <div style={{ marginTop: 16 }}><Link href={backHref}>← Назад к таблице</Link></div>
         </div>
       </div>

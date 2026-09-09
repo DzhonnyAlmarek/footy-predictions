@@ -81,7 +81,7 @@ export default async function ArchiveStagesPage() {
                     className="btn"
                     style={{ textDecoration: "none" }}
                   >
-                    Открыть таблицу
+                    Открыть результаты
                   </Link>
                 </div>
               </div>

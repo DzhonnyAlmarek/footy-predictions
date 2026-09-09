@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import ResultsClient from "./results-client";
-import GoldenWhistleCalculation from "./golden-whistle-calculation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -156,7 +155,6 @@ export default async function AdminResultsPage() {
       </header>
 
       <ResultsClient initialMatches={items} />
-      <GoldenWhistleCalculation stageId={stage.id} />
     </main>
   );
 }
