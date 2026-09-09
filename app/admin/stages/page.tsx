@@ -7,12 +7,18 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function stageStatusLabel(status: string): string {
+  if (status === "locked") return "Закрыт";
+  if (status === "published") return "Опубликован";
+  return "Запланирован";
+}
+
 export default async function AdminStagesPage() {
   const supabase = await createClient();
 
   const { data: stages, error } = await supabase
     .from("stages")
-    .select("id,name,created_at,matches_required,is_current")
+    .select("id,name,status,created_at,matches_required,is_current")
     .order("id", { ascending: false })
     .limit(200);
 
@@ -55,6 +61,11 @@ export default async function AdminStagesPage() {
                 <div style={{ minWidth: 340 }}>
                   <div style={{ fontSize: 18, fontWeight: 800 }}>
                     #{s.id} • {s.name} {s.is_current ? <span style={{ marginLeft: 6 }}>⭐</span> : null}
+                  </div>
+
+                  <div style={{ marginTop: 6 }}>
+                    Статус: <b>{stageStatusLabel(String(s.status ?? "draft"))}</b>
+                    {s.is_current ? <span style={{ marginLeft: 10 }}>• Текущий</span> : null}
                   </div>
 
                   <div style={{ marginTop: 6, opacity: 0.8 }}>
