@@ -67,7 +67,7 @@ export default async function ArchiveStagesPage() {
               <div className="cardBody" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                 <div>
                   <div style={{ fontWeight: 900, fontSize: 18 }}>
-                    Этап #{s.id}: {s.name}
+                    {s.name}
                     {s.is_current ? <span style={{ marginLeft: 8 }}>⭐</span> : null}
                   </div>
                   <div style={{ marginTop: 6, opacity: 0.8 }}>
