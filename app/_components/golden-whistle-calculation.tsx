@@ -96,16 +96,22 @@ export default async function GoldenWhistleCalculation({ stageId }: { stageId: n
       if (!prediction) return null;
 
       const actualPoints = ledgerByKey.get(key) ?? 0;
+      const pointsWithPenalties = basePredictionPoints(
+        Number(prediction.home_pred),
+        Number(prediction.away_pred),
+        homeScore,
+        awayScore
+      );
       const pointsWithoutPenalties = basePredictionPoints(
         Number(prediction.home_pred),
         Number(prediction.away_pred),
         homeScore - homePens,
         awayScore - awayPens
       );
-      const earned = goldenWhistlePoints(actualPoints, pointsWithoutPenalties);
+      const earned = goldenWhistlePoints(actualPoints, pointsWithPenalties, pointsWithoutPenalties);
       totals.set(user.userId, Math.round(((totals.get(user.userId) ?? 0) + earned) * 100) / 100);
 
-      return { actualPoints, pointsWithoutPenalties, earned };
+      return { actualPoints, pointsWithPenalties, pointsWithoutPenalties, earned };
     });
 
     return { match, homeScore, awayScore, homePens, awayPens, cells };
@@ -158,7 +164,10 @@ export default async function GoldenWhistleCalculation({ stageId }: { stageId: n
                           <>
                             <div style={{ fontWeight: 950 }}>{formatWhistlePoints(cell.earned)}</div>
                             <div style={{ marginTop: 3, fontSize: 11, opacity: 0.65 }}>
-                              {formatWhistlePoints(cell.actualPoints)} − {formatWhistlePoints(cell.pointsWithoutPenalties)}
+                              факт. {formatWhistlePoints(cell.actualPoints)} − без пен. {formatWhistlePoints(cell.pointsWithoutPenalties)}
+                            </div>
+                            <div style={{ marginTop: 2, fontSize: 11, opacity: 0.65 }}>
+                              база: {formatWhistlePoints(cell.pointsWithPenalties)} / {formatWhistlePoints(cell.pointsWithoutPenalties)}
                             </div>
                           </>
                         ) : "—"}

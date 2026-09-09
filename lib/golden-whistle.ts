@@ -13,7 +13,12 @@ export function basePredictionPoints(
   return points;
 }
 
-export function goldenWhistlePoints(actualPoints: number, pointsWithoutPenalties: number) {
+export function goldenWhistlePoints(
+  actualPoints: number,
+  pointsWithPenalties: number,
+  pointsWithoutPenalties: number
+) {
+  if (pointsWithPenalties <= pointsWithoutPenalties) return 0;
   return Math.max(actualPoints - pointsWithoutPenalties, 0);
 }
 

@@ -74,13 +74,17 @@ export default async function GoldenWhistleStage({
     const awayPens = Number(match.away_penalty_goals ?? 0);
     if (homePens + awayPens === 0) continue;
 
+    const pointsWithPenalties = basePredictionPoints(
+      Number(p.home_pred), Number(p.away_pred),
+      Number(match.home_score), Number(match.away_score)
+    );
     const pointsWithoutPenalties = basePredictionPoints(
       Number(p.home_pred), Number(p.away_pred),
       Number(match.home_score) - homePens,
       Number(match.away_score) - awayPens
     );
     const actualPoints = ledgerByKey.get(`${p.match_id}:${p.user_id}`) ?? 0;
-    const earned = goldenWhistlePoints(actualPoints, pointsWithoutPenalties);
+    const earned = goldenWhistlePoints(actualPoints, pointsWithPenalties, pointsWithoutPenalties);
     const uid = String(p.user_id);
     whistleByUser.set(uid, Math.round(((whistleByUser.get(uid) ?? 0) + earned) * 100) / 100);
   }
