@@ -1854,6 +1854,10 @@ CREATE TABLE IF NOT EXISTS "public"."matches" (
     "stage_id" bigint,
     "tour_id" bigint,
     "stage_match_no" integer,
+    "home_penalty_goals" integer DEFAULT 0 NOT NULL,
+    "away_penalty_goals" integer DEFAULT 0 NOT NULL,
+    CONSTRAINT "matches_away_penalty_goals_check" CHECK ((("away_penalty_goals" >= 0) AND (("away_score" IS NULL) OR ("away_penalty_goals" <= "away_score")))),
+    CONSTRAINT "matches_home_penalty_goals_check" CHECK ((("home_penalty_goals" >= 0) AND (("home_score" IS NULL) OR ("home_penalty_goals" <= "home_score")))),
     CONSTRAINT "matches_status_check" CHECK (("status" = ANY (ARRAY['scheduled'::"text", 'live'::"text", 'finished'::"text", 'canceled'::"text"])))
 );
 
