@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import type { CSSProperties } from "react";
 
@@ -146,6 +147,10 @@ export default async function GrandPrixPage({
     <main className="pageWrap">
       <section className="card">
         <h1>🏆 Гран-при</h1>
+
+        <p style={{ marginTop: 8 }}>
+          <Link href="/dashboard">← Вернуться к моим прогнозам</Link>
+        </p>
 
         <p>
           Сезон: <b>{season?.name ?? "не найден"}</b>
