@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
+import { stageStatusLabel } from "@/lib/user-labels";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -683,7 +684,7 @@ const timeline = (stageMatches ?? []).map((m: any, idx: number) => ({
           <h1>Аналитика</h1>
           <div className="pageMeta">
             Этап: <b>{stage.name}</b>
-            {stage.status ? <span> · {stage.status}</span> : null}
+            {stage.status ? <span> · {stageStatusLabel(stage.status)}</span> : null}
           </div>
 
           <details className="helpBox" style={{ marginTop: 10 }}>
@@ -738,7 +739,7 @@ const timeline = (stageMatches ?? []).map((m: any, idx: number) => ({
 
       {/* TOP: 2 колонки */}
       <div style={{ marginTop: 14 }}>
-        <div className="analyticsSectionTitle">TOP по этапу</div>
+        <div className="analyticsSectionTitle">Лидеры этапа</div>
 
         <div
           style={{

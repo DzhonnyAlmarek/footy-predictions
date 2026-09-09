@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { stageStatusLabel } from "@/lib/user-labels";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -108,7 +109,7 @@ export default async function GoldenBootPage() {
           <div className="cardTitle">Золотая бутса</div>
           <div className="cardSub">
             Этап: <b>{stage.name ?? `#${stage.id}`}</b>
-            {stage.status ? <span style={{ opacity: 0.65 }}> • {stage.status}</span> : null}
+            {stage.status ? <span style={{ opacity: 0.65 }}> • {stageStatusLabel(stage.status)}</span> : null}
             <span style={{ opacity: 0.65 }}> • сыграно матчей: {matchIds.length}</span>
           </div>
         </div>

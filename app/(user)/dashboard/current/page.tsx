@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 
 import PointsPopover, { type PointsBreakdown as PtsBD } from "@/app/_components/points-popover";
+import { stageStatusLabel } from "@/lib/user-labels";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -255,7 +256,7 @@ export default async function CurrentTablePage() {
 
       <div className="pageMeta">
         Этап: <b>{(stage as any).name ?? `#${(stage as any).id}`}</b>
-        {(stage as any).status ? <span> • {(stage as any).status}</span> : null}
+        {(stage as any).status ? <span> • {stageStatusLabel((stage as any).status)}</span> : null}
       </div>
 
       <div style={{ display: "grid", gap: 28, marginTop: 20 }}>

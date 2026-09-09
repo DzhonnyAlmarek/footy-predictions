@@ -41,7 +41,7 @@ export default async function AllPredictions({ matchId, deadlineAt }: { matchId:
 
   const rows = (data ?? []).map((r: any) => ({
     id: r.id,
-    username: r.profiles?.username ?? "user",
+    username: r.profiles?.username ?? "пользователь",
     home: r.home_pred,
     away: r.away_pred,
     updated_at: r.updated_at,

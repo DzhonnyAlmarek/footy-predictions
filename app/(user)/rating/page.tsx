@@ -40,7 +40,7 @@ export default async function RatingPage() {
       <header style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 900 }}>Рейтинг</h1>
-          <p style={{ marginTop: 6, opacity: 0.8 }}>Только участники прогнозов (без ADMIN)</p>
+          <p style={{ marginTop: 6, opacity: 0.8 }}>Только участники прогнозов (без администратора)</p>
         </div>
         <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link href="/">Авторизация</Link>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { stageStatusLabel } from "@/lib/user-labels";
 
 type NavItem = { href: string; label: string; icon?: string };
 
@@ -34,7 +35,7 @@ export default function AppHeader(props: {
               <span className="metaPill">
                 Этап: <b>{stageName}</b>
                 {stageStatus ? <span className="metaDot">•</span> : null}
-                {stageStatus ? <span>{stageStatus}</span> : null}
+                {stageStatus ? <span>{stageStatusLabel(stageStatus)}</span> : null}
               </span>
             ) : (
               <span className="metaPill">

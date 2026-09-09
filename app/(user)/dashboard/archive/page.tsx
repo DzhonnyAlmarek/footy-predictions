@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+import { stageStatusLabel } from "@/lib/user-labels";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -71,7 +72,7 @@ export default async function ArchiveStagesPage() {
                     {s.is_current ? <span style={{ marginLeft: 8 }}>⭐</span> : null}
                   </div>
                   <div style={{ marginTop: 6, opacity: 0.8 }}>
-                    Статус: <b>{s.status}</b>
+                    Статус: <b>{stageStatusLabel(s.status)}</b>
                   </div>
                 </div>
 

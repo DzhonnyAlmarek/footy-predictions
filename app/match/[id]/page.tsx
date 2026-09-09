@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import PredictionForm from "./prediction-form";
 import AllPredictions from "./all-predictions";
+import { matchStatusLabel, pointsReasonLabel } from "@/lib/user-labels";
 
 function teamName(team: any): string {
   if (Array.isArray(team)) return String(team?.[0]?.name ?? "");
@@ -157,7 +158,7 @@ export default async function MatchPage({
       )}
 
       <p style={{ marginTop: 8, opacity: 0.8 }}>
-        статус: {match.status}
+        Статус: {matchStatusLabel(match.status)}
         {finalScore ? ` • итог: ${finalScore}` : ""}
       </p>
 
@@ -170,7 +171,7 @@ export default async function MatchPage({
         }}
       >
         <div>
-          <b>Kickoff:</b>{" "}
+          <b>Начало матча:</b>{" "}
           {kickoff.toLocaleString("ru-RU", {
             dateStyle: "medium",
             timeStyle: "short",
@@ -196,7 +197,7 @@ export default async function MatchPage({
               <>
                 <span style={{ fontWeight: 900 }}>{myPoints}</span>
                 {myReason ? (
-                  <span style={{ opacity: 0.8 }}> ({myReason})</span>
+                  <span style={{ opacity: 0.8 }}> ({pointsReasonLabel(myReason)})</span>
                 ) : null}
               </>
             )}

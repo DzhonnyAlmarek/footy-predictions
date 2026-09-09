@@ -165,7 +165,7 @@ export default async function UserTourMatchesPage({
                       </div>
 
                       <div style={{ marginTop: 6, opacity: 0.8 }}>
-                        kickoff:{" "}
+                        начало матча:{" "}
                         {kickoff.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}
                       </div>
 

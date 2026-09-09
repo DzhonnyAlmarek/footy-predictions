@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import { stageStatusLabel } from "@/lib/user-labels";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -251,7 +252,7 @@ export default async function AnalyticsUserPage({ params }: Props) {
 
       <div className="pageMeta">
         Этап: <b>{stage.name}</b>
-        {stage.status ? <span> · {stage.status}</span> : null}
+        {stage.status ? <span> · {stageStatusLabel(stage.status)}</span> : null}
         <span> · обновлено: <b>{updated}</b></span>
       </div>
 

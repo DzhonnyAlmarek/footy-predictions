@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { basePredictionPoints, formatWhistlePoints, goldenWhistlePoints } from "@/lib/golden-whistle";
+import { stageStatusLabel } from "@/lib/user-labels";
 import GoldenWhistleCalculation from "@/app/_components/golden-whistle-calculation";
 
 function mustEnv(name: string) {
@@ -98,7 +99,7 @@ export default async function GoldenWhistleStage({
       <div className="card">
         <div className="cardHeader">
           <div className="cardTitle">Золотой свисток</div>
-          <div className="cardSub">Этап: <b>{stageName}</b>{stageStatus ? ` • ${stageStatus}` : ""} • матчей с пенальти: {penaltyMatches}</div>
+          <div className="cardSub">Этап: <b>{stageName}</b>{stageStatus ? ` • ${stageStatusLabel(stageStatus)}` : ""} • матчей с пенальти: {penaltyMatches}</div>
         </div>
         <div className="cardBody">
           <div className="cardSoft" style={{ marginBottom: 16 }}>
