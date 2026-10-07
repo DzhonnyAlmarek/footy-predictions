@@ -2383,7 +2383,15 @@ CREATE INDEX "idx_audit_created_at" ON "public"."audit_log" USING "btree" ("crea
 
 
 
+CREATE INDEX "idx_matches_away_team_id" ON "public"."matches" USING "btree" ("away_team_id");
+
+
+
 CREATE INDEX "idx_matches_deadline" ON "public"."matches" USING "btree" ("deadline_at");
+
+
+
+CREATE INDEX "idx_matches_home_team_id" ON "public"."matches" USING "btree" ("home_team_id");
 
 
 
