@@ -1,7 +1,7 @@
 name: Yandex test image upload (manual only)
 
 # The push entry registers this workflow on the isolated branch only.
-# Upload is disabled unless the yandex-test environment variable
+# Upload is disabled unless the repository Actions variable
 # ENABLE_TEST_IMAGE_UPLOAD is explicitly set to true.
 on:
   push:
