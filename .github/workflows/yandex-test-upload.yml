@@ -1,8 +1,8 @@
-name: Yandex test image upload (OIDC, gated)
+name: Yandex test image upload (manual only)
 
 # The push entry registers this workflow on the isolated branch only.
-# Upload is disabled unless the repository Actions variable
-# ENABLE_TEST_IMAGE_UPLOAD is explicitly set to true.
+# Push is for workflow registration only. Actual uploads require a
+# deliberate workflow_dispatch with the exact confirmation phrase.
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   upload-only:
-    if: github.ref == 'refs/heads/deploy/yandex-cloud' && vars.ENABLE_TEST_IMAGE_UPLOAD == 'true' && (github.event_name != 'workflow_dispatch' || inputs.confirmation == 'UPLOAD-TEST-IMAGE')
+    if: github.ref == 'refs/heads/deploy/yandex-cloud' && github.event_name == 'workflow_dispatch' && inputs.confirmation == 'UPLOAD-TEST-IMAGE'
     environment: yandex-test
     runs-on: ubuntu-latest
     timeout-minutes: 30
