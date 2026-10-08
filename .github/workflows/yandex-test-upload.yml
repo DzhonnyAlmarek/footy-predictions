@@ -1,0 +1,92 @@
+name: Yandex test image upload (manual only)
+
+# IMPORTANT: GitHub requires workflow_dispatch workflows to be registered on
+# the default branch for the Actions UI. This is intentionally kept only on
+# deploy/yandex-cloud until the user explicitly authorizes any change to main.
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Enter UPLOAD-TEST-IMAGE to authorize registry push"
+        required: true
+        type: string
+      registry_id:
+        description: "Yandex Container Registry ID (crp...)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yandex-test-image-publish
+  cancel-in-progress: false
+
+jobs:
+  upload-only:
+    if: github.ref == 'refs/heads/deploy/yandex-cloud' && inputs.confirmation == 'UPLOAD-TEST-IMAGE'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Validate publish scope
+        shell: bash
+        env:
+          REGISTRY_ID: ${{ inputs.registry_id }}
+          IAM_TOKEN: ${{ secrets.YC_REGISTRY_IAM_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REF}" == "refs/heads/deploy/yandex-cloud" ]]
+          [[ "${REGISTRY_ID}" =~ ^crp[a-z0-9]{12,30}$ ]] || { echo "Invalid Container Registry ID"; exit 1; }
+          [[ -n "${IAM_TOKEN}" ]] || { echo "Missing YC_REGISTRY_IAM_TOKEN secret"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build isolated Docker image
+        run: |
+          set -euo pipefail
+          grep -q '^ENV DEPLOY_TARGET=yandex-neon-test$' Dockerfile
+          ! grep -q '^ARG NEXT_PUBLIC_SUPABASE_' Dockerfile
+          docker build --pull -t footy-test:local .
+      - name: Smoke test isolated container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name footy-upload-check -p 127.0.0.1:18080:8080 footy-test:local
+          trap 'docker logs footy-upload-check || true; docker rm -f footy-upload-check || true' EXIT
+          success=0
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:18080/api/test/health -o /tmp/test-health.json 2>/dev/null; then
+              success=1
+              break
+            fi
+            sleep 2
+          done
+          [[ "$success" == "1" ]]
+          grep -q '"environment":"isolated-test"' /tmp/test-health.json
+          status="$(curl -s -o /tmp/blocked.json -w '%{http_code}' http://127.0.0.1:18080/api/login)"
+          [[ "$status" == "503" ]]
+          grep -q 'isolated_test_api_disabled' /tmp/blocked.json
+      - name: Authenticate to Yandex Container Registry
+        shell: bash
+        env:
+          IAM_TOKEN: ${{ secrets.YC_REGISTRY_IAM_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$IAM_TOKEN" | docker login cr.yandex --username iam --password-stdin
+      - name: Upload image only (no deployment)
+        shell: bash
+        env:
+          REGISTRY_ID: ${{ inputs.registry_id }}
+        run: |
+          set -euo pipefail
+          IMAGE="cr.yandex/${REGISTRY_ID}/footy-predictions-test:${GITHUB_SHA}"
+          docker tag footy-test:local "$IMAGE"
+          docker push "$IMAGE"
+          echo "Uploaded image: $IMAGE"
+          echo "No Serverless Container revision was created."
+      - name: Logout
+        if: always()
+        run: docker logout cr.yandex || true
