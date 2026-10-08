@@ -1,8 +1,8 @@
 name: Yandex test image upload (manual only)
 
 # The push entry registers this workflow on the isolated branch only.
-# Push is for workflow registration only. Actual uploads require a
-# deliberate workflow_dispatch with the exact confirmation phrase.
+# One-time approved push is guarded by an exact commit-message match.
+# All later pushes skip upload; workflow_dispatch requires confirmation.
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   upload-only:
-    if: github.ref == 'refs/heads/deploy/yandex-cloud' && github.event_name == 'workflow_dispatch' && inputs.confirmation == 'UPLOAD-TEST-IMAGE'
+    if: github.ref == 'refs/heads/deploy/yandex-cloud' && ((github.event_name == 'workflow_dispatch' && inputs.confirmation == 'UPLOAD-TEST-IMAGE') || (github.event_name == 'push' && github.event.head_commit.message == 'ci(yandex-test): authorized one-time image upload 2026-10-08'))
     environment: yandex-test
     runs-on: ubuntu-latest
     timeout-minutes: 30
