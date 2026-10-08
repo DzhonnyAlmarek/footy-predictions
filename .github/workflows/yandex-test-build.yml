@@ -39,3 +39,30 @@ jobs:
         run: |
           grep -q 'ENV DEPLOY_TARGET=yandex-neon-test' Dockerfile
           ! grep -q '^ARG NEXT_PUBLIC_SUPABASE_' Dockerfile
+      - name: Build isolated Docker image (no push)
+        run: docker build --pull -t footy-test-ci:local .
+      - name: Smoke test Docker startup and API isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name footy-test-ci -p 127.0.0.1:18080:8080 footy-test-ci:local
+          trap 'docker logs footy-test-ci || true; docker rm -f footy-test-ci || true' EXIT
+          healthy=0
+          for i in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/api/test/health -o /tmp/health.json 2>/dev/null; then
+              healthy=1
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$healthy" != 1 ]]; then
+            echo "Isolated test container failed health check"
+            exit 1
+          fi
+          grep -q '"environment":"isolated-test"' /tmp/health.json
+          status=$(curl --silent --output /tmp/blocked.json --write-out '%{http_code}' http://127.0.0.1:18080/api/login)
+          if [[ "$status" != "503" ]]; then
+            echo "Production login API was not blocked: HTTP $status"
+            exit 1
+          fi
+          grep -q 'isolated_test_api_disabled' /tmp/blocked.json
