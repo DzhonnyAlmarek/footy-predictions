@@ -1,9 +1,14 @@
 name: Yandex test image upload (manual only)
 
-# IMPORTANT: GitHub requires workflow_dispatch workflows to be registered on
-# the default branch for the Actions UI. This is intentionally kept only on
-# deploy/yandex-cloud until the user explicitly authorizes any change to main.
+# The push entry registers this workflow on the isolated branch only.
+# Upload is disabled unless the yandex-test environment variable
+# ENABLE_TEST_IMAGE_UPLOAD is explicitly set to true.
 on:
+  push:
+    branches:
+      - deploy/yandex-cloud
+    paths:
+      - ".github/workflows/yandex-test-upload.yml"
   workflow_dispatch:
     inputs:
       confirmation:
@@ -24,7 +29,8 @@ concurrency:
 
 jobs:
   upload-only:
-    if: github.ref == 'refs/heads/deploy/yandex-cloud' && inputs.confirmation == 'UPLOAD-TEST-IMAGE'
+    if: github.ref == 'refs/heads/deploy/yandex-cloud' && vars.ENABLE_TEST_IMAGE_UPLOAD == 'true' && (github.event_name != 'workflow_dispatch' || inputs.confirmation == 'UPLOAD-TEST-IMAGE')
+    environment: yandex-test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -34,7 +40,7 @@ jobs:
       - name: Validate publish scope
         shell: bash
         env:
-          REGISTRY_ID: ${{ inputs.registry_id }}
+          REGISTRY_ID: crpocq57tud830bhe7ck
           IAM_TOKEN: ${{ secrets.YC_REGISTRY_IAM_TOKEN }}
         run: |
           set -euo pipefail
