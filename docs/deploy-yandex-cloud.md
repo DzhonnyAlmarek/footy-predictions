@@ -12,16 +12,13 @@
 
 ## Сборка
 
-Нужны Docker, Git и доступ к GitHub. `NEXT_PUBLIC_*` являются публичными значениями, но секретные ключи нельзя передавать в `--build-arg`.
+Нужны Docker, Git и доступ к GitHub. В тестовом Dockerfile зафиксированы нерабочие заглушки Supabase: нельзя передавать адрес или ключи production Supabase даже через build-arg.
 
 ```bash
 git clone --branch deploy/yandex-cloud https://github.com/DzhonnyAlmarek/footy-predictions.git
 cd footy-predictions
 
-docker build --pull \
-  --build-arg NEXT_PUBLIC_SUPABASE_URL="https://YOUR-TEST-PROJECT.supabase.co" \
-  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="YOUR-TEST-PROJECT-PUBLISHABLE-OR-ANON-KEY" \
-  -t footy-predictions:yandex-test .
+docker build --pull -t footy-predictions:yandex-test .
 ```
 
 Проверка локального запуска (после настройки тестового Supabase):
