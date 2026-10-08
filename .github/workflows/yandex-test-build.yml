@@ -1,0 +1,41 @@
+name: Yandex test build (isolated)
+on:
+  push:
+    branches:
+      - deploy/yandex-cloud
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "middleware.ts"
+      - "Dockerfile"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.ts"
+      - ".github/workflows/yandex-test-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      DEPLOY_TARGET: "yandex-neon-test"
+      NEXT_PUBLIC_SUPABASE_URL: "https://isolated.invalid"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-only-placeholder-not-a-real-key"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify production image isolation
+        run: |
+          grep -q 'ENV DEPLOY_TARGET=yandex-neon-test' Dockerfile
+          ! grep -q '^ARG NEXT_PUBLIC_SUPABASE_' Dockerfile
