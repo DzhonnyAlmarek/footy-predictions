@@ -26,7 +26,10 @@ concurrency:
 
 jobs:
   upload-only:
-    if: github.ref == 'refs/heads/deploy/yandex-cloud' && ((github.event_name == 'workflow_dispatch' && inputs.confirmation == 'UPLOAD-TEST-IMAGE') || (github.event_name == 'push' && github.event.head_commit.message == 'ci(yandex-test): authorized one-time image upload 2026-10-08'))
+    if: >-
+      github.ref == 'refs/heads/deploy/yandex-cloud' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.confirmation == 'UPLOAD-TEST-IMAGE') ||
+      (github.event_name == 'push' && github.event.head_commit.message == 'ci(yandex-test): approved upload retry 2026-10-08'))
     environment: yandex-test
     runs-on: ubuntu-latest
     timeout-minutes: 30
