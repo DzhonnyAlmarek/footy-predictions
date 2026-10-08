@@ -53,7 +53,7 @@ export async function verifyTestSession(token: string | undefined): Promise<bool
   const bytes = fromBase64url(signature);
   const content = fromBase64url(payload);
   if (!bytes || !content || bytes.length !== 32) return false;
-  const valid = await crypto.subtle.verify("HMAC", await keyFor(value), bytes, encoder.encode(payload));
+  const valid = await crypto.subtle.verify("HMAC", await keyFor(value), new Uint8Array(bytes), encoder.encode(payload));
   if (!valid) return false;
   try {
     const obj = JSON.parse(new TextDecoder().decode(content));
