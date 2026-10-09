@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     const tokenHash = createHash("sha256").update(Buffer.from(token, "hex")).digest("hex");
     const sql = participantDatabase();
     // Rate limiting occurs before the expensive password derivation.
-    const globalAllowed = await consumeAttempt(sql, "login_ip", "enrollment-global", 150);
+    const globalAllowed = await consumeAttempt(sql, "login_ip", "enrollment-global", 100);
     const tokenAllowed = await consumeAttempt(sql, "enroll_token", tokenHash, 5);
     if (!globalAllowed || !tokenAllowed) {
       return NextResponse.json(GENERIC, { status: 429, headers: HEADER });
