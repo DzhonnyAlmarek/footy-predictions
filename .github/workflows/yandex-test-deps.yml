@@ -1,0 +1,32 @@
+name: Yandex test dependency lockfile bootstrap
+on:
+  push:
+    branches: [deploy/yandex-cloud]
+    paths: [".github/workflows/yandex-test-deps.yml"]
+permissions:
+  contents: write
+jobs:
+  lockfile-only:
+    if: github.ref == 'refs/heads/deploy/yandex-cloud'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deploy/yandex-cloud
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Update npm manifest and lockfile (test branch only)
+        run: npm install --package-lock-only --save-exact @neondatabase/serverless@1.0.0
+      - name: Commit dependency metadata only
+        run: |
+          set -euo pipefail
+          [[ "$(git branch --show-current)" == 'deploy/yandex-cloud' ]]
+          git add package.json package-lock.json
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'build(yandex-test): lock Neon HTTP driver dependency'
+            git push origin HEAD:refs/heads/deploy/yandex-cloud
+          fi
