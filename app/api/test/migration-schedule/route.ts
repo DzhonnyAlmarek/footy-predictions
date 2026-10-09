@@ -19,7 +19,11 @@ export async function GET(request: Request) {
   if (process.env.NODE_ENV !== "development" ||
       process.env.LOCAL_NEON_AUTH_E2E !== "true" ||
       process.env.DEPLOY_TARGET !== "yandex-neon-test" ||
-      request.headers.get("host") !== "127.0.0.1:3100" ||
+      !(
+        request.headers.get("host") === "127.0.0.1:3100" ||
+        (Boolean(process.env.CODESPACE_NAME) &&
+         request.headers.get("host") === `${process.env.CODESPACE_NAME}-3100.app.github.dev`)
+      ) ||
       !ALLOWED_HOSTS.has(neonHost)) {
     return NextResponse.json({ ok: false }, { status: 404, headers: HEADERS });
   }
