@@ -4,7 +4,7 @@
 BEGIN;
 CREATE SCHEMA IF NOT EXISTS test_auth;
 CREATE TABLE IF NOT EXISTS test_auth.participant_credentials (
-  user_id uuid PRIMARY KEY REFERENCES migration_source.profiles(id) ON DELETE RESTRICT,
+  user_id uuid PRIMARY KEY,
   password_salt bytea,
   password_hash bytea,
   enabled boolean NOT NULL DEFAULT false,
