@@ -25,6 +25,8 @@ assert 'LOCK TABLE migration_source."matches"' in sql
 assert 'ON CONFLICT ("id") DO UPDATE' in sql
 assert "DO $$BEGIN IF NOT" in sql
 assert "import_rpl_matches" in m.snapshot.__code__.co_consts or "import_rpl_matches" == m.UNKEYED
+assert m.stable_fingerprint({"points": 1.00, "components": [0.0, 3.750]}) == m.stable_fingerprint({"components": [0, 3.75], "points": 1})
+assert m.stable_fingerprint({"number": 1}) != m.stable_fingerprint({"number": "1"})
 assert "SET LOCAL statement_timeout" in sql
-print("PASS: delta detection, drift checksum, guarded transaction, unkeyed-table policy")
+print("PASS: delta detection, drift checksum, guarded transaction, canonical numeric hashes, unkeyed-table policy")
 print("No network connections or database writes were performed.")
