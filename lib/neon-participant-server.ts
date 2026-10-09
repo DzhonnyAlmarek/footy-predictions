@@ -23,7 +23,7 @@ export function participantDatabase() {
 }
 
 export async function consumeAttempt(
-  sql: ReturnType<typeof neon>, scope: "login_global" | "login_account" | "enroll_token",
+  sql: ReturnType<typeof neon>, scope: "login_ip" | "login_account" | "enroll_token",
   subject: string, limit: number, seconds = 900
 ): Promise<boolean> {
   const pepper = process.env.PARTICIPANT_RATE_PEPPER!;
