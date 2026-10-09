@@ -39,6 +39,7 @@ export default function TestAreaPage() {
         <p>Вход выполнен: <strong>{username}</strong></p>
         <p>Это искусственный участник тестовой Neon. Рабочие прогнозы и API отключены.</p>
         <p><a href="/test-matches">Посмотреть тестовые матчи</a></p>
+        <p><a href="/test-schedule">Расписание этапов и туров</a></p>
         <button onClick={logout}>Выйти</button>
       </>}
     </main>
