@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     const sql = participantDatabase();
     // Shared database counters. No reliance on untrusted X-Forwarded-For headers.
     // Global limit is a failsafe; per-account limit is the primary brute-force control.
-    const globalAllowed = await consumeAttempt(sql, "login_ip", "global", 300);
+    const globalAllowed = await consumeAttempt(sql, "login_ip", "global", 100);
     const accountAllowed = await consumeAttempt(sql, "login_account", username.toLowerCase(), 5);
     if (!globalAllowed || !accountAllowed) {
       return NextResponse.json({ ok: false, error: "too_many_attempts" },
