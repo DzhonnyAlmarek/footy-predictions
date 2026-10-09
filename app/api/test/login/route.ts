@@ -11,8 +11,15 @@ export async function POST(request: Request) {
   if (process.env.DEPLOY_TARGET !== "yandex-neon-test") {
     return NextResponse.json({ ok: false }, { status: 404, headers });
   }
+  // Yandex Cloud terminates TLS at its reverse proxy. The internal request URL
+  // may be HTTP even when the browser uses our HTTPS sandbox domain.
+  // Keep the browser Origin check strict; never trust arbitrary forwarded hosts.
   const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  const allowedOrigins = new Set([
+    new URL(request.url).origin,
+    "https://bbadj1vr2rcdeh9k8tna.containers.yandexcloud.net",
+  ]);
+  if (origin && !allowedOrigins.has(origin)) {
     return NextResponse.json({ ok: false }, { status: 403, headers });
   }
 
