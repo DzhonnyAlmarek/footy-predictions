@@ -18,6 +18,10 @@ export function participantAuthEnabled(): boolean {
 
 export function participantOriginAllowed(req: Request): boolean {
   const origin = req.headers.get("origin");
+  if (origin === "http://127.0.0.1:3100" &&
+      process.env.NODE_ENV === "development" &&
+      process.env.LOCAL_NEON_AUTH_E2E === "true" &&
+      req.headers.get("host") === "127.0.0.1:3100") return true;
   return !!origin && origin === "https://bbadj1vr2rcdeh9k8tna.containers.yandexcloud.net";
 }
 
