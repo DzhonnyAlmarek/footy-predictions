@@ -32,10 +32,15 @@ export async function middleware(req: NextRequest) {
     "/api/test/participant-session", "/api/test/participant-logout",
     "/api/test/migration-schedule", "/migration-schedule",
   ]);
+  const previewHost = process.env.CODESPACE_NAME
+    ? `${process.env.CODESPACE_NAME}-3100.app.github.dev` : null;
+  const previewRoutes = new Set(["/migration-schedule", "/api/test/migration-schedule"]);
+  const host = req.headers.get("host");
   if (localAuthRoutes.has(pathname) &&
       process.env.NODE_ENV === "development" &&
       process.env.LOCAL_NEON_AUTH_E2E === "true" &&
-      req.headers.get("host") === "127.0.0.1:3100") {
+      (host === "127.0.0.1:3100" ||
+       (previewRoutes.has(pathname) && previewHost !== null && host === previewHost))) {
     return NextResponse.next();
   }
 
