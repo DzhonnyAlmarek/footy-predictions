@@ -7,6 +7,7 @@ No data is deleted, and no source database writes are ever performed.
 Requires psql and private SUPABASE_READONLY_URL / NEON_URL environment variables.
 """
 import argparse, csv, io, hashlib, json, os, re, subprocess, sys
+from decimal import Decimal
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -81,13 +82,33 @@ def snapshot(url,schema):
         t,k,raw=row
         try: record=json.loads(raw)
         except ValueError: stop("snapshot JSON invalid")
-        fp=hashlib.sha256(raw.encode()).hexdigest()
+        fp=stable_fingerprint(record)
         if t==UNKEYED:
             out[t][fp]+=1
         else:
             if k in out[t]: stop("duplicate source/destination key: "+t)
             out[t][k]=(fp,record)
     return out
+
+def stable_fingerprint(value):
+    """Hash JSON semantic values, ignoring PostgreSQL numeric scale/format.
+
+    Distinguishes text, booleans, nulls, arrays and objects; treats 0.0
+    and 0 as the same number, and sorts object properties deterministically.
+    """
+    def normalize(v):
+        if v is None: return ["null"]
+        if isinstance(v,bool): return ["bool",v]
+        if isinstance(v,(int,float,Decimal)):
+            return ["number",format(Decimal(str(v)).normalize(),"f")]
+        if isinstance(v,str): return ["string",v]
+        if isinstance(v,list): return ["array",[normalize(x) for x in v]]
+        if isinstance(v,dict):
+            return ["object",[[k,normalize(v[k])] for k in sorted(v)]]
+        stop("unsupported JSON value")
+    canonical=json.dumps(normalize(value),ensure_ascii=False,separators=(",",":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
 
 def compare(a,b):
     result={}
