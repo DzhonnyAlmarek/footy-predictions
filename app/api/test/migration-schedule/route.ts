@@ -22,7 +22,8 @@ export async function GET(request: Request) {
       !(
         request.headers.get("host") === "127.0.0.1:3100" ||
         (Boolean(process.env.CODESPACE_NAME) &&
-         request.headers.get("host") === `${process.env.CODESPACE_NAME}-3100.app.github.dev`)
+         (request.headers.get("host") === `${process.env.CODESPACE_NAME}-3100.app.github.dev` ||
+          request.headers.get("host") === "localhost:3100"))
       ) ||
       !ALLOWED_HOSTS.has(neonHost)) {
     return NextResponse.json({ ok: false }, { status: 404, headers: HEADERS });
