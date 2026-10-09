@@ -78,7 +78,8 @@ BEGIN
   END IF;
   RAISE NOTICE 'PASS: active session accepted, revoked session denied';
 
-  UPDATE test_auth.participant_sessions SET revoked_at=NULL, expires_at=now()-interval '1 second'
+  UPDATE test_auth.participant_sessions
+  SET revoked_at=NULL, created_at=now()-interval '2 hours', expires_at=now()-interval '1 hour'
   WHERE session_hash=v_session;
   IF test_auth.session_user(v_session) IS NOT NULL THEN
     RAISE EXCEPTION 'expired session accepted';
