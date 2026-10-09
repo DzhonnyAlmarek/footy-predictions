@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.ref == 'refs/heads/deploy/yandex-cloud' &&
       ((github.event_name == 'workflow_dispatch' && inputs.confirmation == 'UPLOAD-TEST-IMAGE') ||
-      (github.event_name == 'push' && github.event.head_commit.message == 'ci(yandex-test): approved upload retry 2026-10-08'))
+      (github.event_name == 'push' && github.event.head_commit.message == 'ci(yandex-test): approved Neon probe image upload 2026-10-09'))
     environment: yandex-test
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -73,6 +73,9 @@ jobs:
           status="$(curl -s -o /tmp/blocked.json -w '%{http_code}' http://127.0.0.1:18080/api/login)"
           [[ "$status" == "503" ]]
           grep -q 'isolated_test_api_disabled' /tmp/blocked.json
+          neon_status="$(curl -s -o /tmp/neon-check.json -w '%{http_code}' http://127.0.0.1:18080/api/test/neon-health)"
+          [[ "$neon_status" == "503" ]]
+          grep -q '"database":"not-configured"' /tmp/neon-check.json
       - name: Request GitHub OIDC token for Yandex Cloud
         id: oidc
         uses: actions/github-script@v7
