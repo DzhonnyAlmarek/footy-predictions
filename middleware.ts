@@ -11,7 +11,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname === "/api/test/health" || pathname === "/test-login" ||
+  if (pathname === "/api/test/health" || pathname === "/api/test/neon-health" || pathname === "/test-login" ||
       pathname === "/api/test/login" || pathname === "/api/test/logout" ||
       pathname === "/api/test/session") {
     return NextResponse.next();
