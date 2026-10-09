@@ -129,9 +129,12 @@ function ymd(d: Date) {
  * - backs up current stage (and/or stageId param)
  * - uploads to Supabase Storage bucket "backups"
  */
-export async function POST(req: Request) {
-  const secret = req.headers.get("x-cron-secret") ?? "";
-  if (!secret || secret !== mustEnv("CRON_SECRET")) {
+async function handleBackup(req: Request) {
+  const configuredSecret = mustEnv("CRON_SECRET");
+  const secret = req.method === "GET"
+    ? (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")
+    : (req.headers.get("x-cron-secret") ?? "");
+  if (!secret || secret !== configuredSecret) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
@@ -209,4 +212,14 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+}
+
+// Vercel Cron sends GET with Authorization: Bearer <CRON_SECRET>.
+export async function GET(req: Request) {
+  return handleBackup(req);
+}
+
+// Preserve existing manually triggered POST backups.
+export async function POST(req: Request) {
+  return handleBackup(req);
 }
