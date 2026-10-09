@@ -30,6 +30,7 @@ export async function middleware(req: NextRequest) {
   const localAuthRoutes = new Set([
     "/api/test/enroll", "/api/test/participant-login",
     "/api/test/participant-session", "/api/test/participant-logout",
+    "/api/test/migration-schedule", "/migration-schedule",
   ]);
   if (localAuthRoutes.has(pathname) &&
       process.env.NODE_ENV === "development" &&
