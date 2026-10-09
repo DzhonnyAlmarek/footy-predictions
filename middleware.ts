@@ -34,8 +34,7 @@ export async function middleware(req: NextRequest) {
   if (localAuthRoutes.has(pathname) &&
       process.env.NODE_ENV === "development" &&
       process.env.LOCAL_NEON_AUTH_E2E === "true" &&
-      req.headers.get("host") === "127.0.0.1:3100" &&
-      req.nextUrl.hostname === "127.0.0.1") {
+      req.headers.get("host") === "127.0.0.1:3100") {
     return NextResponse.next();
   }
 
