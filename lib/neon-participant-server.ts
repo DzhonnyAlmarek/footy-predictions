@@ -5,10 +5,14 @@ export const PARTICIPANT_COOKIE = "fp_neon_participant";
 export const AUTH_HEADERS = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" };
 
 export function participantAuthEnabled(): boolean {
+  // Hard pin to the isolated migration branch endpoint; never fall back to default Neon.
+  let host = "";
+  try { host = new URL(process.env.DATABASE_URL || "").hostname; } catch { return false; }
   return process.env.DEPLOY_TARGET === "yandex-neon-test" &&
     process.env.ENABLE_NEON_PARTICIPANT_AUTH === "true" &&
-    !!process.env.DATABASE_URL &&
-    !!process.env.PARTICIPANT_RATE_PEPPER &&
+    (host === "ep-holy-smoke-b1y4pzhn.c-5.eu-central-1.aws.neon.tech" ||
+     host === "ep-holy-smoke-b1y4pzhn-pooler.c-5.eu-central-1.aws.neon.tech") &&
+    typeof process.env.PARTICIPANT_RATE_PEPPER === "string" &&
     process.env.PARTICIPANT_RATE_PEPPER.length >= 32;
 }
 
