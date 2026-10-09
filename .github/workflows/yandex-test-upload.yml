@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.ref == 'refs/heads/deploy/yandex-cloud' &&
       ((github.event_name == 'workflow_dispatch' && inputs.confirmation == 'UPLOAD-TEST-IMAGE') ||
-      (github.event_name == 'push' && github.event.head_commit.message == 'ci(yandex-test): approved Neon probe image upload 2026-10-09'))
+      (github.event_name == 'push' && github.event.head_commit.message == 'ci(yandex-test): approved matches-viewer image upload 2026-10-09'))
     environment: yandex-test
     runs-on: ubuntu-latest
     timeout-minutes: 30
