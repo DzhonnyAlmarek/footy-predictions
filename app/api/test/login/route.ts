@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { scryptSync, timingSafeEqual } from "node:crypto";
+import { neon } from "@neondatabase/serverless";
 import { COOKIE_NAME, issueTestSession } from "@/lib/test-auth";
 
 export const runtime = "nodejs";
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
 
   const configuredLogin = process.env.TEST_LOGIN;
   const configuredHash = process.env.TEST_PASSWORD_SCRYPT;
-  if (!configuredLogin || !configuredHash || !process.env.TEST_AUTH_SECRET) {
+  if (!configuredLogin || !configuredHash || !process.env.TEST_AUTH_SECRET || !process.env.DATABASE_URL) {
     return NextResponse.json({ ok: false, error: "test_auth_not_configured" }, { status: 503, headers });
   }
 
@@ -37,7 +38,20 @@ export async function POST(request: Request) {
   if (!matched) {
     return NextResponse.json({ ok: false, error: "invalid_credentials" }, { status: 401, headers });
   }
-  const token = await issueTestSession();
+  // Resolve the authenticated sandbox login to a synthetic Neon profile.
+  // No production users or Supabase credentials are queried.
+  let userId: string;
+  try {
+    const sql = neon(process.env.DATABASE_URL!);
+    const profiles = await sql`SELECT id FROM public.profiles WHERE username = ${configuredLogin} LIMIT 1`;
+    if (profiles.length !== 1 || typeof profiles[0]?.id !== "string") {
+      return NextResponse.json({ ok: false, error: "test_profile_not_found" }, { status: 503, headers });
+    }
+    userId = profiles[0].id as string;
+  } catch {
+    return NextResponse.json({ ok: false, error: "test_database_unavailable" }, { status: 503, headers });
+  }
+  const token = await issueTestSession(userId);
   if (!token) {
     return NextResponse.json({ ok: false, error: "test_auth_not_configured" }, { status: 503, headers });
   }
