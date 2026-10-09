@@ -31,10 +31,12 @@ export async function middleware(req: NextRequest) {
     "/api/test/enroll", "/api/test/participant-login",
     "/api/test/participant-session", "/api/test/participant-logout",
     "/api/test/migration-schedule", "/migration-schedule",
+    "/api/test/migration-standings", "/migration-standings",
   ]);
   const previewHost = process.env.CODESPACE_NAME
     ? `${process.env.CODESPACE_NAME}-3100.app.github.dev` : null;
-  const previewRoutes = new Set(["/migration-schedule", "/api/test/migration-schedule"]);
+  const previewRoutes = new Set(["/migration-schedule", "/api/test/migration-schedule",
+    "/migration-standings", "/api/test/migration-standings"]);
   const host = req.headers.get("host");
   if (localAuthRoutes.has(pathname) &&
       process.env.NODE_ENV === "development" &&
