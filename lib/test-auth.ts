@@ -35,32 +35,38 @@ async function keyFor(secretValue: string): Promise<CryptoKey> {
   );
 }
 
-export async function issueTestSession(): Promise<string | null> {
+export async function issueTestSession(userId: string): Promise<string | null> {
   const value = secret();
-  if (!value) return null;
+  if (!value || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) return null;
   const expires = Math.floor(Date.now() / 1000) + 4 * 3600;
-  const payload = toBase64url(encoder.encode(JSON.stringify({ v: 1, sub: "sandbox-tester", exp: expires })));
+  const payload = toBase64url(encoder.encode(JSON.stringify({ v: 2, sub: userId, exp: expires })));
   const mac = new Uint8Array(await crypto.subtle.sign("HMAC", await keyFor(value), encoder.encode(payload)));
   return payload + "." + toBase64url(mac);
 }
 
-export async function verifyTestSession(token: string | undefined): Promise<boolean> {
+export async function getTestUserId(token: string | undefined): Promise<string | null> {
   const value = secret();
-  if (!value || !token || token.length > 2048) return false;
+  if (!value || !token || token.length > 2048) return null;
   const parts = token.split(".");
-  if (parts.length !== 2) return false;
+  if (parts.length !== 2) return null;
   const [payload, signature] = parts;
   const bytes = fromBase64url(signature);
   const content = fromBase64url(payload);
-  if (!bytes || !content || bytes.length !== 32) return false;
+  if (!bytes || !content || bytes.length !== 32) return null;
   const valid = await crypto.subtle.verify("HMAC", await keyFor(value), new Uint8Array(bytes), encoder.encode(payload));
-  if (!valid) return false;
+  if (!valid) return null;
   try {
     const obj = JSON.parse(new TextDecoder().decode(content));
     const now = Math.floor(Date.now() / 1000);
-    return obj.v === 1 && obj.sub === "sandbox-tester" &&
-      Number.isSafeInteger(obj.exp) && obj.exp > now && obj.exp <= now + 4 * 3600;
+    if (obj.v !== 2 || typeof obj.sub !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(obj.sub) ||
+      !Number.isSafeInteger(obj.exp) || obj.exp <= now || obj.exp > now + 4 * 3600) return null;
+    return obj.sub;
   } catch {
-    return false;
+    return null;
   }
 }
+
+export async function verifyTestSession(token: string | undefined): Promise<boolean> {
+  return (await getTestUserId(token)) !== null;
+}
+
