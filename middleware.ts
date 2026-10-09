@@ -25,6 +25,20 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/test-login", req.url));
   }
 
+  // Developer-only local E2E test gate. NEVER enable on deployed test/production:
+  // both dev mode and the exact loopback Host must match.
+  const localAuthRoutes = new Set([
+    "/api/test/enroll", "/api/test/participant-login",
+    "/api/test/participant-session", "/api/test/participant-logout",
+  ]);
+  if (localAuthRoutes.has(pathname) &&
+      process.env.NODE_ENV === "development" &&
+      process.env.LOCAL_NEON_AUTH_E2E === "true" &&
+      req.headers.get("host") === "127.0.0.1:3100" &&
+      req.nextUrl.hostname === "127.0.0.1") {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(
       { ok: false, error: "isolated_test_api_disabled" },
