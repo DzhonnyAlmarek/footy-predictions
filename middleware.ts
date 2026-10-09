@@ -40,7 +40,8 @@ export async function middleware(req: NextRequest) {
       process.env.NODE_ENV === "development" &&
       process.env.LOCAL_NEON_AUTH_E2E === "true" &&
       (host === "127.0.0.1:3100" ||
-       (previewRoutes.has(pathname) && previewHost !== null && host === previewHost))) {
+       (previewRoutes.has(pathname) && previewHost !== null &&
+        (host === previewHost || host === "localhost:3100")))) {
     return NextResponse.next();
   }
 
