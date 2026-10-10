@@ -1,0 +1,94 @@
+# No scheduled write operations. Manual dispatch only.
+# Safe staging: source Supabase is SELECT-only, Neon host is pinned to migration branch.
+name: Footy Neon controlled migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'preview = read only; apply = guarded migration write'
+        required: true
+        type: choice
+        default: preview
+        options:
+          - preview
+          - apply
+      reviewed_checksum:
+        description: 'For apply ONLY: exact PLAN_CHECKSUM from a separately reviewed preview'
+        required: false
+        type: string
+      confirmation:
+        description: 'For apply ONLY: type ISOLATED-NEON-ONLY'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: footy-neon-controlled-migration
+  cancel-in-progress: false
+
+jobs:
+  migration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: footy-neon-migration-preview
+    steps:
+      - name: Validate manual approval before accessing databases
+        shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          CHECKSUM: ${{ inputs.reviewed_checksum }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          if [[ "$MODE" != preview && "$MODE" != apply ]]; then
+            echo "::error::Unexpected mode"
+            exit 1
+          fi
+          if [[ "$MODE" == apply ]]; then
+            if [[ "$CONFIRMATION" != ISOLATED-NEON-ONLY || ! "$CHECKSUM" =~ ^[a-f0-9]{64}$ ]]; then
+              echo "::error::Apply requires exact phrase and reviewed SHA-256 plan checksum"
+              exit 1
+            fi
+          fi
+
+      - name: Check out pinned and tested migration script
+        uses: actions/checkout@v4
+        with:
+          ref: da9f39bc121feb3e22546ae7edfe43827a876a4f
+          persist-credentials: false
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Run offline safety tests
+        run: |
+          python3 -m py_compile scripts/sync-footy-isolated-neon.py
+          python3 scripts/test-sync-footy-safety.py
+
+      - name: Compare and optionally apply approved snapshot
+        shell: bash
+        env:
+          SUPABASE_READONLY_URL: ${{ secrets.SUPABASE_READONLY_URL }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+          MODE: ${{ inputs.mode }}
+          CHECKSUM: ${{ inputs.reviewed_checksum }}
+        run: |
+          set -euo pipefail
+          umask 077
+          plan="$(mktemp /tmp/footy-neon-plan.XXXXXX)"
+          rm -f "$plan"
+          trap 'rm -f "$plan"' EXIT
+          if [[ "$MODE" == preview ]]; then
+            python3 scripts/sync-footy-isolated-neon.py --mode preview --print-checksum
+            echo "Review PLAN_CHECKSUM and row deltas before any separate apply run." >> "$GITHUB_STEP_SUMMARY"
+          else
+            # Create a new private preview immediately before applying.
+            python3 scripts/sync-footy-isolated-neon.py --mode preview --plan-file "$plan"
+            python3 scripts/sync-footy-isolated-neon.py --mode apply --plan-file "$plan" --confirm ISOLATED-NEON-ONLY --expected-checksum "$CHECKSUM"
+          fi
+          echo "Mode: $MODE. Supabase is read-only; destination is isolated migration_source." >> "$GITHUB_STEP_SUMMARY"
