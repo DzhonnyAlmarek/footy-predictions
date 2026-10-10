@@ -47,6 +47,38 @@ jobs:
         run: |
           python3 -m py_compile scripts/sync-footy-isolated-neon.py
           python3 scripts/test-sync-footy-safety.py
+      - name: Diagnose read-only database access safely
+        shell: bash
+        env:
+          SUPABASE_READONLY_URL: ${{ secrets.SUPABASE_READONLY_URL }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+        run: |
+          set -euo pipefail
+          export PGCONNECT_TIMEOUT=12
+          export PGOPTIONS="-c default_transaction_read_only=on"
+          tables=(tournaments teams stages tours grand_prix_seasons grand_prix_rounds profiles matches predictions grand_prix_manual_scores points_ledger match_scores prediction_scores analytics_stage_baseline analytics_stage_user analytics_stage_user_archetype analytics_stage_user_momentum import_rpl_matches)
+          for entry in supabase neon; do
+            if [[ "$entry" == supabase ]]; then
+              export PGDATABASE="$SUPABASE_READONLY_URL"
+              schema=public
+            else
+              export PGDATABASE="$NEON_URL"
+              schema=migration_source
+            fi
+            if psql -X -q -v ON_ERROR_STOP=1 -t -A -c 'SELECT 1' >/dev/null 2>&1; then
+              echo "$entry connection: OK"
+            else
+              echo "::error::$entry connection: FAILED (credentials, TLS or network)"
+              exit 1
+            fi
+            for table in "${tables[@]}"; do
+              if ! psql -X -q -v ON_ERROR_STOP=1 -t -A -c "SELECT count(*) FROM \"$schema\".\"$table\"" >/dev/null 2>&1; then
+                echo "::error::$entry table $schema.$table: FAILED (permissions or structure)"
+                exit 1
+              fi
+            done
+            echo "$entry access to all 18 tables: OK"
+          done
       - name: Compare Supabase and isolated Neon (no writes)
         env:
           SUPABASE_READONLY_URL: ${{ secrets.SUPABASE_READONLY_URL }}
