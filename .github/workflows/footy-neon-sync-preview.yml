@@ -69,12 +69,35 @@ jobs:
               export PGDATABASE="$NEON_URL"
               schema=migration_source
             fi
-            if psql -X -q -v ON_ERROR_STOP=1 -t -A -c 'SELECT 1' >/dev/null 2>&1; then
+            errfile="$(mktemp)"
+            if psql -w -X -q -v ON_ERROR_STOP=1 -t -A -c 'SELECT 1' >/dev/null 2>"$errfile"; then
               echo "$entry connection: OK"
             else
-              echo "::error::$entry connection: FAILED (credentials, TLS or network)"
+              # Never echo raw psql stderr: it may contain a URI or other secrets.
+              if grep -qiE 'password authentication failed|invalid password|authentication failed' "$errfile"; then
+                category="password authentication (check URL encoding, role password or pooler cache)"
+              elif grep -qiE 'tenant or user not found|invalid tenant|user not found' "$errfile"; then
+                category="pooler role / project tenant not recognized"
+              elif grep -qiE 'could not translate host name|name or service not known|nodename nor servname' "$errfile"; then
+                category="DNS resolution"
+              elif grep -qiE 'timeout expired|timed out|no route to host|network is unreachable' "$errfile"; then
+                category="network timeout or routing"
+              elif grep -qiE 'SSL|certificate|TLS' "$errfile"; then
+                category="TLS / certificate negotiation"
+              elif grep -qiE 'invalid URI|invalid connection option|invalid port|missing.*password' "$errfile"; then
+                category="malformed connection URL"
+              elif grep -qiE 'no pg_hba.conf entry|permission denied|not allowed' "$errfile"; then
+                category="access restriction"
+              elif grep -qiE 'fe_sendauth: no password supplied' "$errfile"; then
+                category="no usable password in connection URL"
+              else
+                category="unclassified PostgreSQL connection error"
+              fi
+              rm -f "$errfile"
+              echo "::error::$entry connection: FAILED; category=$category"
               exit 1
             fi
+            rm -f "$errfile"
             for table in "${tables[@]}"; do
               if ! psql -X -q -v ON_ERROR_STOP=1 -t -A -c "SELECT count(*) FROM \"$schema\".\"$table\"" >/dev/null 2>&1; then
                 echo "::error::$entry table $schema.$table: FAILED (permissions or structure)"
