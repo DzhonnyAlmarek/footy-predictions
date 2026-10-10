@@ -82,14 +82,14 @@ jobs:
           tables=(tournaments teams stages tours grand_prix_seasons grand_prix_rounds profiles matches predictions grand_prix_manual_scores points_ledger match_scores prediction_scores analytics_stage_baseline analytics_stage_user analytics_stage_user_archetype analytics_stage_user_momentum import_rpl_matches)
           for entry in supabase neon; do
             if [[ "$entry" == supabase ]]; then
-              export PGDATABASE="$SUPABASE_READONLY_URL"
+              db_url="$SUPABASE_READONLY_URL"
               schema=public
             else
-              export PGDATABASE="$NEON_URL"
+              db_url="$NEON_URL"
               schema=migration_source
             fi
             errfile="$(mktemp)"
-            if psql -w -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -t -A -c 'BEGIN READ ONLY; SELECT 1; ROLLBACK;' >/dev/null 2>"$errfile"; then
+            if psql --dbname="$db_url" -w -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -t -A -c 'BEGIN READ ONLY; SELECT 1; ROLLBACK;' >/dev/null 2>"$errfile"; then
               echo "$entry connection: OK"
             else
               # Never echo raw psql stderr: it may contain a URI or other secrets.
@@ -136,13 +136,23 @@ jobs:
               else
                 category="unclassified PostgreSQL connection error"
               fi
+              # Only output a small, enumerated set of non-sensitive hints.
+              if grep -qiE 'invalid authorization specification|P0[A-Z0-9]{3}|28000' "$errfile"; then
+                echo "$entry hint: authorization specification rejected"
+              elif grep -qiE '28P01' "$errfile"; then
+                echo "$entry hint: password rejected"
+              elif grep -qiE '08[A-Z0-9]{3}' "$errfile"; then
+                echo "$entry hint: connection exception"
+              elif grep -qiE 'unexpected response from server|server sent an error response during SSL exchange' "$errfile"; then
+                echo "$entry hint: startup or TLS protocol problem"
+              fi
               rm -f "$errfile"
               echo "::error::$entry connection: FAILED; category=$category; SQLSTATE=$sqlstate"
               exit 1
             fi
             rm -f "$errfile"
             for table in "${tables[@]}"; do
-              if ! psql -X -q -v ON_ERROR_STOP=1 -t -A -c "SELECT count(*) FROM \"$schema\".\"$table\"" >/dev/null 2>&1; then
+              if ! psql --dbname="$db_url" -w -X -q -v ON_ERROR_STOP=1 -t -A -c "SELECT count(*) FROM \"$schema\".\"$table\"" >/dev/null 2>&1; then
                 echo "::error::$entry table $schema.$table: FAILED (permissions or structure)"
                 exit 1
               fi
