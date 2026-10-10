@@ -202,7 +202,7 @@ def apply_sql(diff,source,target):
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument("--mode",choices=["preview","apply"],default="preview")
+    ap.add_argument("--mode",choices=["preview","validate","apply"],default="preview")
     ap.add_argument("--plan-file")
     ap.add_argument("--confirm")
     ap.add_argument("--expected-checksum", help="SHA-256 fingerprint shown in a separately reviewed preview")
@@ -228,6 +228,21 @@ def main():
             stop("apply requires the exact 64-character checksum from a reviewed preview")
         if code!=args.expected_checksum:
             stop("approved checksum does not match the fresh database snapshot")
+    if args.mode=="validate":
+        if d[UNKEYED]["new"] or d[UNKEYED]["only_neon"]:
+            stop("unkeyed table differs; rollback validation stopped")
+        if any(d[t]["only_neon"] for t in KEYS):
+            stop("Neon-only records detected; rollback validation stopped")
+        if not any(d[t]["new"] or d[t]["changed"] for t in KEYS):
+            print("VALIDATE: no changes needed; no writes performed")
+            return
+        sql=apply_sql(d,a,b)
+        if not sql.endswith("\nCOMMIT;"):
+            stop("unexpected transaction terminator")
+        rollback_sql=sql[:-len("COMMIT;")]+"ROLLBACK;"
+        run_psql(neon_url,rollback_sql,readonly=False)
+        print("VALIDATE OK: guarded SQL executed and transaction ROLLED BACK; nothing committed")
+        return
     if args.mode=="preview":
         if args.plan_file:
             path=Path(args.plan_file)
