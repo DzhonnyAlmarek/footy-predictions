@@ -89,11 +89,19 @@ jobs:
               schema=migration_source
             fi
             errfile="$(mktemp)"
-            if psql -w -X -q -v ON_ERROR_STOP=1 -t -A -c 'BEGIN READ ONLY; SELECT 1; ROLLBACK;' >/dev/null 2>"$errfile"; then
+            if psql -w -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -t -A -c 'BEGIN READ ONLY; SELECT 1; ROLLBACK;' >/dev/null 2>"$errfile"; then
               echo "$entry connection: OK"
             else
               # Never echo raw psql stderr: it may contain a URI or other secrets.
-              if grep -qiE 'password authentication failed|invalid password|authentication failed' "$errfile"; then
+              # A verbose psql error contains a 5-char SQLSTATE if PostgreSQL
+              # supplied one. Emit only the validated code, never raw stderr.
+              sqlstate="$(grep -Eo '(^|[[:space:]])[A-Z0-9]{5}:[[:space:]]' "$errfile" | head -1 | grep -Eo '[A-Z0-9]{5}' || true)"
+              if [[ ! "$sqlstate" =~ ^[A-Z0-9]{5}$ ]]; then sqlstate="unavailable"; fi
+              if grep -qiE 'tenant.*(user|not found)|tenant or user not found|ENOTFOUND|unknown tenant' "$errfile"; then
+                category="pooler tenant or role mismatch"
+              elif grep -qiE 'circuit breaker open' "$errfile"; then
+                category="pooler circuit breaker"
+              elif grep -qiE 'password authentication failed|invalid password|authentication failed' "$errfile"; then
                 category="password authentication (check URL encoding, role password or pooler cache)"
               elif grep -qiE 'tenant or user not found|invalid tenant|user not found' "$errfile"; then
                 category="pooler role / project tenant not recognized"
@@ -119,7 +127,7 @@ jobs:
                 category="unclassified PostgreSQL connection error"
               fi
               rm -f "$errfile"
-              echo "::error::$entry connection: FAILED; category=$category"
+              echo "::error::$entry connection: FAILED; category=$category; SQLSTATE=$sqlstate"
               exit 1
             fi
             rm -f "$errfile"
