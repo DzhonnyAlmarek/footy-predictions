@@ -27,6 +27,8 @@ assert "DO $$BEGIN IF NOT" in sql
 assert "import_rpl_matches" in m.snapshot.__code__.co_consts or "import_rpl_matches" == m.UNKEYED
 assert m.stable_fingerprint({"points": 1.00, "components": [0.0, 3.750]}) == m.stable_fingerprint({"components": [0, 3.75], "points": 1})
 assert m.stable_fingerprint({"number": 1}) != m.stable_fingerprint({"number": "1"})
+assert m.stable_fingerprint({"momentum_series": [1.12345671]}, numeric_places=6) == m.stable_fingerprint({"momentum_series": [1.12345674]}, numeric_places=6)
+assert m.stable_fingerprint({"points": 1.0000001}) != m.stable_fingerprint({"points": 1.0000002})
 assert "SET LOCAL statement_timeout" in sql
 print("PASS: delta detection, drift checksum, guarded transaction, canonical numeric hashes, unkeyed-table policy")
 print("No network connections or database writes were performed.")
