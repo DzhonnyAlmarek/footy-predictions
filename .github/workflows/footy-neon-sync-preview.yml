@@ -165,3 +165,10 @@ jobs:
           NEON_URL: ${{ secrets.NEON_URL }}
         run: |
           python3 scripts/sync-footy-isolated-neon.py --mode preview --print-checksum
+      - name: Execute guarded SQL and roll back (isolated Neon only)
+        env:
+          SUPABASE_READONLY_URL: ${{ secrets.SUPABASE_READONLY_URL }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+        run: |
+          python3 scripts/sync-footy-isolated-neon.py --mode validate
+
