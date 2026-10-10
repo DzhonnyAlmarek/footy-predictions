@@ -82,7 +82,13 @@ def snapshot(url,schema):
         t,k,raw=row
         try: record=json.loads(raw)
         except ValueError: stop("snapshot JSON invalid")
-        fp=stable_fingerprint(record)
+        # Derived analytics can have harmless sub-micro numeric rounding
+        # differences across Postgres serialization. Competition source
+        # tables (especially points_ledger/predictions) remain exact.
+        if t in ("analytics_stage_user", "analytics_stage_user_momentum"):
+            fp=stable_fingerprint(record, numeric_places=6)
+        else:
+            fp=stable_fingerprint(record)
         if t==UNKEYED:
             out[t][fp]+=1
         else:
@@ -90,7 +96,7 @@ def snapshot(url,schema):
             out[t][k]=(fp,record)
     return out
 
-def stable_fingerprint(value):
+def stable_fingerprint(value, numeric_places=None):
     """Hash JSON semantic values, ignoring PostgreSQL numeric scale/format.
 
     Distinguishes text, booleans, nulls, arrays and objects; treats 0.0
@@ -100,7 +106,10 @@ def stable_fingerprint(value):
         if v is None: return ["null"]
         if isinstance(v,bool): return ["bool",v]
         if isinstance(v,(int,float,Decimal)):
-            return ["number",format(Decimal(str(v)).normalize(),"f")]
+            n=Decimal(str(v))
+            if numeric_places is not None:
+                n=n.quantize(Decimal(1).scaleb(-numeric_places))
+            return ["number",format(n.normalize(),"f")]
         if isinstance(v,str): return ["string",v]
         if isinstance(v,list): return ["array",[normalize(x) for x in v]]
         if isinstance(v,dict):
