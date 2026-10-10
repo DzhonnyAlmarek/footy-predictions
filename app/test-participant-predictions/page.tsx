@@ -26,8 +26,17 @@ export default function ParticipantPredictionsPage() {
     return () => controller.abort();
   }, []);
 
+  async function logout() {
+    try {
+      const res = await fetch("/api/test/participant-logout", { method: "POST", credentials: "same-origin" });
+      if (!res.ok) { setError("Не удалось завершить сессию. Попробуй ещё раз."); return; }
+      window.location.replace("/test-participant-login");
+    } catch { setError("Не удалось завершить сессию."); }
+  }
+
   return <main style={{ maxWidth: 900, margin: "40px auto", padding: 20 }}>
     <h1>Мои прогнозы — тест Neon</h1>
+    <button type="button" onClick={logout} style={{ marginBottom: 12 }}>Выйти</button>
     <p>Только просмотр. Изменения прогнозов и начисление очков отключены. Данные из изолированной миграционной схемы Neon.</p>
     {!data && !error && <p role="status">Загружаем прогнозы…</p>}
     {error && <p role="alert">{error}</p>}
