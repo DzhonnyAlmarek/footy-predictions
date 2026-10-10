@@ -1,0 +1,61 @@
+# Scheduled migration reconciliation only. No deployment and no DB writes.
+# Important: the rehearsal script is pinned to a reviewed feature-branch commit.
+name: Footy Neon migration read-only audit
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: footy-neon-migration-readonly
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: footy-neon-migration-preview
+    steps:
+      - name: Check out pinned audit implementation
+        uses: actions/checkout@v4
+        with:
+          ref: b3c92aec722c797efc11fa00cfb944375444df85
+          persist-credentials: false
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Offline safety checks
+        run: |
+          python3 -m py_compile scripts/sync-footy-isolated-neon.py
+          python3 scripts/test-sync-footy-safety.py
+
+      - name: Compare live Supabase with isolated Neon (read only)
+        shell: bash
+        env:
+          SUPABASE_READONLY_URL: ${{ secrets.SUPABASE_READONLY_URL }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SUPABASE_READONLY_URL:-}" || -z "${NEON_URL:-}" ]]; then
+            echo "::error::Migration database secrets are not configured."
+            exit 1
+          fi
+          python3 scripts/sync-footy-isolated-neon.py --mode preview | tee /tmp/footy-neon-audit.log
+          {
+            echo "### Supabase → isolated Neon: read-only audit"
+            echo ""
+            echo "Time: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo ""
+            echo '~~~text'
+            cat /tmp/footy-neon-audit.log
+            echo '~~~'
+            echo ""
+            echo "No writes to either database. No deletion or cutover."
+          } >> "$GITHUB_STEP_SUMMARY"
