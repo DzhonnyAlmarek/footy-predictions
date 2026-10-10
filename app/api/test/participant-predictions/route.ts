@@ -28,15 +28,15 @@ export async function GET(req: NextRequest) {
              m.kickoff_at, m.status, m.home_score, m.away_score,
              ht.name AS home_team, at.name AS away_team,
              s.name AS stage_name, t.name AS tour_name,
-             ps.total AS prediction_points
+             pl.points AS prediction_points
       FROM migration_source.predictions p
       JOIN migration_source.matches m ON m.id = p.match_id
       LEFT JOIN migration_source.teams ht ON ht.id = m.home_team_id
       LEFT JOIN migration_source.teams at ON at.id = m.away_team_id
       LEFT JOIN migration_source.stages s ON s.id = m.stage_id
       LEFT JOIN migration_source.tours t ON t.id = m.tour_id
-      LEFT JOIN migration_source.prediction_scores ps
-        ON ps.prediction_id = p.id AND ps.user_id = p.user_id
+      LEFT JOIN migration_source.points_ledger pl
+        ON pl.match_id = p.match_id AND pl.user_id = p.user_id AND pl.reason = 'prediction'
       WHERE p.user_id = ${userId}::uuid
       ORDER BY m.kickoff_at DESC NULLS LAST, p.id DESC
       LIMIT 500`;
