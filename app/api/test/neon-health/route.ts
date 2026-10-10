@@ -1,5 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { NextResponse } from "next/server";
+import { participantAuthEnabled } from "@/lib/neon-participant-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export async function GET() {
       throw new Error("Unexpected query result");
     }
     return NextResponse.json(
-      { ok: true, environment: "isolated-test", database: "connected" },
+      { ok: true, environment: "isolated-test", database: "connected", participantAuthReady: participantAuthEnabled() },
       { headers }
     );
   } catch {
