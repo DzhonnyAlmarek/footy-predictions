@@ -29,6 +29,10 @@ assert m.stable_fingerprint({"points": 1.00, "components": [0.0, 3.750]}) == m.s
 assert m.stable_fingerprint({"number": 1}) != m.stable_fingerprint({"number": "1"})
 assert m.stable_fingerprint({"momentum_series": [1.12345671]}, numeric_places=6) == m.stable_fingerprint({"momentum_series": [1.12345674]}, numeric_places=6)
 assert m.stable_fingerprint({"points": 1.0000001}) != m.stable_fingerprint({"points": 1.0000002})
+assert "expected-checksum" in pathlib.Path(path).read_text()
+assert 'if code!=args.expected_checksum:' in pathlib.Path(path).read_text()
+assert 'PLAN_CHECKSUM=' in pathlib.Path(path).read_text()
+assert "--confirm" in pathlib.Path(path).read_text()
 assert "SET LOCAL statement_timeout" in sql
-print("PASS: delta detection, drift checksum, guarded transaction, canonical numeric hashes, unkeyed-table policy")
+print("PASS: delta detection, drift checksum, guarded transaction, checksum approval gate, canonical numeric hashes, unkeyed-table policy")
 print("No network connections or database writes were performed.")
