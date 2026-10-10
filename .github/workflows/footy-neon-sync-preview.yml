@@ -77,7 +77,8 @@ jobs:
         run: |
           set -euo pipefail
           export PGCONNECT_TIMEOUT=12
-          export PGOPTIONS="-c default_transaction_read_only=on"
+          # Session pooler may reject PGOPTIONS as an unsupported startup parameter.
+          unset PGOPTIONS || true
           tables=(tournaments teams stages tours grand_prix_seasons grand_prix_rounds profiles matches predictions grand_prix_manual_scores points_ledger match_scores prediction_scores analytics_stage_baseline analytics_stage_user analytics_stage_user_archetype analytics_stage_user_momentum import_rpl_matches)
           for entry in supabase neon; do
             if [[ "$entry" == supabase ]]; then
@@ -88,7 +89,7 @@ jobs:
               schema=migration_source
             fi
             errfile="$(mktemp)"
-            if psql -w -X -q -v ON_ERROR_STOP=1 -t -A -c 'SELECT 1' >/dev/null 2>"$errfile"; then
+            if psql -w -X -q -v ON_ERROR_STOP=1 -t -A -c 'BEGIN READ ONLY; SELECT 1; ROLLBACK;' >/dev/null 2>"$errfile"; then
               echo "$entry connection: OK"
             else
               # Never echo raw psql stderr: it may contain a URI or other secrets.
