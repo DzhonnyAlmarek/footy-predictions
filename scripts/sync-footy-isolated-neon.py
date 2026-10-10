@@ -55,7 +55,7 @@ def connections():
 
 def run_psql(url,script,readonly=True):
     env=dict(os.environ)
-    env["PGDATABASE"]=url
+    env.pop("PGDATABASE",None)
     env["PGCONNECT_TIMEOUT"]="12"
     # Supabase session pooler may reject the PGOPTIONS startup parameter.
     # Source snapshots explicitly use BEGIN ... READ ONLY; the source role is read-only.
@@ -63,7 +63,7 @@ def run_psql(url,script,readonly=True):
     if readonly and not script.lstrip().upper().startswith("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;"):
         stop("read-only snapshot must use an explicit read-only transaction")
     try:
-        r=subprocess.run(["psql","-X","-q","-v","ON_ERROR_STOP=1"],
+        r=subprocess.run(["psql","--dbname",url,"-X","-q","-v","ON_ERROR_STOP=1"],
             input=script,text=True,capture_output=True,env=env,timeout=180)
     except (FileNotFoundError,subprocess.TimeoutExpired):
         stop("psql unavailable or timed out; inspect DB status before retry")
