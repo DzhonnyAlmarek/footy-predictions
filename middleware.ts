@@ -38,6 +38,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Invitation-only enrollment, separately gated and never enabled by default.
+  if ((pathname === "/test-participant-enroll" || pathname === "/api/test/enroll") &&
+      process.env.DEPLOY_TARGET === "yandex-neon-test" &&
+      process.env.ENABLE_NEON_PARTICIPANT_AUTH === "true" &&
+      process.env.ENABLE_NEON_PARTICIPANT_ENROLLMENT === "true") {
+    return NextResponse.next();
+  }
+
   // Developer-only local E2E test gate. NEVER enable on deployed test/production:
   // both dev mode and the exact loopback Host must match.
   const localAuthRoutes = new Set([
