@@ -205,6 +205,8 @@ def main():
     ap.add_argument("--mode",choices=["preview","apply"],default="preview")
     ap.add_argument("--plan-file")
     ap.add_argument("--confirm")
+    ap.add_argument("--expected-checksum", help="SHA-256 fingerprint shown in a separately reviewed preview")
+    ap.add_argument("--print-checksum", action="store_true")
     args=ap.parse_args()
     src_url,neon_url=connections()
     if args.mode=="apply":
@@ -219,6 +221,13 @@ def main():
     d=compare(a,b)
     report(d)
     code=digest(a,b)
+    if args.print_checksum:
+        print("PLAN_CHECKSUM="+code)
+    if args.mode=="apply":
+        if not args.expected_checksum or not re.fullmatch(r"[a-f0-9]{64}",args.expected_checksum):
+            stop("apply requires the exact 64-character checksum from a reviewed preview")
+        if code!=args.expected_checksum:
+            stop("approved checksum does not match the fresh database snapshot")
     if args.mode=="preview":
         if args.plan_file:
             path=Path(args.plan_file)
