@@ -20,6 +20,12 @@ export async function GET() {
     );
   }
 
+  const allowedHosts = new Set(["ep-holy-smoke-b1y4pzhn.c-5.eu-central-1.aws.neon.tech", "ep-holy-smoke-b1y4pzhn-pooler.c-5.eu-central-1.aws.neon.tech"]);
+  const connectionTarget = (() => {
+    try { return allowedHosts.has(new URL(connectionString).hostname) ? "expected" : "different"; }
+    catch { return "invalid"; }
+  })();
+
   try {
     const sql = neon(connectionString);
     const rows = await sql`SELECT 1 AS connected`;
@@ -27,7 +33,7 @@ export async function GET() {
       throw new Error("Unexpected query result");
     }
     return NextResponse.json(
-      { ok: true, environment: "isolated-test", database: "connected", participantAuthReady: participantAuthEnabled() },
+      { ok: true, environment: "isolated-test", database: "connected", participantAuthReady: participantAuthEnabled(), connectionTarget },
       { headers }
     );
   } catch {
