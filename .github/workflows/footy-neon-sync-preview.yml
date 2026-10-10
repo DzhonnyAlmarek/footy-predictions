@@ -1,0 +1,51 @@
+# Read-only migration rehearsal. Never writes to Supabase or Neon.
+# This workflow is prepared on feature/neon-participant-auth and will only be
+# enabled after a separately approved merge/deployment plan.
+name: Footy isolated Neon sync preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: footy-isolated-neon-preview
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: footy-neon-migration-preview
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Validate required read-only connections
+        shell: bash
+        env:
+          SUPABASE_READONLY_URL: ${{ secrets.SUPABASE_READONLY_URL }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SUPABASE_READONLY_URL}" || -z "${NEON_URL}" ]]; then
+            echo "Migration secrets are missing. No databases were accessed."
+            exit 1
+          fi
+          echo "Connection secrets present; running read-only comparison."
+      - name: Verify Python and read-only safety checks
+        run: |
+          python3 -m py_compile scripts/sync-footy-isolated-neon.py
+          python3 scripts/test-sync-footy-safety.py
+      - name: Compare Supabase and isolated Neon (no writes)
+        env:
+          SUPABASE_READONLY_URL: ${{ secrets.SUPABASE_READONLY_URL }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+        run: |
+          python3 scripts/sync-footy-isolated-neon.py --mode preview
