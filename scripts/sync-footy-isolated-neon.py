@@ -41,8 +41,13 @@ def connections():
     if not src or not dst: stop("missing source/target URL; never paste secrets in chat")
     try: a,b=urlsplit(src),urlsplit(dst)
     except ValueError: stop("invalid connection URL")
-    if a.hostname!="db.dfcfixmvplkhkaayfbbd.supabase.co" or a.username!="footy_migration_reader":
-        stop("source must use dedicated Supabase read-only role and direct project endpoint")
+    source_direct=(a.hostname=="db.dfcfixmvplkhkaayfbbd.supabase.co"
+                   and a.username=="footy_migration_reader" and a.port==5432)
+    source_pooler=(a.hostname=="aws-1-eu-west-1.pooler.supabase.com"
+                   and a.username=="footy_migration_reader.dfcfixmvplkhkaayfbbd"
+                   and a.port==5432)
+    if not (source_direct or source_pooler):
+        stop("source must use the dedicated Supabase read-only role via approved direct or session-pooler endpoint")
     if b.hostname not in NEON_HOSTS: stop("target is NOT isolated migration-work Neon branch")
     if a.scheme not in ("postgres","postgresql") or b.scheme not in ("postgres","postgresql"):
         stop("unexpected DB URL scheme")
