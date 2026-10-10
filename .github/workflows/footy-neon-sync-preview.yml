@@ -43,6 +43,10 @@ jobs:
             exit 1
           fi
           echo "Connection secrets present; running read-only comparison."
+      - name: Show sanitized rehearsal configuration
+        run: |
+          echo "Migration workflow commit: ${GITHUB_SHA}"
+          echo "Mode: read-only preview; Supabase session pooler now allowed"
       - name: Verify Python and read-only safety checks
         run: |
           python3 -m py_compile scripts/sync-footy-isolated-neon.py
