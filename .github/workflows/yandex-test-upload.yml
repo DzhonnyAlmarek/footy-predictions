@@ -1,0 +1,112 @@
+name: Yandex test image upload (manual only)
+
+# Registered on the default branch for manual dispatch only.
+# Upload is allowed exclusively for deploy/yandex-cloud with explicit confirmation.
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Enter UPLOAD-TEST-IMAGE to authorize registry push"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: yandex-test-image-publish
+  cancel-in-progress: false
+
+jobs:
+  upload-only:
+    if: >-
+      github.ref == 'refs/heads/deploy/yandex-cloud' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.confirmation == 'UPLOAD-TEST-IMAGE'
+    environment: yandex-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Validate publish scope
+        shell: bash
+        env:
+          REGISTRY_ID: crpocq57tud830bhe7ck
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REF}" == "refs/heads/deploy/yandex-cloud" ]]
+          [[ "${REGISTRY_ID}" =~ ^crp[a-z0-9]{12,30}$ ]] || { echo "Invalid Container Registry ID"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build isolated Docker image
+        run: |
+          set -euo pipefail
+          grep -q '^ENV DEPLOY_TARGET=yandex-neon-test$' Dockerfile
+          ! grep -q '^ARG NEXT_PUBLIC_SUPABASE_' Dockerfile
+          docker build --pull -t footy-test:local .
+      - name: Smoke test isolated container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name footy-upload-check -p 127.0.0.1:18080:8080 footy-test:local
+          trap 'docker logs footy-upload-check || true; docker rm -f footy-upload-check || true' EXIT
+          success=0
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:18080/api/test/health -o /tmp/test-health.json 2>/dev/null; then
+              success=1
+              break
+            fi
+            sleep 2
+          done
+          [[ "$success" == "1" ]]
+          grep -q '"environment":"isolated-test"' /tmp/test-health.json
+          status="$(curl -s -o /tmp/blocked.json -w '%{http_code}' http://127.0.0.1:18080/api/login)"
+          [[ "$status" == "503" ]]
+          grep -q 'isolated_test_api_disabled' /tmp/blocked.json
+          neon_status="$(curl -s -o /tmp/neon-check.json -w '%{http_code}' http://127.0.0.1:18080/api/test/neon-health)"
+          [[ "$neon_status" == "503" ]]
+          grep -q '"database":"not-configured"' /tmp/neon-check.json
+      - name: Request GitHub OIDC token for Yandex Cloud
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(token);
+            core.setOutput('jwt', token);
+      - name: Exchange OIDC token and authenticate to Cloud Registry
+        shell: bash
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+          SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            --request POST 'https://auth.yandex.cloud/oauth/token' \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${GITHUB_OIDC_JWT}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          iam_token="$(jq -er '.access_token' <<< "$response")"
+          echo "::add-mask::${iam_token}"
+          printf '%s' "$iam_token" | docker login registry.yandexcloud.net --username iam --password-stdin
+          unset iam_token response GITHUB_OIDC_JWT
+      - name: Upload image only (no deployment)
+        shell: bash
+        env:
+          REGISTRY_ID: crpocq57tud830bhe7ck
+        run: |
+          set -euo pipefail
+          IMAGE="registry.yandexcloud.net/${REGISTRY_ID}/footy-predictions-test:${GITHUB_SHA}"
+          docker tag footy-test:local "$IMAGE"
+          docker push "$IMAGE"
+          echo "Uploaded image: $IMAGE"
+          echo "No Serverless Container revision was created."
+      - name: Logout
+        if: always()
+        run: docker logout registry.yandexcloud.net || true
