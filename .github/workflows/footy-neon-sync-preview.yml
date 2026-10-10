@@ -113,6 +113,16 @@ jobs:
                 category="TLS / certificate negotiation"
               elif grep -qiE 'invalid URI|invalid connection option|invalid port|missing.*password' "$errfile"; then
                 category="malformed connection URL"
+              elif grep -qiE 'role .* does not exist|role does not exist|user .* does not exist' "$errfile"; then
+                category="PostgreSQL role not found"
+              elif grep -qiE 'unsupported startup parameter|unsupported parameter|unsupported option|unrecognized configuration parameter' "$errfile"; then
+                category="unsupported startup parameter"
+              elif grep -qiE 'SASL|SCRAM|auth query|EAUTHQUERY|authentication backend' "$errfile"; then
+                category="SCRAM or pooler authentication backend"
+              elif grep -qiE 'database .* does not exist|unknown database' "$errfile"; then
+                category="database name not found"
+              elif grep -qiE 'too many connections|remaining connection slots|pool is full' "$errfile"; then
+                category="connection limit"
               elif grep -qiE 'no pg_hba.conf entry|permission denied|not allowed' "$errfile"; then
                 category="access restriction"
               elif grep -qiE 'fe_sendauth: no password supplied' "$errfile"; then
