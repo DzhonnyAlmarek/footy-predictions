@@ -1,10 +1,14 @@
 # Read-only migration rehearsal. Never writes to Supabase or Neon.
-# This workflow is prepared on feature/neon-participant-auth and will only be
-# enabled after a separately approved merge/deployment plan.
+# Feature-branch-only safe preview trigger; no deployment or database writes.
 name: Footy isolated Neon sync preview
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/neon-participant-auth
+    paths:
+      - .github/workflows/footy-neon-sync-preview.yml
 
 permissions:
   contents: read
