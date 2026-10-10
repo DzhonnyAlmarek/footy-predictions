@@ -25,6 +25,19 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/test-login", req.url));
   }
 
+  // Read-only participant cabinet on the explicitly isolated Yandex test runtime.
+  // Every participant API independently validates its Neon session and database scope.
+  const participantRoutes = new Set([
+    "/test-participant-login", "/test-participant-predictions",
+    "/api/test/participant-login", "/api/test/participant-session",
+    "/api/test/participant-predictions", "/api/test/participant-logout",
+  ]);
+  if (participantRoutes.has(pathname) &&
+      process.env.DEPLOY_TARGET === "yandex-neon-test" &&
+      process.env.ENABLE_NEON_PARTICIPANT_AUTH === "true") {
+    return NextResponse.next();
+  }
+
   // Developer-only local E2E test gate. NEVER enable on deployed test/production:
   // both dev mode and the exact loopback Host must match.
   const localAuthRoutes = new Set([
