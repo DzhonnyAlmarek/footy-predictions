@@ -51,6 +51,24 @@ jobs:
         run: |
           python3 -m py_compile scripts/sync-footy-isolated-neon.py
           python3 scripts/test-sync-footy-safety.py
+      - name: Validate secret URL structure without disclosure
+        shell: bash
+        env:
+          SUPABASE_READONLY_URL: ${{ secrets.SUPABASE_READONLY_URL }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit, unquote
+          for var in ("SUPABASE_READONLY_URL", "NEON_URL"):
+              raw = os.environ.get(var, "")
+              print(f"{var}: present={bool(raw)}, trailing_whitespace={raw != raw.strip()}, contains_placeholder={'YOUR-PASSWORD' in raw or 'ТВОЙ_ПАРОЛЬ' in raw}")
+              try:
+                  u = urlsplit(raw)
+                  print(f"{var}: scheme_valid={u.scheme in ('postgres', 'postgresql')}, host_present={bool(u.hostname)}, user_present={bool(u.username)}, password_present={bool(u.password)}, port_valid={u.port == 5432}, db_valid={u.path == '/postgres' if var.startswith('SUPABASE') else u.path == '/neondb'}, url_has_query={bool(u.query)}, user_is_expected={unquote(u.username or '') == ('footy_migration_reader.dfcfixmvplkhkaayfbbd' if 'pooler.supabase.com' in (u.hostname or '') else 'footy_migration_reader') if var.startswith('SUPABASE') else True}")
+              except ValueError:
+                  print(f"{var}: malformed URI structure")
+          PY
       - name: Diagnose read-only database access safely
         shell: bash
         env:
@@ -90,6 +108,12 @@ jobs:
                 category="access restriction"
               elif grep -qiE 'fe_sendauth: no password supplied' "$errfile"; then
                 category="no usable password in connection URL"
+              elif grep -qiE 'could not connect to server|connection refused|server closed the connection|connection reset|EOF detected' "$errfile"; then
+                category="server connection refused or dropped"
+              elif grep -qiE 'FATAL|ERROR' "$errfile"; then
+                category="PostgreSQL server rejected session (unrecognized server error)"
+              elif grep -qiE 'psql:.*option|psql:.*usage|psql:.*invalid' "$errfile"; then
+                category="psql connection invocation or URI error"
               else
                 category="unclassified PostgreSQL connection error"
               fi
