@@ -2693,6 +2693,78 @@ CREATE POLICY "audit_select_admin" ON "public"."audit_log" FOR SELECT TO "authen
 
 
 
+CREATE POLICY "footy_migration_reader_select" ON "public"."analytics_stage_baseline" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."analytics_stage_user" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."analytics_stage_user_archetype" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."analytics_stage_user_momentum" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."grand_prix_manual_scores" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."grand_prix_rounds" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."grand_prix_seasons" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."import_rpl_matches" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."match_scores" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."matches" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."points_ledger" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."prediction_scores" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."predictions" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."profiles" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."stages" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."teams" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."tournaments" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
+CREATE POLICY "footy_migration_reader_select" ON "public"."tours" FOR SELECT TO "footy_migration_reader" USING (true);
+
+
+
 CREATE POLICY "grand prix manual scores select authenticated" ON "public"."grand_prix_manual_scores" FOR SELECT TO "authenticated" USING (true);
 
 
@@ -2894,6 +2966,7 @@ GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
+GRANT USAGE ON SCHEMA "public" TO "footy_migration_reader";
 
 
 
@@ -3218,24 +3291,28 @@ GRANT ALL ON FUNCTION "public"."set_updated_at"() TO "service_role";
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_baseline" TO "anon";
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_baseline" TO "authenticated";
 GRANT ALL ON TABLE "public"."analytics_stage_baseline" TO "service_role";
+GRANT SELECT ON TABLE "public"."analytics_stage_baseline" TO "footy_migration_reader";
 
 
 
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_user" TO "anon";
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_user" TO "authenticated";
 GRANT ALL ON TABLE "public"."analytics_stage_user" TO "service_role";
+GRANT SELECT ON TABLE "public"."analytics_stage_user" TO "footy_migration_reader";
 
 
 
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_user_archetype" TO "anon";
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."analytics_stage_user_archetype" TO "authenticated";
 GRANT ALL ON TABLE "public"."analytics_stage_user_archetype" TO "service_role";
+GRANT SELECT ON TABLE "public"."analytics_stage_user_archetype" TO "footy_migration_reader";
 
 
 
 GRANT ALL ON TABLE "public"."analytics_stage_user_momentum" TO "anon";
 GRANT ALL ON TABLE "public"."analytics_stage_user_momentum" TO "authenticated";
 GRANT ALL ON TABLE "public"."analytics_stage_user_momentum" TO "service_role";
+GRANT SELECT ON TABLE "public"."analytics_stage_user_momentum" TO "footy_migration_reader";
 
 
 
@@ -3254,6 +3331,7 @@ GRANT ALL ON SEQUENCE "public"."audit_log_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."grand_prix_manual_scores" TO "anon";
 GRANT ALL ON TABLE "public"."grand_prix_manual_scores" TO "authenticated";
 GRANT ALL ON TABLE "public"."grand_prix_manual_scores" TO "service_role";
+GRANT SELECT ON TABLE "public"."grand_prix_manual_scores" TO "footy_migration_reader";
 
 
 
@@ -3266,6 +3344,7 @@ GRANT ALL ON SEQUENCE "public"."grand_prix_manual_scores_id_seq" TO "service_rol
 GRANT ALL ON TABLE "public"."grand_prix_rounds" TO "anon";
 GRANT ALL ON TABLE "public"."grand_prix_rounds" TO "authenticated";
 GRANT ALL ON TABLE "public"."grand_prix_rounds" TO "service_role";
+GRANT SELECT ON TABLE "public"."grand_prix_rounds" TO "footy_migration_reader";
 
 
 
@@ -3278,6 +3357,7 @@ GRANT ALL ON SEQUENCE "public"."grand_prix_rounds_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."grand_prix_seasons" TO "anon";
 GRANT ALL ON TABLE "public"."grand_prix_seasons" TO "authenticated";
 GRANT ALL ON TABLE "public"."grand_prix_seasons" TO "service_role";
+GRANT SELECT ON TABLE "public"."grand_prix_seasons" TO "footy_migration_reader";
 
 
 
@@ -3290,6 +3370,7 @@ GRANT ALL ON SEQUENCE "public"."grand_prix_seasons_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."import_rpl_matches" TO "anon";
 GRANT ALL ON TABLE "public"."import_rpl_matches" TO "authenticated";
 GRANT ALL ON TABLE "public"."import_rpl_matches" TO "service_role";
+GRANT SELECT ON TABLE "public"."import_rpl_matches" TO "footy_migration_reader";
 
 
 
@@ -3302,12 +3383,14 @@ GRANT ALL ON TABLE "public"."login_accounts" TO "service_role";
 GRANT ALL ON TABLE "public"."match_scores" TO "anon";
 GRANT ALL ON TABLE "public"."match_scores" TO "authenticated";
 GRANT ALL ON TABLE "public"."match_scores" TO "service_role";
+GRANT SELECT ON TABLE "public"."match_scores" TO "footy_migration_reader";
 
 
 
 GRANT ALL ON TABLE "public"."matches" TO "anon";
 GRANT ALL ON TABLE "public"."matches" TO "authenticated";
 GRANT ALL ON TABLE "public"."matches" TO "service_role";
+GRANT SELECT ON TABLE "public"."matches" TO "footy_migration_reader";
 
 
 
@@ -3320,6 +3403,7 @@ GRANT ALL ON SEQUENCE "public"."matches_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."points_ledger" TO "anon";
 GRANT ALL ON TABLE "public"."points_ledger" TO "authenticated";
 GRANT ALL ON TABLE "public"."points_ledger" TO "service_role";
+GRANT SELECT ON TABLE "public"."points_ledger" TO "footy_migration_reader";
 
 
 
@@ -3332,12 +3416,14 @@ GRANT ALL ON SEQUENCE "public"."points_ledger_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."prediction_scores" TO "anon";
 GRANT ALL ON TABLE "public"."prediction_scores" TO "authenticated";
 GRANT ALL ON TABLE "public"."prediction_scores" TO "service_role";
+GRANT SELECT ON TABLE "public"."prediction_scores" TO "footy_migration_reader";
 
 
 
 GRANT ALL ON TABLE "public"."predictions" TO "anon";
 GRANT ALL ON TABLE "public"."predictions" TO "authenticated";
 GRANT ALL ON TABLE "public"."predictions" TO "service_role";
+GRANT SELECT ON TABLE "public"."predictions" TO "footy_migration_reader";
 
 
 
@@ -3350,12 +3436,14 @@ GRANT ALL ON SEQUENCE "public"."predictions_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."profiles" TO "anon";
 GRANT ALL ON TABLE "public"."profiles" TO "authenticated";
 GRANT ALL ON TABLE "public"."profiles" TO "service_role";
+GRANT SELECT ON TABLE "public"."profiles" TO "footy_migration_reader";
 
 
 
 GRANT ALL ON TABLE "public"."stages" TO "anon";
 GRANT ALL ON TABLE "public"."stages" TO "authenticated";
 GRANT ALL ON TABLE "public"."stages" TO "service_role";
+GRANT SELECT ON TABLE "public"."stages" TO "footy_migration_reader";
 
 
 
@@ -3368,6 +3456,7 @@ GRANT ALL ON SEQUENCE "public"."stages_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."teams" TO "anon";
 GRANT ALL ON TABLE "public"."teams" TO "authenticated";
 GRANT ALL ON TABLE "public"."teams" TO "service_role";
+GRANT SELECT ON TABLE "public"."teams" TO "footy_migration_reader";
 
 
 
@@ -3380,6 +3469,7 @@ GRANT ALL ON SEQUENCE "public"."teams_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."telegram_broadcast_log" TO "anon";
 GRANT ALL ON TABLE "public"."telegram_broadcast_log" TO "authenticated";
 GRANT ALL ON TABLE "public"."telegram_broadcast_log" TO "service_role";
+GRANT SELECT ON TABLE "public"."telegram_broadcast_log" TO "footy_migration_reader";
 
 
 
@@ -3392,6 +3482,7 @@ GRANT ALL ON SEQUENCE "public"."telegram_broadcast_log_id_seq" TO "service_role"
 GRANT ALL ON TABLE "public"."tournaments" TO "anon";
 GRANT ALL ON TABLE "public"."tournaments" TO "authenticated";
 GRANT ALL ON TABLE "public"."tournaments" TO "service_role";
+GRANT SELECT ON TABLE "public"."tournaments" TO "footy_migration_reader";
 
 
 
@@ -3404,6 +3495,7 @@ GRANT ALL ON SEQUENCE "public"."tournaments_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."tours" TO "anon";
 GRANT ALL ON TABLE "public"."tours" TO "authenticated";
 GRANT ALL ON TABLE "public"."tours" TO "service_role";
+GRANT SELECT ON TABLE "public"."tours" TO "footy_migration_reader";
 
 
 
