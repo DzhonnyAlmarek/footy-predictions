@@ -57,7 +57,7 @@ jobs:
       - name: Check out pinned and tested migration script
         uses: actions/checkout@v4
         with:
-          ref: 70fef5c1b4ddb58723cce6da51a061c51a7c9f57
+          ref: 06cb320cc9e54512c588d1c9212c117df04c49b3
           persist-credentials: false
 
       - name: Install PostgreSQL client
