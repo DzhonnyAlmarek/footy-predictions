@@ -1,0 +1,44 @@
+name: Footy Neon sync failure alert
+
+on:
+  workflow_run:
+    workflows:
+      - "Footy isolated Neon sync (manual)"
+    types:
+      - completed
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: footy-neon-sync-alert
+  cancel-in-progress: false
+
+jobs:
+  alert-on-failure:
+    if: >-
+      github.event.workflow_run.head_branch == 'deploy/yandex-cloud' &&
+      contains(fromJSON('["failure","timed_out","action_required"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Create or update sync incident issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_TIME: ${{ github.event.workflow_run.updated_at }}
+        run: |
+          set -euo pipefail
+          title='Footy: ошибка синхронизации Supabase → Neon'
+          body=$(printf '⚠️ Синхронизация тестовой Neon завершилась с ошибкой.\n\n- Запуск: %s\n- Номер: %s\n- Состояние: %s\n- Время (UTC): %s\n\nПроверь журнал запуска. Рабочую Supabase изменять не нужно.\n' "$RUN_URL" "$RUN_ID" "$CONCLUSION" "$RUN_TIME")
+          existing=$(gh issue list --repo "$GH_REPO" --state open --limit 100 --json number,title --jq '.[] | select(.title == "Footy: ошибка синхронизации Supabase → Neon") | .number' | head -n 1)
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --repo "$GH_REPO" --body "$body"
+            echo "Updated existing incident issue #$existing"
+          else
+            gh issue create --repo "$GH_REPO" --title "$title" --body "$body"
+          fi
