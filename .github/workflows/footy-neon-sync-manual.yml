@@ -1,0 +1,47 @@
+name: Footy isolated Neon sync (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run or apply to isolated Neon only"
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - apply
+      confirm:
+        description: "For apply type APPLY-ISOLATED-NEON; otherwise leave empty"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: footy-test-neon-manual-sync
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    if: github.ref == 'refs/heads/deploy/yandex-cloud' && (inputs.mode == 'dry-run' || (inputs.mode == 'apply' && inputs.confirm == 'APPLY-ISOLATED-NEON'))
+    runs-on: ubuntu-24.04
+    environment: yandex-test
+    timeout-minutes: 15
+    env:
+      FOOTY_SOURCE_SUPABASE_DATABASE_URL: ${{ secrets.FOOTY_SOURCE_SUPABASE_DATABASE_URL }}
+      FOOTY_SOURCE_SUPABASE_CA_CERT: ${{ secrets.FOOTY_SOURCE_SUPABASE_CA_CERT }}
+      FOOTY_TEST_NEON_DATABASE_URL: ${{ secrets.FOOTY_TEST_NEON_DATABASE_URL }}
+      FOOTY_SYNC_MODE: ${{ inputs.mode }}
+      FOOTY_SYNC_CONFIRM: ${{ inputs.confirm }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install locked dependencies and PostgreSQL client
+        run: |
+          npm ci --ignore-scripts
+          npm install --no-save --package-lock=false --ignore-scripts pg@8
+      - name: Compare and optionally apply isolated sync
+        run: node scripts/footy-neon-sync-manual.mjs
