@@ -1,0 +1,26 @@
+name: Footy Supabase to Neon diff (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    if: github.ref == 'refs/heads/deploy/yandex-cloud'
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 15
+    env:
+      FOOTY_SOURCE_SUPABASE_URL: ${{ secrets.FOOTY_SOURCE_SUPABASE_URL }}
+      FOOTY_SOURCE_SUPABASE_READ_KEY: ${{ secrets.FOOTY_SOURCE_SUPABASE_READ_KEY }}
+      FOOTY_TEST_NEON_DATABASE_URL: ${{ secrets.FOOTY_TEST_NEON_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Compare read-only; never write to either database
+        run: node scripts/footy-neon-diff-readonly.mjs
