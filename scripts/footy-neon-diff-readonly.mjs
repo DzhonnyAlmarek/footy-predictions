@@ -1,26 +1,30 @@
 // Read-only Supabase -> isolated Neon comparison. No database writes.
-import { createClient } from "@supabase/supabase-js";
+import pg from "pg";
 import { neon } from "@neondatabase/serverless";
 
 const hostAllowlist = new Set([
   "ep-holy-smoke-b1y4pzhn.c-5.eu-central-1.aws.neon.tech",
   "ep-holy-smoke-b1y4pzhn-pooler.c-5.eu-central-1.aws.neon.tech"
 ]);
-const sourceUrl = process.env.FOOTY_SOURCE_SUPABASE_URL;
-const sourceKey = process.env.FOOTY_SOURCE_SUPABASE_READ_KEY;
+const sourceUrl = process.env.FOOTY_SOURCE_SUPABASE_DATABASE_URL;
 const destinationUrl = process.env.FOOTY_TEST_NEON_DATABASE_URL;
-if (!sourceUrl || !sourceKey || !destinationUrl) {
+if (!sourceUrl || !destinationUrl) {
   throw new Error("Missing dedicated sync secrets; no operations executed");
 }
 if (!hostAllowlist.has(new URL(destinationUrl).hostname)) {
   throw new Error("Neon endpoint is not the isolated migration branch");
 }
-if (new URL(sourceUrl).protocol !== "https:") {
-  throw new Error("Source Supabase URL must use HTTPS");
+const sourceParsed = new URL(sourceUrl);
+if (sourceParsed.protocol !== "postgresql:" && sourceParsed.protocol !== "postgres:") {
+  throw new Error("Source must be a Postgres connection URI");
 }
-const source = createClient(sourceUrl, sourceKey, {
-  auth: { persistSession: false, autoRefreshToken: false }
-});
+if (!/^([a-z0-9.-]+\\.)?supabase\\.co$/.test(sourceParsed.hostname) ||
+    !sourceParsed.hostname.includes("dfcfixmvplkhkaayfbbd") ||
+    sourceParsed.username !== "footy_migration_reader") {
+  throw new Error("Source is not the dedicated Footy read-only PostgreSQL role");
+}
+const source = new pg.Client({ connectionString: sourceUrl, ssl: { rejectUnauthorized: false },
+  connectionTimeoutMillis: 15000 });
 const target = neon(destinationUrl);
 const PAGE_SIZE = 500;
 const TABLES = ["matches", "predictions", "points_ledger"];
@@ -28,11 +32,14 @@ const TABLES = ["matches", "predictions", "points_ledger"];
 async function sourceRows(table) {
   const result = [];
   for (let offset = 0; ; offset += PAGE_SIZE) {
-    const { data, error } = await source.from(table).select("*")
-      .order("id", { ascending: true }).range(offset, offset + PAGE_SIZE - 1);
-    if (error) throw new Error("Supabase read failed for " + table + ": " + error.code);
-    result.push(...data);
-    if (data.length < PAGE_SIZE) break;
+    const query = {
+      text: 'SELECT row_to_json(t) AS row FROM public.' + table +
+        ' t ORDER BY id LIMIT $1 OFFSET $2',
+      values: [PAGE_SIZE, offset]
+    };
+    const { rows } = await source.query(query);
+    result.push(...rows.map(r => r.row));
+    if (rows.length < PAGE_SIZE) break;
   }
   return result;
 }
@@ -67,6 +74,9 @@ function canonical(row) {
   return JSON.stringify(Object.keys(row).sort().map(k => [k, normalized(row[k])]));
 }
 let differences = 0;
+await source.connect();
+await source.query("BEGIN TRANSACTION READ ONLY");
+try {
 for (const table of TABLES) {
   const [a, b] = await Promise.all([sourceRows(table), targetRows(table)]);
   const S = new Map(a.map(r => [String(r.id), r]));
@@ -81,5 +91,9 @@ for (const table of TABLES) {
     new_ids: missing.slice(0, 50), changed_ids: changed.slice(0, 50),
     only_neon_ids: extra.slice(0, 50)
   }));
+}
+} finally {
+  await source.query("ROLLBACK");
+  await source.end();
 }
 console.log("DRY_RUN_ONLY: true; total_differences:", differences);
