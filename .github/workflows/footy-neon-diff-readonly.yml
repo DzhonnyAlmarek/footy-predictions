@@ -14,6 +14,7 @@ jobs:
     timeout-minutes: 15
     env:
       FOOTY_SOURCE_SUPABASE_DATABASE_URL: ${{ secrets.FOOTY_SOURCE_SUPABASE_DATABASE_URL }}
+      FOOTY_SOURCE_SUPABASE_CA_CERT: ${{ secrets.FOOTY_SOURCE_SUPABASE_CA_CERT }}
       FOOTY_TEST_NEON_DATABASE_URL: ${{ secrets.FOOTY_TEST_NEON_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
