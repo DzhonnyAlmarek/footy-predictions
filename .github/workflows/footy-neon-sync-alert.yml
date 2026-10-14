@@ -1,6 +1,7 @@
 name: Footy Neon sync failure alert
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows:
       - "Footy isolated Neon sync (manual)"
@@ -42,3 +43,19 @@ jobs:
           else
             gh issue create --repo "$GH_REPO" --title "$title" --body "$body"
           fi
+
+  test-alert:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Create a clearly labeled test incident
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title='[ТЕСТ] Footy: проверка уведомлений синхронизации'
+          body=$(printf 'Это тест системы уведомлений; реального сбоя базы или синхронизации не было.\n\nПроверочный запуск: %s\n\nПосле проверки уведомления эту Issue можно закрыть.\n' "$RUN_URL")
+          gh issue create --repo "$GH_REPO" --title "$title" --body "$body"
