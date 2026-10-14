@@ -3,12 +3,16 @@ name: Yandex test registry check (read-only)
 on:
   workflow_dispatch:
 
+# Only the isolated deployment branch may access yandex-test.
+
+
 permissions:
   contents: read
   id-token: write
 
 jobs:
   inspect:
+    if: github.ref == 'refs/heads/deploy/yandex-cloud'
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 10
