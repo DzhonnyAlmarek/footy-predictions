@@ -23,7 +23,7 @@ if (!/^([a-z0-9.-]+\\.)?supabase\\.co$/.test(sourceParsed.hostname) ||
     sourceParsed.username !== "footy_migration_reader") {
   throw new Error("Source is not the dedicated Footy read-only PostgreSQL role");
 }
-const source = new pg.Client({ connectionString: sourceUrl, ssl: { rejectUnauthorized: false },
+const source = new pg.Client({ connectionString: sourceUrl, ssl: { rejectUnauthorized: true },
   connectionTimeoutMillis: 15000 });
 const target = neon(destinationUrl);
 const PAGE_SIZE = 500;
