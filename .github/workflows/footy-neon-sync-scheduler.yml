@@ -1,0 +1,32 @@
+name: Footy Neon sync scheduler (30 min)
+
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: footy-neon-sync-dispatcher
+  cancel-in-progress: false
+
+jobs:
+  dispatch-protected-sync:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch sync on protected deploy branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/${GH_REPO}/actions/workflows/footy-neon-sync-manual.yml/dispatches" \
+            -f ref='deploy/yandex-cloud' \
+            -f 'inputs[mode]=apply' \
+            -f 'inputs[confirm]=APPLY-ISOLATED-NEON'
+          echo 'Protected sync dispatched to deploy/yandex-cloud; check the target workflow for actual results.'
