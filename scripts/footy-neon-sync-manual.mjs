@@ -20,7 +20,10 @@ if (!(direct || pooler)) throw Error("Source must use dedicated read-only user")
 const targetKind = process.env.FOOTY_SYNC_TARGET || "migration";
 const validationHosts = new Set(["ep-cool-resonance-b1a56z1z.c-5.eu-central-1.aws.neon.tech"]);
 if (targetKind === "validation") {
-  if (!validationHosts.has(dstUrl.hostname)) throw Error("Validation target must use dedicated Neon host");
+  if (!validationHosts.has(dstUrl.hostname)) {
+    console.error("NEON_TARGET_HOST_CHECK:", JSON.stringify({expected: [...validationHosts], actual_hostname: dstUrl.hostname, actual_port: dstUrl.port || "default"}));
+    throw Error("Validation target must use dedicated Neon host");
+  }
   if (mode === "apply" && process.env.FOOTY_SYNC_CONFIRM !== "APPLY-VALIDATION-ONLY") throw Error("Validation approval missing");
 } else if (targetKind === "migration") {
   if (!branchHost.has(dstUrl.hostname)) throw Error("Neon host not in isolated migration branch allowlist");
