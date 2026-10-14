@@ -26,8 +26,18 @@ const pooler = sourceParsed.hostname.endsWith(".pooler.supabase.com") &&
 if (!direct && !pooler) {
   throw new Error("Source is not the dedicated Footy read-only PostgreSQL role");
 }
-const source = new pg.Client({ connectionString: sourceUrl, ssl: { rejectUnauthorized: true },
-  connectionTimeoutMillis: 15000 });
+const trustedCa = process.env.FOOTY_SOURCE_SUPABASE_CA_CERT;
+if (!trustedCa || !trustedCa.includes("-----BEGIN CERTIFICATE-----") ||
+    !trustedCa.includes("-----END CERTIFICATE-----")) {
+  throw new Error("Missing Supabase server root CA certificate secret");
+}
+sourceParsed.searchParams.delete("sslmode");
+sourceParsed.searchParams.delete("sslrootcert");
+const source = new pg.Client({
+  connectionString: sourceParsed.toString(),
+  ssl: { ca: trustedCa.replace(/\\n/g, "\n"), rejectUnauthorized: true },
+  connectionTimeoutMillis: 15000
+});
 const target = neon(destinationUrl);
 const PAGE_SIZE = 500;
 const TABLES = ["matches", "predictions", "points_ledger"];
