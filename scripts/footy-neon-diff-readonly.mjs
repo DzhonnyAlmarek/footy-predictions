@@ -18,9 +18,12 @@ const sourceParsed = new URL(sourceUrl);
 if (sourceParsed.protocol !== "postgresql:" && sourceParsed.protocol !== "postgres:") {
   throw new Error("Source must be a Postgres connection URI");
 }
-if (!/^([a-z0-9.-]+\\.)?supabase\\.co$/.test(sourceParsed.hostname) ||
-    !sourceParsed.hostname.includes("dfcfixmvplkhkaayfbbd") ||
-    sourceParsed.username !== "footy_migration_reader") {
+const projectRef = "dfcfixmvplkhkaayfbbd";
+const direct = sourceParsed.hostname === "db." + projectRef + ".supabase.co" &&
+  sourceParsed.username === "footy_migration_reader";
+const pooler = sourceParsed.hostname.endsWith(".pooler.supabase.com") &&
+  sourceParsed.username === "footy_migration_reader." + projectRef;
+if (!direct && !pooler) {
   throw new Error("Source is not the dedicated Footy read-only PostgreSQL role");
 }
 const source = new pg.Client({ connectionString: sourceUrl, ssl: { rejectUnauthorized: true },
