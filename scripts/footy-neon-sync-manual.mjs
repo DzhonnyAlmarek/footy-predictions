@@ -44,6 +44,9 @@ async function rows(client, schema, table) {
   return rows.map(r => r.row);
 }
 let transactionOpen = false;
+const report = [];
+let totalAdded = 0;
+let totalUpdated = 0;
 await source.connect();
 try {
   await source.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
@@ -61,6 +64,9 @@ try {
       const modified = incoming.filter(r => N.has(String(r.id)) && canonical(r) !== canonical(N.get(String(r.id))));
       const extra = existing.filter(r => !S.has(String(r.id)));
       console.log(JSON.stringify({ table, source: incoming.length, neon: existing.length, missing: missing.length, changed: modified.length, only_neon: extra.length }));
+      report.push({ table, added: missing.length, updated: modified.length });
+      totalAdded += missing.length;
+      totalUpdated += modified.length;
       if (extra.length) throw Error(table + ": unexpected Neon-only rows; refusing to modify");
       if (missing.length + modified.length > 200) throw Error(table + ": drift over 200 rows; manual review required");
       if (mode === "apply" && (missing.length || modified.length)) {
@@ -82,10 +88,12 @@ try {
       await dest.query("COMMIT");
       transactionOpen = false;
       console.log("APPLIED_AND_VERIFIED: true");
+      console.log("SYNC_SUMMARY:", JSON.stringify({mode, totalAdded, totalUpdated, report}));
     } else {
       await dest.query("ROLLBACK");
       transactionOpen = false;
       console.log("DRY_RUN_ONLY: true");
+      console.log("SYNC_SUMMARY:", JSON.stringify({mode, totalAdded, totalUpdated, report}));
     }
   } finally {
     if (transactionOpen) await dest.query("ROLLBACK").catch(() => {});
