@@ -17,8 +17,17 @@ const project = "dfcfixmvplkhkaayfbbd";
 const direct = srcUrl.hostname === "db." + project + ".supabase.co" && srcUrl.username === "footy_migration_reader";
 const pooler = srcUrl.hostname.endsWith(".pooler.supabase.com") && srcUrl.username === "footy_migration_reader." + project;
 if (!(direct || pooler)) throw Error("Source must use dedicated read-only user");
-if (!branchHost.has(dstUrl.hostname)) throw Error("Neon host not in isolated branch allowlist");
-if (mode === "apply" && process.env.FOOTY_SYNC_CONFIRM !== "APPLY-ISOLATED-NEON") throw Error("Manual confirmation missing");
+const targetKind = process.env.FOOTY_SYNC_TARGET || "migration";
+const validationHosts = new Set(["ep-cool-resonance-b1a56z1z.c-5.eu-central-1.aws.neon.tech"]);
+if (targetKind === "validation") {
+  if (!validationHosts.has(dstUrl.hostname)) throw Error("Validation target must use dedicated Neon host");
+  if (mode === "apply" && process.env.FOOTY_SYNC_CONFIRM !== "APPLY-VALIDATION-ONLY") throw Error("Validation approval missing");
+} else if (targetKind === "migration") {
+  if (!branchHost.has(dstUrl.hostname)) throw Error("Neon host not in isolated migration branch allowlist");
+} else {
+  throw Error("Invalid sync target");
+}
+if (mode === "apply" && targetKind === "migration" && process.env.FOOTY_SYNC_CONFIRM !== "APPLY-ISOLATED-NEON") throw Error("Manual confirmation missing");
 srcUrl.searchParams.delete("sslmode");
 srcUrl.searchParams.delete("sslrootcert");
 const source = new pg.Client({ connectionString: srcUrl.toString(), ssl: { ca: cert.replace(/\\n/g, "\n"), rejectUnauthorized: true }, connectionTimeoutMillis: 15000 });
