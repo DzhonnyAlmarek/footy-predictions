@@ -11,6 +11,11 @@ on:
         options:
           - dry-run
           - apply
+      simulate_failure:
+        description: "TEST ONLY: safely fail before database access"
+        required: false
+        type: boolean
+        default: false
       confirm:
         description: "For apply type APPLY-ISOLATED-NEON; otherwise leave empty"
         required: false
@@ -36,6 +41,11 @@ jobs:
       FOOTY_SYNC_MODE: ${{ inputs.mode }}
       FOOTY_SYNC_CONFIRM: ${{ inputs.confirm }}
     steps:
+      - name: Simulate failure without connecting to databases
+        if: inputs.simulate_failure == true
+        run: |
+          echo "::error::TEST ONLY: simulated sync failure before accessing databases"
+          exit 1
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
