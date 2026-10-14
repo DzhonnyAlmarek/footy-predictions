@@ -1,0 +1,48 @@
+name: Footy Neon isolated validation (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Validation branch only; start with dry-run"
+        required: true
+        type: choice
+        default: dry-run
+        options:
+          - dry-run
+          - apply
+      confirm:
+        description: "For apply type APPLY-VALIDATION-ONLY"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: footy-neon-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/deploy/yandex-cloud' && (inputs.mode == 'dry-run' || (inputs.mode == 'apply' && inputs.confirm == 'APPLY-VALIDATION-ONLY'))
+    runs-on: ubuntu-24.04
+    environment: yandex-test
+    timeout-minutes: 15
+    env:
+      FOOTY_SOURCE_SUPABASE_DATABASE_URL: ${{ secrets.FOOTY_SOURCE_SUPABASE_DATABASE_URL }}
+      FOOTY_SOURCE_SUPABASE_CA_CERT: ${{ secrets.FOOTY_SOURCE_SUPABASE_CA_CERT }}
+      FOOTY_TEST_NEON_DATABASE_URL: ${{ secrets.FOOTY_VALIDATION_NEON_DATABASE_URL }}
+      FOOTY_SYNC_MODE: ${{ inputs.mode }}
+      FOOTY_SYNC_CONFIRM: ${{ inputs.confirm }}
+      FOOTY_SYNC_TARGET: validation
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install project dependencies and PostgreSQL client
+        run: |
+          npm ci --ignore-scripts
+          npm install --no-save --package-lock=false --ignore-scripts pg@8
+      - name: Validate independent Neon branch
+        run: node scripts/footy-neon-sync-manual.mjs
