@@ -18,7 +18,7 @@ const direct = srcUrl.hostname === "db." + project + ".supabase.co" && srcUrl.us
 const pooler = srcUrl.hostname.endsWith(".pooler.supabase.com") && srcUrl.username === "footy_migration_reader." + project;
 if (!(direct || pooler)) throw Error("Source must use dedicated read-only user");
 const targetKind = process.env.FOOTY_SYNC_TARGET || "migration";
-const validationHosts = new Set(["ep-cool-resonance-b1a56z1z.c-5.eu-central-1.aws.neon.tech"]);
+const validationHosts = new Set(["ep-cool-resonance-b1a56z1z.c-5.eu-central-1.aws.neon.tech", "ep-cool-resonance-b1a56z1z-pooler.c-5.eu-central-1.aws.neon.tech"]);
 if (targetKind === "validation") {
   if (!validationHosts.has(dstUrl.hostname)) {
     console.error("NEON_TARGET_HOST_CHECK:", JSON.stringify({expected: [...validationHosts], actual_hostname: dstUrl.hostname, actual_port: dstUrl.port || "default"}));
