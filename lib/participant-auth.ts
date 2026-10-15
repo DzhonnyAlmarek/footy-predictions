@@ -16,7 +16,7 @@ function derivePasswordHash(password: string, salt: Buffer): Promise<Buffer> {
   });
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export const MIN_PASSWORD_LENGTH = 12;
+export const MIN_PASSWORD_LENGTH = 5;
 export const MAX_PASSWORD_LENGTH = 128;
 
 export function isParticipantId(value: unknown): value is string {
