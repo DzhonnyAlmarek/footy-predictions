@@ -53,3 +53,51 @@ export async function POST(req:NextRequest){
   return NextResponse.json({ok:true,draftId:rows[0].draft_id,testOnly:true},{headers:AUTH_HEADERS});
  }catch{return reply("data_unavailable",503);}
 }
+
+export async function PATCH(req:NextRequest){
+ if(!writesEnabled())return reply("writes_disabled",404);
+ if(!participantOriginAllowed(req))return reply("forbidden_origin",403);
+ if(Number(req.headers.get("content-length")||0)>4096)return reply("invalid_body",400);
+ try{
+  if(!await requireTestAdmin(req))return reply("forbidden",403);
+  const b=await req.json().catch(()=>null);
+  if(!b||!validId(b.draftId)||!["edit","delete","restore"].includes(b.action))return reply("invalid_match",400);
+  const sql=participantDatabase();
+  if(b.action==="delete"){
+   const rows=await sql`UPDATE footy_sandbox.calendar_new_matches SET is_deleted=true,updated_at=now()
+    WHERE draft_id=${b.draftId} AND is_deleted=false AND EXISTS
+    (SELECT 1 FROM migration_source.stages s WHERE s.id=stage_id AND s.status='draft')
+    RETURNING draft_id::text`;
+   return rows.length?NextResponse.json({ok:true,testOnly:true},{headers:AUTH_HEADERS}):reply("draft_not_editable",409);
+  }
+  if(b.action==="restore"){
+   // A restored team must still be free in its tour.
+   const rows=await sql`UPDATE footy_sandbox.calendar_new_matches n SET is_deleted=false,updated_at=now()
+    WHERE n.draft_id=${b.draftId} AND n.is_deleted=true
+    AND EXISTS(SELECT 1 FROM migration_source.stages s WHERE s.id=n.stage_id AND s.status='draft')
+    AND NOT EXISTS(SELECT 1 FROM migration_source.matches m WHERE m.tour_id=n.tour_id AND
+      (m.home_team_id IN(n.home_team_id,n.away_team_id) OR m.away_team_id IN(n.home_team_id,n.away_team_id)))
+    AND NOT EXISTS(SELECT 1 FROM footy_sandbox.calendar_new_matches other WHERE other.draft_id<>n.draft_id AND other.tour_id=n.tour_id AND other.is_deleted=false AND
+      (other.home_team_id IN(n.home_team_id,n.away_team_id) OR other.away_team_id IN(n.home_team_id,n.away_team_id)))
+    RETURNING n.draft_id::text`;
+   return rows.length?NextResponse.json({ok:true,testOnly:true},{headers:AUTH_HEADERS}):reply("draft_not_editable",409);
+  }
+  if(!validId(b.stageId)||!validId(b.tourId)||!validId(b.homeTeamId)||!validId(b.awayTeamId)||b.homeTeamId===b.awayTeamId||!validDate(b.kickoffAt)||!validDate(b.deadlineAt))return reply("invalid_match",400);
+  const kickoff=new Date(b.kickoffAt).toISOString(),deadline=new Date(b.deadlineAt).toISOString();
+  if(Date.parse(deadline)>Date.parse(kickoff))return reply("deadline_after_kickoff",400);
+  const rows=await sql`UPDATE footy_sandbox.calendar_new_matches n
+    SET stage_id=${b.stageId},tour_id=${b.tourId},home_team_id=${b.homeTeamId},away_team_id=${b.awayTeamId},
+        kickoff_at=${kickoff}::timestamptz,deadline_at=${deadline}::timestamptz,updated_at=now()
+    WHERE n.draft_id=${b.draftId} AND n.is_deleted=false
+    AND EXISTS(SELECT 1 FROM migration_source.stages s JOIN migration_source.tours t ON t.stage_id=s.id
+      WHERE s.id=${b.stageId} AND s.status='draft' AND t.id=${b.tourId})
+    AND EXISTS(SELECT 1 FROM migration_source.teams WHERE id=${b.homeTeamId})
+    AND EXISTS(SELECT 1 FROM migration_source.teams WHERE id=${b.awayTeamId})
+    AND NOT EXISTS(SELECT 1 FROM migration_source.matches m WHERE m.tour_id=${b.tourId}
+      AND (m.home_team_id IN(${b.homeTeamId},${b.awayTeamId}) OR m.away_team_id IN(${b.homeTeamId},${b.awayTeamId})))
+    AND NOT EXISTS(SELECT 1 FROM footy_sandbox.calendar_new_matches other WHERE other.draft_id<>n.draft_id AND other.tour_id=${b.tourId} AND other.is_deleted=false
+      AND (other.home_team_id IN(${b.homeTeamId},${b.awayTeamId}) OR other.away_team_id IN(${b.homeTeamId},${b.awayTeamId})))
+    RETURNING n.draft_id::text`;
+  return rows.length?NextResponse.json({ok:true,testOnly:true},{headers:AUTH_HEADERS}):reply("draft_not_editable",409);
+ }catch{return reply("data_unavailable",503);}
+}
