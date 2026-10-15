@@ -23,7 +23,7 @@ export async function GET(req:NextRequest){
 }
 
 const validId=(n:unknown):n is number=>typeof n==="number"&&Number.isSafeInteger(n)&&n>0;
-const validDate=(s:unknown)=>typeof s==="string"&&/^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d/.test(s)&&Number.isFinite(Date.parse(s));
+const validDate=(s:unknown)=>typeof s==="string"&&/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(s)&&Number.isFinite(Date.parse(s));
 export async function POST(req:NextRequest){
  if(!writesEnabled())return reply("writes_disabled",404);
  if(!participantOriginAllowed(req))return reply("forbidden_origin",403);
