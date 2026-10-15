@@ -41,7 +41,7 @@ export default function ParticipantDraftsPage() {
     {status && <p role="status">{status}</p>}
     {matches.map(m => <section key={m.match_id} style={{borderBottom:"1px solid #aaa",padding:"12px 0"}}>
       <div><strong>{m.home_team} — {m.away_team}</strong></div>
-      <small>Матч: {new Date(m.kickoff_at).toLocaleString("ru-RU")}; дедлайн: {new Date(m.deadline_at).toLocaleString("ru-RU")}</small>
+      <small>Начало матча и дедлайн: {new Date(m.kickoff_at).toLocaleString("ru-RU")}</small>
       <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
         <input aria-label="Голы хозяев" inputMode="numeric" style={{width:55}} value={scores[m.match_id]?.[0] ?? ""} disabled={!m.editable || busy !== null} onChange={e => setScores(prev=>({...prev,[m.match_id]:[e.target.value,prev[m.match_id]?.[1] ?? ""]}))}/>
         :
