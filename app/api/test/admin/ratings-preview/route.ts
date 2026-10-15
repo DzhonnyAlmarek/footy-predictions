@@ -18,6 +18,7 @@ export async function GET(req:NextRequest) {
    LEFT JOIN original o ON o.user_id=s.user_id ORDER BY s.total DESC,p.username
   `;
   const count=await sql`SELECT count(*)::int AS total FROM footy_sandbox.match_result_overrides`;
-  return NextResponse.json({readonly:true,overrides:count[0]?.total??0,ratings:rows},{headers:AUTH_HEADERS});
+  const changed=await sql`SELECT match_id::text AS id FROM footy_sandbox.match_result_overrides ORDER BY match_id`;
+  return NextResponse.json({readonly:true,overrides:count[0]?.total??0,changedMatchIds:changed.map(x=>x.id),ratings:rows},{headers:AUTH_HEADERS});
  } catch {return NextResponse.json({error:"data_unavailable"},{status:503,headers:AUTH_HEADERS});}
 }
