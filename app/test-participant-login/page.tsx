@@ -59,5 +59,6 @@ export default function TestParticipantLogin() {
       <button type="submit" disabled={busy}>{busy ? "Проверка…" : "Войти"}</button>
       <p role="status">{message}</p>
     </form>
+    <p><a href="/test-change-password">Сменить тестовый пароль (после входа)</a></p>
   </main>;
 }
