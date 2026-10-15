@@ -35,6 +35,7 @@ export async function middleware(req: NextRequest) {
     "/test-participant-ratings", "/api/test/participant-ratings",
     "/test-match-overview", "/api/test/match-overview",
     "/test-change-password", "/api/test/change-password",
+    "/api/test/participant-new-match-predictions", "/test-participant-new-match-predictions",
     "/test-participant-calendar", "/api/test/participant-calendar",
   ]);
   if (participantRoutes.has(pathname) &&
