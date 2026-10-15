@@ -10,7 +10,17 @@ export default function ParticipantDraftsPage() {
   useEffect(() => {
     fetch("/api/test/participant-drafts", {credentials:"same-origin",cache:"no-store"})
       .then(async res => { if (res.status === 401) throw Error("Войди в кабинет участника заново."); if (res.status === 404) throw Error("Тестовые черновики ещё не включены в контейнере."); if (!res.ok) throw Error("Не удалось загрузить матчи."); return res.json(); })
-      .then(data => { const list: Match[] = data.matches || []; setMatches(list); setScores(Object.fromEntries(list.map(m => [m.match_id, [m.home_pred == null ? "" : String(m.home_pred), m.away_pred == null ? "" : String(m.away_pred)]])); setStatus(""); })
+      .then(data => {
+        const list: Match[] = data.matches || [];
+        setMatches(list);
+        const entries = list.map(m => [
+          m.match_id,
+          [m.home_pred == null ? "" : String(m.home_pred),
+           m.away_pred == null ? "" : String(m.away_pred)]
+        ] as [string, [string, string]]);
+        setScores(Object.fromEntries(entries));
+        setStatus("");
+      })
       .catch(e => setStatus(e.message || "Ошибка загрузки"));
   }, []);
   async function save(m: Match) {
