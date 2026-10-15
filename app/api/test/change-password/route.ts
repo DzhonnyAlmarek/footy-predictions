@@ -29,13 +29,21 @@ export async function POST(req:NextRequest) {
   if(!valid) return response("invalid_credentials",401);
   const next=await hashParticipantPassword(newPassword);
   const oldHash=Buffer.from(row.digest,"hex").toString("hex");
-  const updated=await sql`UPDATE test_auth.participant_credentials
-    SET password_salt=decode(${next.salt.toString("hex")},'hex'),
-        password_hash=decode(${next.hash.toString("hex")},'hex'),password_set_at=now()
-    WHERE user_id=${userId}::uuid AND enabled=true AND password_hash=decode(${oldHash},'hex')
-    RETURNING user_id`;
+  const updated=await sql`
+    WITH changed AS (
+      UPDATE test_auth.participant_credentials
+      SET password_salt=decode(${next.salt.toString("hex")},'hex'),
+          password_hash=decode(${next.hash.toString("hex")},'hex'),password_set_at=now()
+      WHERE user_id=${userId}::uuid AND enabled=true AND password_hash=decode(${oldHash},'hex')
+      RETURNING user_id
+    ), revoked AS (
+      UPDATE test_auth.participant_sessions
+      SET revoked_at=now()
+      WHERE user_id IN (SELECT user_id FROM changed) AND revoked_at IS NULL
+      RETURNING 1
+    )
+    SELECT user_id FROM changed`;
   if(updated.length!==1) return response("retry_required",409);
-  await sql`UPDATE test_auth.participant_sessions SET revoked_at=now() WHERE user_id=${userId}::uuid AND revoked_at IS NULL`;
   const out=NextResponse.json({ok:true},{headers:AUTH_HEADERS});
   out.cookies.set(PARTICIPANT_COOKIE,"",{httpOnly:true,secure:true,sameSite:"strict",path:"/",maxAge:0});
   return out;
