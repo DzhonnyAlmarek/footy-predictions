@@ -1,12 +1,12 @@
 "use client";
 import { useEffect,useMemo,useState } from "react";
-type ListedMatch={id:string;home_team:string;away_team:string;stage_name:string|null;tour_name:string|null;kickoff_at:string|null;status:string};
+type ListedMatch={home_score:number|null;away_score:number|null;id:string;home_team:string;away_team:string;stage_name:string|null;tour_name:string|null;kickoff_at:string|null;status:string};
 type Rating={username:string;original_points:string;preview_points:string;delta:string};
 type Match={match_id:string;original_status:string;original_home_score:number|null;original_away_score:number|null;preview_status:string;preview_home_score:number|null;preview_away_score:number|null;has_test_override:boolean};
 export default function AdminTestResult() {
  const [ratings,setRatings]=useState<Rating[]>([]);const [overrides,setOverrides]=useState(0);const [ratingError,setRatingError]=useState("");
  const [matchList,setMatchList]=useState<ListedMatch[]>([]);const [listError,setListError]=useState("");
- const [search,setSearch]=useState("");const [stage,setStage]=useState("");const [tour,setTour]=useState("");const [selected,setSelected]=useState("");
+ const [search,setSearch]=useState("");const [stage,setStage]=useState("");const [tour,setTour]=useState("");const [page,setPage]=useState(1);
  const [id,setId]=useState("");const [match,setMatch]=useState<Match|null>(null);
  const [home,setHome]=useState("0");const [away,setAway]=useState("0");
  const [hp,setHp]=useState("0");const [ap,setAp]=useState("0");
@@ -16,13 +16,16 @@ export default function AdminTestResult() {
  const stages=useMemo(()=>Array.from(new Set(matchList.map(m=>m.stage_name).filter((x):x is string=>!!x))).sort((a,b)=>a.localeCompare(b,"ru")),[matchList]);
  const tours=useMemo(()=>Array.from(new Set(matchList.filter(m=>!stage||m.stage_name===stage).map(m=>m.tour_name).filter((x):x is string=>!!x))).sort((a,b)=>a.localeCompare(b,"ru")),[matchList,stage]);
  const filtered=useMemo(()=>matchList.filter(m=>(!stage||m.stage_name===stage)&&(!tour||m.tour_name===tour)&&(!search||[m.id,m.home_team,m.away_team,m.stage_name||"",m.tour_name||""].join(" ").toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru")))).sort((a,b)=>(b.kickoff_at||"").localeCompare(a.kickoff_at||"")),[matchList,search,stage,tour]);
+ const visible=filtered;const perPage=20;const pages=Math.max(1,Math.ceil(visible.length/perPage));const currentPage=Math.min(page,pages);
+ const pageMatches=visible.slice((currentPage-1)*perPage,currentPage*perPage);
+ const dateLabel=(value:string|null)=>value?new Date(value).toLocaleDateString("ru-RU",{timeZone:"Europe/Moscow"}):"—";
  const label=(m:ListedMatch)=>`${m.kickoff_at?new Date(m.kickoff_at).toLocaleDateString("ru-RU",{timeZone:"Europe/Moscow"}):"Без даты"} · ${m.home_team} — ${m.away_team} · ${m.stage_name||"—"} / ${m.tour_name||"—"} · #${m.id}`;
  async function load(matchId:string) {
   setBusy(true);setMsg("");setMatch(null);
   try {
    const r=await fetch("/api/test/admin/result-draft?matchId="+encodeURIComponent(matchId),{cache:"no-store",credentials:"same-origin"});
    const d=await r.json();if(!r.ok)throw Error(d.error||"Не удалось загрузить матч");
-   setMatch(d.match);setReadonly(d.readonly);
+   setMatch(d.match);setId(matchId);setReadonly(d.readonly);
    setHome(String(d.match.preview_home_score??0));setAway(String(d.match.preview_away_score??0));setHp("0");setAp("0");
   }catch(e){setMsg(e instanceof Error?e.message:"Ошибка");}
   finally{setBusy(false);}
@@ -45,31 +48,33 @@ export default function AdminTestResult() {
   }catch(e){setMsg(e instanceof Error?e.message:"Ошибка");}
   finally{setBusy(false);}
  }
- return <main style={{maxWidth:650,margin:"35px auto",padding:20}}>
+ return <main style={{maxWidth:1130,margin:"35px auto",padding:20}}>
   <h1>Тестовый ввод результатов — ADMIN</h1>
   <p>Изолированная Neon. Импортированные матчи и рабочий Footy не изменяются.</p>
   <p><a href="/test-match-overview">← Список матчей</a></p>
-  <section style={{border:"1px solid #d0d7e2",borderRadius:10,padding:18,margin:"20px 0"}}>
-   <h2>Выбрать матч из списка</h2>
-   <div style={{display:"flex",flexWrap:"wrap",gap:12,marginBottom:12}}>
-    <label>Этап <select value={stage} onChange={e=>{setStage(e.target.value);setTour("");setSelected("");}}><option value="">Все этапы</option>{stages.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
-    <label>Тур <select value={tour} onChange={e=>{setTour(e.target.value);setSelected("");}}><option value="">Все туры</option>{tours.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
-    <label>Поиск <input value={search} onChange={e=>{setSearch(e.target.value);setSelected("");}} placeholder="Команда или ID" style={{padding:6,maxWidth:170}}/></label>
+  <section style={{margin:"20px 0"}}>
+   <h2>Матчи — редактирование результатов</h2>
+   <div style={{display:"flex",flexWrap:"wrap",gap:12,marginBottom:14,alignItems:"end"}}>
+    <label>Этап <select value={stage} onChange={e=>{setStage(e.target.value);setTour("");setPage(1);}}><option value="">Все этапы</option>{stages.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+    <label>Тур <select value={tour} onChange={e=>{setTour(e.target.value);setPage(1);}}><option value="">Все туры</option>{tours.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+    <label>Поиск <input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} placeholder="Команда или ID" style={{padding:7}}/></label>
    </div>
-   <label style={{display:"block"}}>Матч <select value={selected} onChange={e=>setSelected(e.target.value)} style={{display:"block",maxWidth:"100%",width:"100%",padding:8,marginTop:6}}>
-    <option value="">Выбери матч ({filtered.length} найдено)</option>
-    {filtered.map(m=><option key={m.id} value={m.id}>{label(m)}</option>)}
-   </select></label>
-   <button type="button" disabled={!selected||busy} onClick={()=>{setId(selected);void load(selected);}} style={{marginTop:12}}>Загрузить выбранный матч</button>
+   <p>Найдено матчей: {filtered.length}. Страница {currentPage} из {pages}.</p>
    {listError&&<p role="alert">{listError}</p>}
-  </section>
-  <p>Или введи ID вручную:</p>
-  <form onSubmit={e=>{e.preventDefault();if(/^\d{1,15}$/.test(id))void load(id);else setMsg("Укажи корректный ID матча.");}} style={{display:"flex",gap:10,margin:"20px 0"}}>
-   <label>ID матча <input required inputMode="numeric" value={id} onChange={e=>setId(e.target.value)} style={{padding:8,width:135,marginLeft:8}}/></label>
-   <button type="submit" disabled={busy}>Загрузить</button>
-  </form>
-  {match&&<section style={{border:"1px solid #d0d7e2",borderRadius:10,padding:18}}>
-   <h2>Матч #{match.match_id}</h2>
+   <div style={{overflowX:"auto"}}>
+    <table style={{width:"100%",borderCollapse:"collapse",minWidth:740}}>
+     <thead><tr><th>Дата (МСК)</th><th>Матч</th><th>Этап / тур</th><th>Статус</th><th>Исходный счёт</th><th>Действие</th></tr></thead>
+     <tbody>{pageMatches.map(m=><tr key={m.id}><td colSpan={6} style={{padding:0,borderBottom:"1px solid #d0d7e2"}}>
+      <div style={{display:"grid",gridTemplateColumns:"105px minmax(155px,2fr) minmax(160px,1.5fr) 90px 95px 115px",gap:10,alignItems:"center",padding:"10px 5px"}}>
+       <span>{dateLabel(m.kickoff_at)}</span>
+       <span><strong>{m.home_team} — {m.away_team}</strong><small style={{display:"block"}}>#{m.id}</small></span>
+       <span>{m.stage_name||"—"} / {m.tour_name||"—"}</span>
+       <span>{m.status}</span>
+       <span>{m.home_score===null||m.away_score===null?"—":m.home_score+" : "+m.away_score}</span>
+       <button type="button" disabled={busy} onClick={()=>{if(match?.match_id===m.id){setMatch(null);return;}void load(m.id);}}>{match?.match_id===m.id?"Закрыть":"Редактировать"}</button>
+      </div>
+      {match&&match.match_id===m.id&&<section style={{border:"1px solid #d0d7e2",borderRadius:10,padding:18}}>
+   <h3>{m.home_team} — {m.away_team} · матч #{match.match_id}</h3>
    <p>Исходный статус: {match.original_status}. Исходный счёт: {match.original_home_score??"—"} : {match.original_away_score??"—"}.</p>
    <p>Тестовый счёт: {match.preview_home_score??"—"} : {match.preview_away_score??"—"}; {match.has_test_override?"изменён":"совпадает с исходным"}.</p>
    {readonly?<p><strong>Запись выключена.</strong> Для неё нужен отдельный переключатель в тестовом контейнере.</p>:<>
@@ -82,6 +87,15 @@ export default function AdminTestResult() {
     </div>
    </>}
   </section>}
+     </td></tr>)}</tbody>
+    </table>
+   </div>
+   <div style={{display:"flex",gap:12,alignItems:"center",marginTop:15}}>
+    <button type="button" disabled={currentPage<=1} onClick={()=>{setPage(p=>Math.max(1,p-1));setMatch(null);}}>← Назад</button>
+    <span>{currentPage} / {pages}</span>
+    <button type="button" disabled={currentPage>=pages} onClick={()=>{setPage(p=>Math.min(pages,p+1));setMatch(null);}}>Далее →</button>
+   </div>
+  </section>
   <p role="status">{msg}</p>
   <section style={{marginTop:28,border:"1px solid #d0d7e2",borderRadius:10,padding:18}}>
    <h2>Рейтинг: исходный и тестовый</h2>
