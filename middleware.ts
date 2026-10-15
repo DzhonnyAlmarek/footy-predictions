@@ -41,6 +41,15 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Administrative test API is disabled unless an explicit separate flag is enabled.
+  // Each request also checks the ADMIN role and an enabled database credential.
+  if (pathname === "/api/test/admin/matches" &&
+      process.env.DEPLOY_TARGET === "yandex-neon-test" &&
+      process.env.ENABLE_NEON_PARTICIPANT_AUTH === "true" &&
+      process.env.ENABLE_NEON_TEST_ADMIN === "true") {
+    return NextResponse.next();
+  }
+
   // Invitation-only enrollment, separately gated and never enabled by default.
   if ((pathname === "/test-participant-enroll" || pathname === "/api/test/enroll") &&
       process.env.DEPLOY_TARGET === "yandex-neon-test" &&
