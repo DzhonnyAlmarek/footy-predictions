@@ -39,6 +39,7 @@ export default function ParticipantPredictionsPage() {
     <button type="button" onClick={logout} style={{ marginBottom: 12 }}>Выйти</button>
     <p>Только просмотр. Изменения прогнозов и начисление очков отключены. Данные из изолированной миграционной схемы Neon.</p>
     <p><a href="/test-participant-drafts">Перейти к отдельным тестовым черновикам прогнозов</a></p>
+    <p><a href="/test-participant-ratings">Рейтинги участников: общий, по этапам и турам</a></p>
     {!data && !error && <p role="status">Загружаем прогнозы…</p>}
     {error && <p role="alert">{error}</p>}
     {data && <>
