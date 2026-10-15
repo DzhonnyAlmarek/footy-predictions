@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       const rows = await sql`SELECT stage_id::text AS group_id,stage_name AS group_name,username,points,entries FROM footy_sandbox.stage_rating_v1 ORDER BY stage_id DESC,points DESC,username ASC LIMIT 500`;
       return NextResponse.json({scope,rows},{headers:AUTH_HEADERS});
     }
-    const rows = await sql`SELECT tour_id::text AS group_id,stage_id::text AS stage_id,tour_name AS group_name,username,points,entries FROM footy_sandbox.tour_rating_v1 ORDER BY tour_id DESC,points DESC,username ASC LIMIT 500`;
+    const rows = await sql`SELECT tr.tour_id::text AS group_id,tr.stage_id::text AS stage_id,s.name AS stage_name,tr.tour_name AS group_name,tr.username,tr.points,tr.entries FROM footy_sandbox.tour_rating_v1 tr JOIN migration_source.stages s ON s.id=tr.stage_id ORDER BY tr.stage_id,tr.tour_id,tr.points DESC,tr.username ASC LIMIT 500`;
     return NextResponse.json({scope,rows},{headers:AUTH_HEADERS});
   } catch {
     return NextResponse.json({error:"data_unavailable"},{status:503,headers:AUTH_HEADERS});
