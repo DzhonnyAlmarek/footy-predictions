@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useMemo,useState} from "react";
-type Match={source:string;display_id:string;match_id:string;kickoff_at:string;deadline_at:string;status:string;has_test_edit:boolean;home_team:string;away_team:string;stage_name:string|null;tour_name:string|null;my_home_pred:number|null;my_away_pred:number|null;prediction_editable:boolean};
+type Match={source:string;display_id:string;match_id:string;kickoff_at:string;deadline_at:string;status:string;has_test_edit:boolean;home_team:string;away_team:string;stage_name:string|null;tour_name:string|null;my_home_pred:number|null;my_away_pred:number|null;my_prediction_source:'test'|'imported'|'none';prediction_editable:boolean};
 export default function ParticipantCalendar(){
  const [rows,setRows]=useState<Match[]>([]),[err,setErr]=useState(""),[notice,setNotice]=useState(""),[search,setSearch]=useState(""),[page,setPage]=useState(1),[filter,setFilter]=useState("upcoming"),[writes,setWrites]=useState(false),[importedWrites,setImportedWrites]=useState(false),[values,setValues]=useState<Record<string,{home:string;away:string}>>({}),[busy,setBusy]=useState("");
  async function load(){
@@ -36,7 +36,7 @@ export default function ParticipantCalendar(){
  <strong className="teams">{m.home_team} <span>—</span> {m.away_team}</strong>
  <div className="deadline">Приём до: {date(m.deadline_at)}</div></div>
  <div className="prediction">{<>
-  <div className="saved">{m.my_home_pred===null?"Прогноз не сделан":"Мой прогноз: "+m.my_home_pred+":"+m.my_away_pred}</div>
+  <div className="saved">{m.my_prediction_source==="none"?"Прогноз не сделан":(m.my_prediction_source==="imported"?"Исходный прогноз: ":"Тестовый прогноз: ")+m.my_home_pred+":"+m.my_away_pred}</div>
   {m.prediction_editable&&(m.source==="new"?writes:importedWrites)?<div className="score"><input type="number" min={0} max={30} step={1} aria-label={"Хозяева "+m.display_id} value={values[m.source+':'+m.match_id]?.home??""} onChange={e=>setValues(v=>({...v,[m.source+':'+m.match_id]:{...(v[m.source+':'+m.match_id]||{away:""}),home:e.target.value}}))}/><span>:</span><input type="number" min={0} max={30} step={1} aria-label={"Гости "+m.display_id} value={values[m.source+':'+m.match_id]?.away??""} onChange={e=>setValues(v=>({...v,[m.source+':'+m.match_id]:{...(v[m.source+':'+m.match_id]||{home:""}),away:e.target.value}}))}/><button disabled={busy!==""} onClick={()=>void save(m)}>{busy===m.match_id?"Сохраняю…":"Сохранить"}</button></div>:<span className="closed">{!(m.source==="new"?writes:importedWrites)?"Запись тестовых прогнозов отключена":"Приём закрыт"}</span>}
  </>}</div>
  </article>)}</div></section>)}
