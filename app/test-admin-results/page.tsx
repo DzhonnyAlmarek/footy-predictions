@@ -4,14 +4,14 @@ type ListedMatch={home_score:number|null;away_score:number|null;id:string;home_t
 type Rating={username:string;original_points:string;preview_points:string;delta:string};
 type Match={match_id:string;original_status:string;original_home_score:number|null;original_away_score:number|null;preview_status:string;preview_home_score:number|null;preview_away_score:number|null;has_test_override:boolean};
 export default function AdminTestResult() {
- const [ratings,setRatings]=useState<Rating[]>([]);const [overrides,setOverrides]=useState(0);const [ratingError,setRatingError]=useState("");
+ const [changedIds,setChangedIds]=useState<string[]>([]);const [ratings,setRatings]=useState<Rating[]>([]);const [overrides,setOverrides]=useState(0);const [ratingError,setRatingError]=useState("");
  const [matchList,setMatchList]=useState<ListedMatch[]>([]);const [listError,setListError]=useState("");
  const [search,setSearch]=useState("");const [stage,setStage]=useState("");const [tour,setTour]=useState("");const [page,setPage]=useState(1);
  const [id,setId]=useState("");const [match,setMatch]=useState<Match|null>(null);
  const [home,setHome]=useState("0");const [away,setAway]=useState("0");
  const [hp,setHp]=useState("0");const [ap,setAp]=useState("0");
  const [readonly,setReadonly]=useState(true);const [busy,setBusy]=useState(false);const [msg,setMsg]=useState("");
- async function loadRatings(){try{const r=await fetch("/api/test/admin/ratings-preview",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка рейтинга");setRatings(d.ratings);setOverrides(d.overrides);setRatingError("");}catch(e){setRatingError(e instanceof Error?e.message:"Ошибка рейтинга");}}
+ async function loadRatings(){try{const r=await fetch("/api/test/admin/ratings-preview",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка рейтинга");setRatings(d.ratings);setOverrides(d.overrides);setChangedIds(d.changedMatchIds||[]);setRatingError("");}catch(e){setRatingError(e instanceof Error?e.message:"Ошибка рейтинга");}}
  useEffect(()=>{void loadRatings();const controller=new AbortController();fetch("/api/test/match-overview",{credentials:"same-origin",cache:"no-store",signal:controller.signal}).then(async r=>{if(!r.ok)throw Error(r.status===401?"Сессия истекла — войди заново.":"Не удалось загрузить список матчей.");return r.json();}).then(d=>{if(!controller.signal.aborted)setMatchList(d.rows||[]);}).catch(e=>{if(!controller.signal.aborted)setListError(e instanceof Error?e.message:"Ошибка списка");});return ()=>controller.abort();},[]);
  const stages=useMemo(()=>Array.from(new Set(matchList.map(m=>m.stage_name).filter((x):x is string=>!!x))).sort((a,b)=>a.localeCompare(b,"ru")),[matchList]);
  const tours=useMemo(()=>Array.from(new Set(matchList.filter(m=>!stage||m.stage_name===stage).map(m=>m.tour_name).filter((x):x is string=>!!x))).sort((a,b)=>a.localeCompare(b,"ru")),[matchList,stage]);
@@ -65,9 +65,9 @@ export default function AdminTestResult() {
     <table style={{width:"100%",borderCollapse:"collapse",minWidth:740}}>
      <thead><tr><th>Дата (МСК)</th><th>Матч</th><th>Этап / тур</th><th>Статус</th><th>Исходный счёт</th><th>Действие</th></tr></thead>
      <tbody>{pageMatches.map(m=><tr key={m.id}><td colSpan={6} style={{padding:0,borderBottom:"1px solid #d0d7e2"}}>
-      <div style={{display:"grid",gridTemplateColumns:"105px minmax(155px,2fr) minmax(160px,1.5fr) 90px 95px 115px",gap:10,alignItems:"center",padding:"10px 5px"}}>
+      <div style={{display:"grid",gridTemplateColumns:"105px minmax(155px,2fr) minmax(160px,1.5fr) 90px 95px 115px",gap:10,alignItems:"center",padding:"10px 5px",background:changedIds.includes(m.id)?"#fff4db":"transparent"}}>
        <span>{dateLabel(m.kickoff_at)}</span>
-       <span><strong>{m.home_team} — {m.away_team}</strong><small style={{display:"block"}}>#{m.id}</small></span>
+       <span><strong>{m.home_team} — {m.away_team}</strong><small style={{display:"block"}}>#{m.id} {changedIds.includes(m.id)?"· Тестовый результат изменён":""}</small></span>
        <span>{m.stage_name||"—"} / {m.tour_name||"—"}</span>
        <span>{m.status}</span>
        <span>{m.home_score===null||m.away_score===null?"—":m.home_score+" : "+m.away_score}</span>
