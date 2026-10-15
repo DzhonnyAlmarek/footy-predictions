@@ -1,11 +1,15 @@
 "use client";
 import { useEffect,useState } from "react";
+type Rating={username:string;original_points:string;preview_points:string;delta:string};
 type Match={match_id:string;original_status:string;original_home_score:number|null;original_away_score:number|null;preview_status:string;preview_home_score:number|null;preview_away_score:number|null;has_test_override:boolean};
 export default function AdminTestResult() {
+ const [ratings,setRatings]=useState<Rating[]>([]);const [overrides,setOverrides]=useState(0);const [ratingError,setRatingError]=useState("");
  const [id,setId]=useState("");const [match,setMatch]=useState<Match|null>(null);
  const [home,setHome]=useState("0");const [away,setAway]=useState("0");
  const [hp,setHp]=useState("0");const [ap,setAp]=useState("0");
  const [readonly,setReadonly]=useState(true);const [busy,setBusy]=useState(false);const [msg,setMsg]=useState("");
+ async function loadRatings(){try{const r=await fetch("/api/test/admin/ratings-preview",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка рейтинга");setRatings(d.ratings);setOverrides(d.overrides);setRatingError("");}catch(e){setRatingError(e instanceof Error?e.message:"Ошибка рейтинга");}}
+ useEffect(()=>{void loadRatings();},[]);
  async function load(matchId:string) {
   setBusy(true);setMsg("");setMatch(null);
   try {
@@ -30,7 +34,7 @@ export default function AdminTestResult() {
     options.body=JSON.stringify({matchId:Number(match.match_id),homeScore:values[0],awayScore:values[1],homePenaltyGoals:values[2],awayPenaltyGoals:values[3]});
    }
    const r=await fetch(url,options);const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка сохранения");
-   await load(match.match_id);setMsg(method==="POST"?"Тестовый результат сохранён.":"Тестовый результат удалён.");
+   await load(match.match_id);await loadRatings();setMsg(method==="POST"?"Тестовый результат сохранён.":"Тестовый результат удалён.");
   }catch(e){setMsg(e instanceof Error?e.message:"Ошибка");}
   finally{setBusy(false);}
  }
@@ -57,5 +61,15 @@ export default function AdminTestResult() {
    </>}
   </section>}
   <p role="status">{msg}</p>
+  <section style={{marginTop:28,border:"1px solid #d0d7e2",borderRadius:10,padding:18}}>
+   <h2>Рейтинг: исходный и тестовый</h2>
+   <p>Тестовых изменений матчей: {overrides}. Расчёт только для просмотра, начисления не изменяются.</p>
+   <button type="button" onClick={()=>void loadRatings()}>Обновить рейтинг</button>
+   {ratingError&&<p role="alert">{ratingError}</p>}
+   <div style={{overflowX:"auto",marginTop:12}}><table style={{borderCollapse:"collapse",width:"100%",textAlign:"right"}}>
+    <thead><tr><th style={{textAlign:"left"}}>Участник</th><th>Исходный</th><th>Тестовый</th><th>Разница</th></tr></thead>
+    <tbody>{ratings.map(x=><tr key={x.username}><td style={{textAlign:"left",padding:"8px 4px"}}>{x.username}</td><td>{x.original_points}</td><td>{x.preview_points}</td><td style={{color:Number(x.delta)>0?"green":Number(x.delta)<0?"#b42318":"inherit"}}>{Number(x.delta)>0?"+":""}{x.delta}</td></tr>)}</tbody>
+   </table></div>
+  </section>
  </main>;
 }
