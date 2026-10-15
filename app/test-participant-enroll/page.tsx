@@ -17,8 +17,8 @@ export default function ParticipantEnrollment() {
       setMessage("Укажи действительный одноразовый код приглашения.");
       return;
     }
-    if (password.length < 12 || password.length > 128 || new TextEncoder().encode(password).length > 256) {
-      setMessage("Пароль должен содержать от 12 до 128 символов.");
+    if (password.length < 5 || password.length > 128 || new TextEncoder().encode(password).length > 256) {
+      setMessage("Пароль должен содержать от 5 до 128 символов.");
       return;
     }
     if (password !== confirmation) {
@@ -62,7 +62,7 @@ export default function ParticipantEnrollment() {
           onChange={e => setToken(e.target.value)} maxLength={64}
           style={{ display: "block", width: "100%" }} />
       </label>
-      <label>Новый тестовый пароль (не менее 12 символов)
+      <label>Новый тестовый пароль (не менее 5 символов)
         <input required type="password" autoComplete="new-password" value={password}
           onChange={e => setPassword(e.target.value)}
           style={{ display: "block", width: "100%" }} />
