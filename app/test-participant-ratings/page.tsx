@@ -78,6 +78,7 @@ export default function ParticipantRatings() {
     <h1 style={{marginBottom:8}}>Рейтинги Footy — тест Neon</h1>
     <p style={{color:"#555",marginTop:0}}>Только просмотр. Данные из импортированных начислений, без тестовых черновиков.</p>
     <p><a href="/test-participant-predictions">← Мои прогнозы</a></p>
+    <p><a href="/test-match-overview">Матчи и результаты (только просмотр) →</a></p>
     <nav aria-label="Вид рейтинга" style={{display:"flex",gap:8,flexWrap:"wrap",margin:"20px 0"}}>
       {([
         ["overall", "Общий рейтинг"],
