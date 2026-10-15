@@ -7,7 +7,7 @@ export default function ParticipantCalendar(){
   const r=await fetch("/api/test/participant-calendar",{credentials:"same-origin",cache:"no-store"});
   const d=await r.json();if(!r.ok)throw Error(d.error==="unauthorized"?"Сессия истекла — войди снова.":d.error||"Ошибка");
   const list:Match[]=d.rows||[];setRows(list);setWrites(d.predictionsEnabledForNewMatches===true);setImportedWrites(d.predictionsEnabledForImportedMatches===true);
-  setValues(Object.fromEntries(list.map(m=>[m.match_id,{home:m.my_home_pred==null?"":String(m.my_home_pred),away:m.my_away_pred==null?"":String(m.my_away_pred)}])));
+  setValues(Object.fromEntries(list.map(m=>[m.source+':'+m.match_id,{home:m.my_home_pred==null?"":String(m.my_home_pred),away:m.my_away_pred==null?"":String(m.my_away_pred)}])));
  }
  useEffect(()=>{void load().catch(e=>setErr(e.message));},[]);
  const filtered=useMemo(()=>{const now=Date.now();return rows.filter(m=>(filter==="all"||(filter==="upcoming"&&new Date(m.kickoff_at).getTime()>=now)||(filter==="changed"&&m.has_test_edit))&&(!search||[m.display_id,m.home_team,m.away_team,m.stage_name,m.tour_name].join(" ").toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))));},[rows,search,filter]);
@@ -16,7 +16,7 @@ export default function ParticipantCalendar(){
  const date=(s:string)=>new Date(s).toLocaleString("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})+" МСК";
  async function save(m:Match){
   if(!(m.source==="new"?writes:importedWrites)||!m.prediction_editable||busy)return;
-  const v=values[m.match_id];if(!/^\d+$/.test(v?.home||"")||!/^\d+$/.test(v?.away||"")||Number(v.home)>30||Number(v.away)>30){setNotice("Укажи целый счёт от 0 до 30.");return;}
+  const v=values[m.source+':'+m.match_id];if(!/^\d+$/.test(v?.home||"")||!/^\d+$/.test(v?.away||"")||Number(v.home)>30||Number(v.away)>30){setNotice("Укажи целый счёт от 0 до 30.");return;}
   setBusy(m.match_id);setNotice("");
   try{
    const r=await fetch(m.source==="new"?"/api/test/participant-new-match-predictions":"/api/test/participant-imported-match-predictions",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({matchId:Number(m.match_id),homePred:Number(v.home),awayPred:Number(v.away)})});
@@ -37,7 +37,7 @@ export default function ParticipantCalendar(){
  <div className="deadline">Приём до: {date(m.deadline_at)}</div></div>
  <div className="prediction">{<>
   <div className="saved">{m.my_home_pred===null?"Прогноз не сделан":"Мой прогноз: "+m.my_home_pred+":"+m.my_away_pred}</div>
-  {m.prediction_editable&&(m.source==="new"?writes:importedWrites)?<div className="score"><input type="number" min={0} max={30} step={1} aria-label={"Хозяева "+m.display_id} value={values[m.match_id]?.home??""} onChange={e=>setValues(v=>({...v,[m.match_id]:{...(v[m.match_id]||{away:""}),home:e.target.value}}))}/><span>:</span><input type="number" min={0} max={30} step={1} aria-label={"Гости "+m.display_id} value={values[m.match_id]?.away??""} onChange={e=>setValues(v=>({...v,[m.match_id]:{...(v[m.match_id]||{home:""}),away:e.target.value}}))}/><button disabled={busy!==""} onClick={()=>void save(m)}>{busy===m.match_id?"Сохраняю…":"Сохранить"}</button></div>:<span className="closed">{!(m.source==="new"?writes:importedWrites)?"Запись тестовых прогнозов отключена":"Приём закрыт"}</span>}
+  {m.prediction_editable&&(m.source==="new"?writes:importedWrites)?<div className="score"><input type="number" min={0} max={30} step={1} aria-label={"Хозяева "+m.display_id} value={values[m.source+':'+m.match_id]?.home??""} onChange={e=>setValues(v=>({...v,[m.source+':'+m.match_id]:{...(v[m.match_id]||{away:""}),home:e.target.value}}))}/><span>:</span><input type="number" min={0} max={30} step={1} aria-label={"Гости "+m.display_id} value={values[m.source+':'+m.match_id]?.away??""} onChange={e=>setValues(v=>({...v,[m.source+':'+m.match_id]:{...(v[m.match_id]||{home:""}),away:e.target.value}}))}/><button disabled={busy!==""} onClick={()=>void save(m)}>{busy===m.match_id?"Сохраняю…":"Сохранить"}</button></div>:<span className="closed">{!(m.source==="new"?writes:importedWrites)?"Запись тестовых прогнозов отключена":"Приём закрыт"}</span>}
  </>}</div>
  </article>)}</div></section>)}
  {!err&&shown.length===0&&<p>Матчи не найдены.</p>}
