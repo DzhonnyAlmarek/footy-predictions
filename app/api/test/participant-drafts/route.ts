@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const matchId = body?.match_id;
     const home = body?.home_pred;
     const away = body?.away_pred;
-    if (typeof matchId !== "string" || !/^[1-9]\\d{0,17}$/.test(matchId) ||
+    if (typeof matchId !== "string" || !/^[1-9]\d{0,17}$/.test(matchId) ||
         !Number.isInteger(home) || !Number.isInteger(away) ||
         home < 0 || away < 0 || home > 30 || away > 30)
       return NextResponse.json({error:"invalid_payload"}, {status:400,headers:AUTH_HEADERS});
