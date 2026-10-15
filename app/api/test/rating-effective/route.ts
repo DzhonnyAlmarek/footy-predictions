@@ -10,7 +10,7 @@ export async function GET(req:NextRequest){
   const sql=participantDatabase(),hash=hashOpaqueToken(token);
   const s=await sql`SELECT test_auth.session_user(decode(${hash},'hex')) AS user_id`;
   if(typeof s[0]?.user_id!=="string")return NextResponse.json({error:"unauthorized"},{status:401,headers:AUTH_HEADERS});
-  const rows=await sql`SELECT username,original_points,test_delta,effective_points FROM footy_sandbox.rating_effective_v2 ORDER BY effective_points DESC,username ASC`;
+  const rows=await sql`SELECT user_id::text AS user_id,username,original_points,test_delta,effective_points FROM footy_sandbox.rating_effective_v2 ORDER BY effective_points DESC,username ASC`;
   return NextResponse.json({rows,readOnly:true,sandbox:true},{headers:AUTH_HEADERS});
  }catch{return NextResponse.json({error:"data_unavailable"},{status:503,headers:AUTH_HEADERS});}
 }
