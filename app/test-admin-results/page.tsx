@@ -22,6 +22,8 @@ export default function AdminTestResult() {
  const dateLabel=(value:string|null)=>value?new Date(value).toLocaleDateString("ru-RU",{timeZone:"Europe/Moscow"}):"—";
  const statusLabel=(value:string)=>value==="finished"?"Завершён":value==="scheduled"?"Запланирован":value==="live"?"Идёт":value;
  const overrideScore=(id:string)=>changedMatches.find(x=>x.id===id);
+ const canEnterResult=(m:ListedMatch)=>!!m.kickoff_at&&new Date(m.kickoff_at).getTime()<=Date.now();
+ const errorText=(error:string)=>error==="match_not_started_or_missing"?"Нельзя сохранить результат до начала матча.":error==="forbidden"?"Нет прав администратора или сессия истекла.":error==="writes_disabled"?"Запись тестовых результатов отключена.":error==="invalid_result"?"Проверь введённый счёт.":error;
  const label=(m:ListedMatch)=>`${m.kickoff_at?new Date(m.kickoff_at).toLocaleDateString("ru-RU",{timeZone:"Europe/Moscow"}):"Без даты"} · ${m.home_team} — ${m.away_team} · ${m.stage_name||"—"} / ${m.tour_name||"—"} · #${m.id}`;
  async function load(matchId:string) {
   setBusy(true);setMsg("");setMatch(null);
@@ -35,6 +37,8 @@ export default function AdminTestResult() {
  }
  async function update(method:"POST"|"DELETE") {
   if(!match||readonly)return;
+  const currentMatch=matchList.find(m=>m.id===match.match_id);
+  if(method==="POST"&&(!currentMatch||!canEnterResult(currentMatch))){setMsg("Нельзя сохранить результат до начала матча.");return;}
   if(method==="DELETE"&&!window.confirm("Удалить только тестовый результат матча?"))return;
   setBusy(true);setMsg("");
   try {
@@ -46,7 +50,7 @@ export default function AdminTestResult() {
     if([home,away,hp,ap].some(v=>!/^\d+$/.test(v))||values.some(n=>!Number.isInteger(n)||n<0||n>30)||values[2]>values[0]||values[3]>values[1]){setMsg("Проверь счёт и голы с пенальти (0–30).");setBusy(false);return;}
     options.body=JSON.stringify({matchId:Number(match.match_id),homeScore:values[0],awayScore:values[1],homePenaltyGoals:values[2],awayPenaltyGoals:values[3]});
    }
-   const r=await fetch(url,options);const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка сохранения");
+   const r=await fetch(url,options);const d=await r.json();if(!r.ok)throw Error(errorText(d.error||"Ошибка сохранения"));
    await load(match.match_id);await loadRatings();setMsg(method==="POST"?"Тестовый результат сохранён.":"Тестовый результат удалён.");
   }catch(e){setMsg(e instanceof Error?e.message:"Ошибка");}
   finally{setBusy(false);}
@@ -88,8 +92,9 @@ export default function AdminTestResult() {
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(110px,145px))",gap:10}}>
      {([["Голы хозяев",home,setHome],["Голы гостей",away,setAway],["С пенальти хозяев",hp,setHp],["С пенальти гостей",ap,setAp]] as const).map(([label,value,setter])=><label key={label}>{label}<input type="number" required min={0} max={30} step={1} value={value} onChange={e=>setter(e.target.value)} style={{display:"block",width:"100%",maxWidth:105,padding:7}}/></label>)}
     </div>
+    {!canEnterResult(m)&&<p style={{color:"#855700",marginTop:12}}>Сохранение станет доступно после начала матча{m.kickoff_at?` (${new Date(m.kickoff_at).toLocaleString("ru-RU",{dateStyle:"short",timeStyle:"short",timeZone:"Europe/Moscow"})} МСК)`:"; время начала не задано"}.</p>}
     <div style={{display:"flex",gap:12,marginTop:18,flexWrap:"wrap"}}>
-     <button type="button" disabled={busy} onClick={()=>void update("POST")}>Сохранить только тестовый результат</button>
+     <button type="button" disabled={busy||!canEnterResult(m)} onClick={()=>void update("POST")}>Сохранить только тестовый результат</button>
      {match.has_test_override&&<button type="button" disabled={busy} onClick={()=>void update("DELETE")}>Отменить тестовый результат</button>}
     </div>
    </>}
