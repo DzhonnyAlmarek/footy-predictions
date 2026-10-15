@@ -2,12 +2,12 @@
 import {useEffect,useMemo,useState} from "react";
 type Match={source:string;display_id:string;match_id:string;kickoff_at:string;deadline_at:string;status:string;has_test_edit:boolean;home_team:string;away_team:string;stage_name:string|null;tour_name:string|null;my_home_pred:number|null;my_away_pred:number|null;prediction_editable:boolean};
 export default function ParticipantCalendar(){
- const [rows,setRows]=useState<Match[]>([]),[err,setErr]=useState(""),[notice,setNotice]=useState(""),[search,setSearch]=useState(""),[page,setPage]=useState(1),[filter,setFilter]=useState("upcoming"),[writes,setWrites]=useState(false),[values,setValues]=useState<Record<string,{home:string;away:string}>>({}),[busy,setBusy]=useState("");
+ const [rows,setRows]=useState<Match[]>([]),[err,setErr]=useState(""),[notice,setNotice]=useState(""),[search,setSearch]=useState(""),[page,setPage]=useState(1),[filter,setFilter]=useState("upcoming"),[writes,setWrites]=useState(false),[importedWrites,setImportedWrites]=useState(false),[values,setValues]=useState<Record<string,{home:string;away:string}>>({}),[busy,setBusy]=useState("");
  async function load(){
   const r=await fetch("/api/test/participant-calendar",{credentials:"same-origin",cache:"no-store"});
   const d=await r.json();if(!r.ok)throw Error(d.error==="unauthorized"?"Сессия истекла — войди снова.":d.error||"Ошибка");
-  const list:Match[]=d.rows||[];setRows(list);setWrites(d.predictionsEnabledForNewMatches===true);
-  setValues(Object.fromEntries(list.filter(m=>m.source==="new").map(m=>[m.match_id,{home:m.my_home_pred==null?"":String(m.my_home_pred),away:m.my_away_pred==null?"":String(m.my_away_pred)}])));
+  const list:Match[]=d.rows||[];setRows(list);setWrites(d.predictionsEnabledForNewMatches===true);setImportedWrites(d.predictionsEnabledForImportedMatches===true);
+  setValues(Object.fromEntries(list.map(m=>[m.match_id,{home:m.my_home_pred==null?"":String(m.my_home_pred),away:m.my_away_pred==null?"":String(m.my_away_pred)}])));
  }
  useEffect(()=>{void load().catch(e=>setErr(e.message));},[]);
  const filtered=useMemo(()=>{const now=Date.now();return rows.filter(m=>(filter==="all"||(filter==="upcoming"&&new Date(m.kickoff_at).getTime()>=now)||(filter==="changed"&&m.has_test_edit))&&(!search||[m.display_id,m.home_team,m.away_team,m.stage_name,m.tour_name].join(" ").toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))));},[rows,search,filter]);
@@ -15,18 +15,18 @@ export default function ParticipantCalendar(){
  const groups=useMemo(()=>{const result:{name:string;matches:Match[]}[]=[];for(const m of shown){const name=(m.stage_name||"Без этапа")+" · "+(m.tour_name||"Без тура");const g=result.find(x=>x.name===name);if(g)g.matches.push(m);else result.push({name,matches:[m]});}return result;},[shown]);
  const date=(s:string)=>new Date(s).toLocaleString("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})+" МСК";
  async function save(m:Match){
-  if(m.source!=="new"||!writes||!m.prediction_editable||busy)return;
+  if(!(m.source==="new"?writes:importedWrites)||!m.prediction_editable||busy)return;
   const v=values[m.match_id];if(!/^\d+$/.test(v?.home||"")||!/^\d+$/.test(v?.away||"")||Number(v.home)>30||Number(v.away)>30){setNotice("Укажи целый счёт от 0 до 30.");return;}
   setBusy(m.match_id);setNotice("");
   try{
-   const r=await fetch("/api/test/participant-new-match-predictions",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({matchId:Number(m.match_id),homePred:Number(v.home),awayPred:Number(v.away)})});
+   const r=await fetch(m.source==="new"?"/api/test/participant-new-match-predictions":"/api/test/participant-imported-match-predictions",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({matchId:Number(m.match_id),homePred:Number(v.home),awayPred:Number(v.away)})});
    const d=await r.json();if(!r.ok)throw Error(d.error==="deadline_or_match_unavailable"?"Дедлайн истёк или матч недоступен.":d.error||"Ошибка сохранения");
    await load();setNotice("Тестовый прогноз на "+m.display_id+" сохранён. Рабочие очки не изменены.");
   }catch(e){setNotice(e instanceof Error?e.message:"Ошибка сохранения");}finally{setBusy("");}
  }
  return <main className="calendar">
  <h1>Расписание и прогнозы</h1>
- <p className="intro">Тестовая площадка Neon · новые матчи и прогнозы не влияют на рабочие очки.</p>
+ <p className="intro">Тестовая площадка Neon · прогнозы не влияют на рабочие очки.</p>
  <p><a href="/test-participant-predictions">← Прогнозы участника</a></p>
  <div className="toolbar"><label>Поиск<input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} placeholder="Команда, матч или тур"/></label><label>Показывать<select value={filter} onChange={e=>{setFilter(e.target.value);setPage(1);}}><option value="upcoming">Предстоящие</option><option value="changed">Тестовые изменения</option><option value="all">Все</option></select></label></div>
  {err&&<p role="alert" className="alert">{err}</p>}{notice&&<p role="status" className="notice">{notice}</p>}
@@ -35,10 +35,10 @@ export default function ParticipantCalendar(){
  <div className="details"><div className="meta"><span className="id">{m.display_id}</span><span>{date(m.kickoff_at)}</span>{m.source==="new"&&<span className="tag">Тестовый</span>}{m.source!=="new"&&m.has_test_edit&&<span className="tag">Изменён</span>}</div>
  <strong className="teams">{m.home_team} <span>—</span> {m.away_team}</strong>
  <div className="deadline">Приём до: {date(m.deadline_at)}</div></div>
- <div className="prediction">{m.source==="new"?<>
+ <div className="prediction">{<>
   <div className="saved">{m.my_home_pred===null?"Прогноз не сделан":"Мой прогноз: "+m.my_home_pred+":"+m.my_away_pred}</div>
-  {m.prediction_editable&&writes?<div className="score"><input type="number" min={0} max={30} step={1} aria-label={"Хозяева "+m.display_id} value={values[m.match_id]?.home??""} onChange={e=>setValues(v=>({...v,[m.match_id]:{...(v[m.match_id]||{away:""}),home:e.target.value}}))}/><span>:</span><input type="number" min={0} max={30} step={1} aria-label={"Гости "+m.display_id} value={values[m.match_id]?.away??""} onChange={e=>setValues(v=>({...v,[m.match_id]:{...(v[m.match_id]||{home:""}),away:e.target.value}}))}/><button disabled={busy!==""} onClick={()=>void save(m)}>{busy===m.match_id?"Сохраняю…":"Сохранить"}</button></div>:<span className="closed">{!writes?"Запись тестовых прогнозов отключена":"Приём закрыт"}</span>}
- </>:<span className="readOnly">Импорт · только просмотр</span>}</div>
+  {m.prediction_editable&&(m.source==="new"?writes:importedWrites)?<div className="score"><input type="number" min={0} max={30} step={1} aria-label={"Хозяева "+m.display_id} value={values[m.match_id]?.home??""} onChange={e=>setValues(v=>({...v,[m.match_id]:{...(v[m.match_id]||{away:""}),home:e.target.value}}))}/><span>:</span><input type="number" min={0} max={30} step={1} aria-label={"Гости "+m.display_id} value={values[m.match_id]?.away??""} onChange={e=>setValues(v=>({...v,[m.match_id]:{...(v[m.match_id]||{home:""}),away:e.target.value}}))}/><button disabled={busy!==""} onClick={()=>void save(m)}>{busy===m.match_id?"Сохраняю…":"Сохранить"}</button></div>:<span className="closed">{!(m.source==="new"?writes:importedWrites)?"Запись тестовых прогнозов отключена":"Приём закрыт"}</span>}
+ </>}</div>
  </article>)}</div></section>)}
  {!err&&shown.length===0&&<p>Матчи не найдены.</p>}
  <nav className="pager"><button disabled={page<=1} onClick={()=>setPage(p=>p-1)}>← Назад</button><span>{Math.min(page,total)} / {total}</span><button disabled={page>=total} onClick={()=>setPage(p=>p+1)}>Далее →</button></nav>
