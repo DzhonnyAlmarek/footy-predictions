@@ -15,7 +15,7 @@ export default function ParticipantDraftsPage() {
   }, []);
   async function save(m: Match) {
     const [h,a] = scores[m.match_id] || ["",""];
-    if (!/^(0|[1-9]\\d?)$/.test(h) || !/^(0|[1-9]\\d?)$/.test(a) || Number(h) > 30 || Number(a) > 30) { setStatus("Укажи оба счёта целыми числами от 0 до 30."); return; }
+    if (!/^(0|[1-9]\d?)$/.test(h) || !/^(0|[1-9]\d?)$/.test(a) || Number(h) > 30 || Number(a) > 30) { setStatus("Укажи оба счёта целыми числами от 0 до 30."); return; }
     setBusy(m.match_id); setStatus("");
     try {
       const response = await fetch("/api/test/participant-drafts",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({match_id:m.match_id,home_pred:Number(h),away_pred:Number(a)})});
