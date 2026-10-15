@@ -30,8 +30,24 @@ export default function ParticipantDraftsPage() {
     try {
       const response = await fetch("/api/test/participant-drafts",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({match_id:m.match_id,home_pred:Number(h),away_pred:Number(a)})});
       if (!response.ok) throw Error(response.status === 409 ? "Дедлайн матча прошёл или матч недоступен." : "Не удалось сохранить черновик.");
+      setMatches(prev=>prev.map(row=>row.match_id===m.match_id?{...row,home_pred:Number(h),away_pred:Number(a)}:row));
       setStatus("Черновик сохранён в отдельной тестовой таблице Neon.");
     } catch(e) { setStatus(e instanceof Error ? e.message : "Ошибка сохранения"); }
+    finally { setBusy(null); }
+  }
+  async function remove(m: Match) {
+    if (!window.confirm("Удалить тестовый черновик для этого матча?")) return;
+    setBusy(m.match_id); setStatus("");
+    try {
+      const response = await fetch("/api/test/participant-drafts", {
+        method:"DELETE", headers:{"Content-Type":"application/json"},
+        credentials:"same-origin", body:JSON.stringify({match_id:m.match_id})
+      });
+      if (!response.ok) throw Error(response.status === 409 ? "Матч уже начался, удаление запрещено." : "Не удалось удалить черновик.");
+      setScores(prev=>({...prev,[m.match_id]:["",""]}));
+      setMatches(prev=>prev.map(row=>row.match_id===m.match_id?{...row,home_pred:null,away_pred:null}:row));
+      setStatus("Тестовый черновик удалён.");
+    } catch(e) { setStatus(e instanceof Error ? e.message : "Ошибка удаления"); }
     finally { setBusy(null); }
   }
   return <main style={{maxWidth:880,margin:"36px auto",padding:20}}>
@@ -47,6 +63,7 @@ export default function ParticipantDraftsPage() {
         :
         <input aria-label="Голы гостей" inputMode="numeric" style={{width:55}} value={scores[m.match_id]?.[1] ?? ""} disabled={!m.editable || busy !== null} onChange={e => setScores(prev=>({...prev,[m.match_id]:[prev[m.match_id]?.[0] ?? "",e.target.value]}))}/>
         <button disabled={!m.editable || busy !== null} onClick={()=>save(m)}>{busy === m.match_id ? "Сохраняем…" : "Сохранить черновик"}</button>
+        <button disabled={!m.editable || busy !== null || (m.home_pred == null && m.away_pred == null)} onClick={()=>remove(m)}>Удалить черновик</button>
       </div>
     </section>)}
     {!status && matches.length === 0 && <p>Доступных матчей нет.</p>}
