@@ -32,6 +32,7 @@ export async function middleware(req: NextRequest) {
     "/api/test/participant-login", "/api/test/participant-session",
     "/api/test/participant-predictions", "/api/test/participant-logout",
     "/test-participant-drafts", "/api/test/participant-drafts",
+    "/test-participant-ratings", "/api/test/participant-ratings",
   ]);
   if (participantRoutes.has(pathname) &&
       process.env.DEPLOY_TARGET === "yandex-neon-test" &&
