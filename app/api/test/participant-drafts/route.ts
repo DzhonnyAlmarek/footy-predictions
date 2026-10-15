@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       SELECT m.id::text AS match_id, m.kickoff_at, m.deadline_at,
              ht.name AS home_team, at.name AS away_team,
              d.home_pred, d.away_pred, d.updated_at,
-             (m.deadline_at > now() AND m.status = 'scheduled') AS editable
+             (m.kickoff_at > now() AND m.status = 'scheduled') AS editable
       FROM migration_source.matches m
       JOIN migration_source.teams ht ON ht.id = m.home_team_id
       JOIN migration_source.teams at ON at.id = m.away_team_id
@@ -57,12 +57,12 @@ export async function POST(req: NextRequest) {
         home < 0 || away < 0 || home > 30 || away > 30)
       return NextResponse.json({error:"invalid_payload"}, {status:400,headers:AUTH_HEADERS});
     const sql = participantDatabase();
-    // Database-side deadline + status guard, applied atomically with UPSERT.
+    // Kickoff is the authoritative deadline. At kickoff or later writes are rejected in SQL.
     const rows = await sql`
       INSERT INTO footy_sandbox.prediction_drafts(user_id, match_id, home_pred, away_pred)
       SELECT ${userId}::uuid, m.id, ${home}, ${away}
       FROM migration_source.matches m
-      WHERE m.id = ${matchId}::bigint AND m.status = 'scheduled' AND m.deadline_at > now()
+      WHERE m.id = ${matchId}::bigint AND m.status = 'scheduled' AND m.kickoff_at > now()
       ON CONFLICT(user_id, match_id) DO UPDATE
       SET home_pred = excluded.home_pred, away_pred = excluded.away_pred, updated_at = now()
       RETURNING match_id::text AS match_id, home_pred, away_pred, updated_at`;
