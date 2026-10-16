@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-export default function TestParticipantLogin() {\n  const afterLogin = () => { const requested = new URLSearchParams(window.location.search).get("next") || ""; return requested.startsWith("/test-") && !requested.startsWith("//") && !requested.includes("\\\\") ? requested : "/test-participant-home"; };
+export default function TestParticipantLogin() {
+  const afterLogin = () => { const requested = new URLSearchParams(window.location.search).get("next") || ""; return requested.startsWith("/test-") && !requested.startsWith("//") && !requested.includes("\\\\") ? requested : "/test-participant-home"; };
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
