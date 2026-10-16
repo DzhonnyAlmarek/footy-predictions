@@ -29,6 +29,8 @@ export async function GET(req:NextRequest){
  const points_bonus=Math.abs(h-hs)+Math.abs(a-as)===1?0.5:0;
  return {username:p.username,home_pred:h,away_pred:a,points_outcome,points_diff,points_h1,points_h2,points_bonus,points:Number((points_outcome+points_diff+points_h1+points_h2+points_bonus).toFixed(2))};
  });
- return NextResponse.json({match:match[0],simulated_result:{home:hs,away:as},rows,simulationOnly:true,ratingUnchanged:true},{headers:AUTH_HEADERS});
+ const rating=await sql`SELECT username,effective_points FROM footy_sandbox.rating_effective_v2 ORDER BY effective_points DESC,username ASC`;
+ const ranking=rating.map(r=>{const base=Number(r.effective_points);const extra=rows.find(x=>x.username===r.username)?.points||0;return {username:r.username,current_points:base,added_points:extra,projected_points:Number((base+extra).toFixed(2))};}).sort((a,b)=>b.projected_points-a.projected_points||a.username.localeCompare(b.username,"ru")).map((r,i)=>({...r,projected_rank:i+1}));
+ return NextResponse.json({match:match[0],simulated_result:{home:hs,away:as},rows,ranking,simulationOnly:true,ratingUnchanged:true},{headers:AUTH_HEADERS});
  }catch{return err("data_unavailable",503);}
 }
