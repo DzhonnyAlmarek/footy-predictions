@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from "react";
-type Match={match_id:string;home_team:string;away_team:string;kickoff_at:string;deadline_at:string;home_pred:number|null;away_pred:number|null;editable:boolean};
+type Match={stage_name:string|null;tour_name:string|null;match_id:string;home_team:string;away_team:string;kickoff_at:string;deadline_at:string;home_pred:number|null;away_pred:number|null;editable:boolean};
 export default function NewMatchPredictions(){
  const [matches,setMatches]=useState<Match[]>([]),[readonly,setReadonly]=useState(true),[loading,setLoading]=useState(true),[message,setMessage]=useState(""),[busy,setBusy]=useState(false),[values,setValues]=useState<Record<string,{home:string;away:string}>>({});
  async function load(){
@@ -29,7 +29,7 @@ export default function NewMatchPredictions(){
   {!loading&&<p>{readonly?"Запись тестовых прогнозов пока отключена.":"Запись разрешена только в тестовые черновики."}</p>}
   {matches.map(m=><section key={m.match_id} style={{border:"1px solid #d0d7e2",borderRadius:10,padding:15,margin:"14px 0"}}>
    <strong>T-{m.match_id} · {m.home_team} — {m.away_team}</strong>
-   <p>Начало: {date(m.kickoff_at)}. Приём до: {date(m.deadline_at)}.</p>
+   <p>{m.stage_name||"Этап не указан"} · {m.tour_name||"Тур не указан"}</p>\n   <p>Начало: {date(m.kickoff_at)}. Приём до: {date(m.deadline_at)}.</p>
    <div style={{display:"flex",alignItems:"end",gap:10,flexWrap:"wrap"}}>
     <label>Хозяева <input type="number" min={0} max={30} step={1} style={{width:70,display:"block"}} value={values[m.match_id]?.home??""} onChange={e=>setValues(v=>({...v,[m.match_id]:{...(v[m.match_id]||{away:""}),home:e.target.value}}))}/></label>
     <label>Гости <input type="number" min={0} max={30} step={1} style={{width:70,display:"block"}} value={values[m.match_id]?.away??""} onChange={e=>setValues(v=>({...v,[m.match_id]:{...(v[m.match_id]||{home:""}),away:e.target.value}}))}/></label>
