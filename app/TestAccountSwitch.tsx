@@ -4,6 +4,7 @@ import {useEffect,useState} from "react";
 
 const links=[
  {href:"/test-admin-home",label:"Обзор"},
+ {href:"/test-admin-stages",label:"Этапы и туры"},
  {href:"/test-admin-results",label:"Результаты"},
  {href:"/test-admin-calendar",label:"Новые матчи"},
  {href:"/test-admin-calendar-imported",label:"Импортированный календарь"},
