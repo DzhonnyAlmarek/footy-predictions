@@ -38,6 +38,7 @@ export async function middleware(req: NextRequest) {
     "/api/test/participant-new-match-predictions", "/test-participant-new-match-predictions",
     "/api/test/participant-imported-match-predictions",
     "/test-participant-calendar", "/api/test/participant-calendar",
+    "/test-participant-competitions", "/api/test/participant-competitions",
     "/test-rating-effective", "/api/test/rating-effective",
     "/test-rating-details", "/api/test/rating-details",
     "/test-new-match-score-simulation", "/api/test/new-match-score-simulation",
