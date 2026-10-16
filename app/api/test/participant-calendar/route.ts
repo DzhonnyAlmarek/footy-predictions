@@ -11,7 +11,7 @@ export async function GET(req:NextRequest){
   const sql=participantDatabase(),hash=hashOpaqueToken(token);
   const session=await sql`SELECT test_auth.session_user(decode(${hash},'hex')) AS user_id`;
   if(typeof session[0]?.user_id!=="string")return error("unauthorized",401);
-  const rows=await sql`SELECT c.source,c.display_id,c.match_id::text,c.kickoff_at,c.deadline_at,c.status,c.is_deleted,c.has_test_edit,
+  const rows=await sql`SELECT c.source,c.display_id,c.match_id::text,c.stage_id::text AS stage_id,c.tour_id::text AS tour_id,c.kickoff_at,c.deadline_at,c.status,c.is_deleted,c.has_test_edit,
     h.name AS home_team,a.name AS away_team,s.name AS stage_name,t.name AS tour_name, COALESCE(p.home_pred,pd.home_pred,orig.home_pred) AS my_home_pred,COALESCE(p.away_pred,pd.away_pred,orig.away_pred) AS my_away_pred,\n    CASE WHEN c.source='new' AND p.draft_id IS NOT NULL THEN 'test' WHEN c.source='imported' AND pd.match_id IS NOT NULL THEN 'test' WHEN orig.id IS NOT NULL THEN 'imported' ELSE 'none' END AS my_prediction_source,\n    (c.status='scheduled' AND c.deadline_at>now() AND c.kickoff_at>now() AND s.status IN ('draft','published')) AS prediction_editable
     FROM footy_sandbox.calendar_effective_v1 c
     JOIN migration_source.teams h ON h.id=c.home_team_id
