@@ -28,7 +28,7 @@ export async function middleware(req: NextRequest) {
   // Read-only participant cabinet on the explicitly isolated Yandex test runtime.
   // Every participant API independently validates its Neon session and database scope.
   const participantRoutes = new Set([
-    "/test-participant-login", "/test-participant-predictions",
+    "/test-participant-login", "/test-participant-predictions", "/test-participant-home",
     "/api/test/participant-login", "/api/test/participant-session",
     "/api/test/participant-predictions", "/api/test/participant-logout",
     "/test-participant-drafts", "/api/test/participant-drafts",
