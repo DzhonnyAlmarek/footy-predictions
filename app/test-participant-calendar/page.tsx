@@ -1,16 +1,16 @@
 "use client";
 import {useEffect,useMemo,useState} from "react";
-type Match={source:string;display_id:string;match_id:string;kickoff_at:string;deadline_at:string;status:string;has_test_edit:boolean;home_team:string;away_team:string;stage_name:string|null;tour_name:string|null;my_home_pred:number|null;my_away_pred:number|null;my_prediction_source:'test'|'imported'|'none';prediction_editable:boolean};
+type Match={stage_id:string;tour_id:string;source:string;display_id:string;match_id:string;kickoff_at:string;deadline_at:string;status:string;has_test_edit:boolean;home_team:string;away_team:string;stage_name:string|null;tour_name:string|null;my_home_pred:number|null;my_away_pred:number|null;my_prediction_source:'test'|'imported'|'none';prediction_editable:boolean};
 export default function ParticipantCalendar(){
- const [rows,setRows]=useState<Match[]>([]),[err,setErr]=useState(""),[notice,setNotice]=useState(""),[search,setSearch]=useState(""),[page,setPage]=useState(1),[filter,setFilter]=useState("upcoming"),[writes,setWrites]=useState(false),[importedWrites,setImportedWrites]=useState(false),[values,setValues]=useState<Record<string,{home:string;away:string}>>({}),[busy,setBusy]=useState("");
+ const [tourFilter,setTourFilter]=useState("");const [rows,setRows]=useState<Match[]>([]),[err,setErr]=useState(""),[notice,setNotice]=useState(""),[search,setSearch]=useState(""),[page,setPage]=useState(1),[filter,setFilter]=useState("upcoming"),[writes,setWrites]=useState(false),[importedWrites,setImportedWrites]=useState(false),[values,setValues]=useState<Record<string,{home:string;away:string}>>({}),[busy,setBusy]=useState("");
  async function load(){
   const r=await fetch("/api/test/participant-calendar",{credentials:"same-origin",cache:"no-store"});
   const d=await r.json();if(!r.ok)throw Error(d.error==="unauthorized"?"Сессия истекла — войди снова.":d.error||"Ошибка");
   const list:Match[]=d.rows||[];setRows(list);setWrites(d.predictionsEnabledForNewMatches===true);setImportedWrites(d.predictionsEnabledForImportedMatches===true);
   setValues(Object.fromEntries(list.map(m=>[m.source+':'+m.match_id,{home:m.my_home_pred==null?"":String(m.my_home_pred),away:m.my_away_pred==null?"":String(m.my_away_pred)}])));
  }
- useEffect(()=>{void load().catch(e=>setErr(e.message));},[]);
- const filtered=useMemo(()=>{const now=Date.now();return rows.filter(m=>(filter==="all"||(filter==="upcoming"&&new Date(m.kickoff_at).getTime()>=now)||(filter==="changed"&&m.has_test_edit))&&(!search||[m.display_id,m.home_team,m.away_team,m.stage_name,m.tour_name].join(" ").toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))));},[rows,search,filter]);
+ useEffect(()=>{setTourFilter(new URLSearchParams(window.location.search).get("tour")||"");void load().catch(e=>setErr(e.message));},[]);
+ const filtered=useMemo(()=>{const now=Date.now();return rows.filter(m=>(!tourFilter||m.tour_id===tourFilter)&&(filter==="all"||(filter==="upcoming"&&new Date(m.kickoff_at).getTime()>=now)||(filter==="changed"&&m.has_test_edit))&&(!search||[m.display_id,m.home_team,m.away_team,m.stage_name,m.tour_name].join(" ").toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))));},[rows,search,filter,tourFilter]);
  const total=Math.max(1,Math.ceil(filtered.length/20)),shown=filtered.slice((Math.min(page,total)-1)*20,Math.min(page,total)*20);
  const groups=useMemo(()=>{const result:{name:string;matches:Match[]}[]=[];for(const m of shown){const name=(m.stage_name||"Без этапа")+" · "+(m.tour_name||"Без тура");const g=result.find(x=>x.name===name);if(g)g.matches.push(m);else result.push({name,matches:[m]});}return result;},[shown]);
  const date=(s:string)=>new Date(s).toLocaleString("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})+" МСК";
@@ -27,7 +27,7 @@ export default function ParticipantCalendar(){
  return <main className="calendar">
  <h1>Расписание и прогнозы</h1>
  <p className="intro">Тестовая площадка Neon · прогнозы не влияют на рабочие очки.</p>
- <p><a href="/test-participant-predictions">← Прогнозы участника</a></p>
+ <p><a href="/test-participant-competitions">← Этапы и туры</a> · <a href="/test-participant-predictions">Мои прогнозы</a></p>{tourFilter&&<p><a href="/test-participant-calendar">Сбросить фильтр тура и показать все матчи</a></p>}
  <div className="toolbar"><label>Поиск<input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} placeholder="Команда, матч или тур"/></label><label>Показывать<select value={filter} onChange={e=>{setFilter(e.target.value);setPage(1);}}><option value="upcoming">Предстоящие</option><option value="changed">Тестовые изменения</option><option value="all">Все</option></select></label></div>
  {err&&<p role="alert" className="alert">{err}</p>}{notice&&<p role="status" className="notice">{notice}</p>}
  <p className="counter">Найдено матчей: {filtered.length}. Страница {Math.min(page,total)} из {total}.</p>
