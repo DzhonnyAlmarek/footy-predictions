@@ -22,7 +22,7 @@ export async function GET(req:NextRequest){
      COALESCE(o.points,0)::numeric original_points,
      COALESCE(n.points_outcome,0)::numeric outcome,COALESCE(n.points_diff,0)::numeric diff,
      COALESCE(n.points_h1,0)::numeric home,COALESCE(n.points_h2,0)::numeric away,
-     COALESCE(n.points_bonus,0)::numeric near_bonus
+     COALESCE(n.points_bonus,0)::numeric near_bonus,\n     COALESCE(o.points_outcome,0)::numeric original_outcome,COALESCE(o.points_diff,0)::numeric original_diff,\n     COALESCE(o.points_h1,0)::numeric original_home,COALESCE(o.points_h2,0)::numeric original_away,\n     COALESCE(o.points_bonus,0)::numeric original_near_bonus
     FROM (SELECT * FROM footy_sandbox.score_effective_v2 WHERE source='imported' AND user_id=${uid}::uuid) n
     FULL JOIN (SELECT * FROM footy_sandbox.score_preview_v1 WHERE user_id=${uid}::uuid) o USING(match_id)
   )
@@ -31,7 +31,7 @@ export async function GET(req:NextRequest){
    v.preview_home_score test_home_score,v.preview_away_score test_away_score,
    ep.home_pred,ep.away_pred,ep.has_test_override prediction_overridden,v.has_test_override result_overridden,
    s.original_points,s.test_points,(s.test_points-s.original_points)::numeric(8,2) delta,
-   s.outcome,s.diff,s.home,s.away,s.near_bonus
+   s.outcome,s.diff,s.home,s.away,s.near_bonus,\n   s.original_outcome,s.original_diff,s.original_home,s.original_away,s.original_near_bonus
   FROM scored s JOIN migration_source.matches m ON m.id=s.match_id
   JOIN footy_sandbox.match_results_preview_v1 v ON v.match_id=s.match_id
   JOIN migration_source.teams ht ON ht.id=m.home_team_id
