@@ -91,13 +91,31 @@ jobs:
           SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
         run: |
           set -euo pipefail
-          response="$(curl --retry 8 --retry-all-errors --retry-delay 10 --retry-max-time 240 --fail-with-body --silent --show-error \
-            --request POST 'https://auth.yandex.cloud/oauth/token' \
-            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
-            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
-            --data-urlencode "audience=${SERVICE_ACCOUNT_ID}" \
-            --data-urlencode "subject_token=${GITHUB_OIDC_JWT}" \
-            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          response=""
+          for attempt in 1 2 3 4 5; do
+            http_code="$(curl --silent --show-error --max-time 30 --output /tmp/yandex-token-response.json --write-out '%{http_code}' \
+              --request POST 'https://auth.yandex.cloud/oauth/token' \
+              --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+              --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+              --data-urlencode "audience=${SERVICE_ACCOUNT_ID}" \
+              --data-urlencode "subject_token=${GITHUB_OIDC_JWT}" \
+              --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')" || http_code="000"
+            echo "Yandex token exchange: HTTP ${http_code}, attempt ${attempt}/5"
+            if [[ "$http_code" == "200" ]]; then
+              response="$(cat /tmp/yandex-token-response.json)"
+              break
+            fi
+            if [[ "$http_code" != "429" && "$http_code" != "500" && "$http_code" != "502" && "$http_code" != "503" && "$http_code" != "504" && "$http_code" != "000" ]]; then
+              echo "::error::Non-retryable Yandex token exchange HTTP ${http_code}"
+              exit 1
+            fi
+            if [[ "$attempt" == "5" ]]; then
+              echo "::error::Yandex token exchange failed after 5 attempts (last HTTP ${http_code})"
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
+          rm -f /tmp/yandex-token-response.json
           iam_token="$(jq -er '.access_token' <<< "$response")"
           echo "::add-mask::${iam_token}"
           printf '%s' "$iam_token" | docker login registry.yandexcloud.net --username iam --password-stdin
