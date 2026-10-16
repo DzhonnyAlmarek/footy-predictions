@@ -40,6 +40,7 @@ export async function middleware(req: NextRequest) {
     "/test-participant-calendar", "/api/test/participant-calendar",
     "/test-rating-effective", "/api/test/rating-effective",
     "/test-rating-details", "/api/test/rating-details",
+    "/test-new-match-score-simulation", "/api/test/new-match-score-simulation",
   ]);
   if (participantRoutes.has(pathname) &&
       process.env.DEPLOY_TARGET === "yandex-neon-test" &&
