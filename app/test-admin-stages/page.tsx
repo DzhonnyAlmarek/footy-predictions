@@ -8,6 +8,8 @@ type TourDraft={draft_id:string;imported_stage_id:string|null;draft_stage_id:str
 type TourEdit={tour_id:string;name:string|null};
 type Data={stages:Stage[];tours:Tour[];stageDrafts:StageDraft[];stageEdits:StageEdit[];tourDrafts:TourDraft[];tourEdits:TourEdit[];writeEnabled:boolean;overlayReady:boolean};
 const field={padding:9,border:"1px solid #b9c8dc",borderRadius:7};
+const tourCard={display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,border:"1px solid #d3ddec",borderRadius:8,padding:"9px 12px",background:"#f7faff",fontSize:13,minWidth:180};
+const actionButton={padding:"5px 9px",border:"1px solid #aabbd4",borderRadius:6,background:"#fff",cursor:"pointer"};
 export default function AdminStages(){
  const [data,setData]=useState<Data|null>(null),[error,setError]=useState(""),[notice,setNotice]=useState(""),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[filter,setFilter]=useState("");
  const [stageName,setStageName]=useState(""),[matches,setMatches]=useState("56");
@@ -55,13 +57,20 @@ export default function AdminStages(){
    </form>
   </section>}
   <label>Поиск этапа <input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Название этапа" style={{...field,display:"block",width:"100%",maxWidth:400,marginTop:5}} /></label>
-  {shown.map(stage=>{const tours=stage.draft?[]:data.tours.filter(t=>t.stage_id===stage.id);const drafts=data.tourDrafts.filter(t=>stage.draft?t.draft_stage_id===stage.id:t.imported_stage_id===stage.id);return <section key={stage.key} style={{border:"1px solid #cfdced",borderRadius:12,padding:18,marginTop:15}}>
+  {shown.map(stage=>{const tours=stage.draft?[]:data.tours.filter(t=>t.stage_id===stage.id);const drafts=data.tourDrafts.filter(t=>stage.draft?t.draft_stage_id===stage.id:t.imported_stage_id===stage.id);
+  const orderedTours=[...tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no)||a.tour_no.localeCompare(b.tour_no));return <section key={stage.key} style={{border:"1px solid #cfdced",borderRadius:12,padding:18,marginTop:15}}>
    <div style={{display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap",alignItems:"center"}}><h2 style={{margin:"0 0 8px",fontSize:20}}>{stage.displayName}{stage.draft?" · Тестовый":""}</h2>
    {data.writeEnabled&&stage.status==="draft"&&<button disabled={busy} onClick={()=>rename(stage.draft?"draft-stage":"imported-stage",Number(stage.id),stage.displayName)}>Переименовать этап</button>}</div>
    <p style={{fontSize:13,color:"#5a6a80"}}>Статус: {stage.status} {stage.is_current?"· Текущий этап":""} · Туров: {tours.length+drafts.length}</p>
-   <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-    {tours.map(t=><span key={t.id} style={{border:"1px solid #d3ddec",borderRadius:7,padding:9,background:"#f7faff",fontSize:13}}>{data.tourEdits.find(e=>e.tour_id===t.id)?.name||t.name||"Тур "+t.tour_no} {data.writeEnabled&&stage.status==="draft"&&<button disabled={busy} onClick={()=>rename("imported-tour",Number(t.id),t.name||"Тур "+t.tour_no)}>Изменить</button>}</span>)}
-    {drafts.map(t=><span key={"d"+t.draft_id} style={{border:"1px solid #b8ddc4",borderRadius:7,padding:9,background:"#f1fff4",fontSize:13}}>Тестовый тур {t.tour_no}: {t.name} {data.writeEnabled&&<button disabled={busy} onClick={()=>rename("draft-tour",Number(t.draft_id),t.name||"Тур "+t.tour_no)}>Изменить</button>}</span>)}
+   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
+    {orderedTours.map(t=>{const title=data.tourEdits.find(e=>e.tour_id===t.id)?.name||t.name||"Без названия";return <div key={t.id} style={tourCard}>
+      <div><strong>Тур {t.tour_no}</strong><div style={{color:"#53657c",marginTop:3}}>{title}</div></div>
+      {data.writeEnabled&&stage.status==="draft"&&<button style={actionButton} disabled={busy} onClick={()=>rename("imported-tour",Number(t.id),title)}>Изменить</button>}
+     </div>;})}
+    {drafts.map(t=><div key={"d"+t.draft_id} style={{...tourCard,background:"#f1fff4",borderColor:"#b8ddc4"}}>
+      <div><strong>Тестовый тур {t.tour_no}</strong><div style={{color:"#53657c",marginTop:3}}>{t.name}</div></div>
+      {data.writeEnabled&&<button style={actionButton} disabled={busy} onClick={()=>rename("draft-tour",Number(t.draft_id),t.name||"Тур "+t.tour_no)}>Изменить</button>}
+     </div>)}
    </div>
   </section>;})}
   {shown.length===0&&<p>Этапы не найдены.</p>}
