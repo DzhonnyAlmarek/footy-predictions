@@ -17,11 +17,11 @@ export async function GET(req:NextRequest){
   const uid=await user(req);if(!uid)return reply("unauthorized",401);
   const sql=participantDatabase();
   const rows=await sql`SELECT n.draft_id::text AS match_id,n.kickoff_at,n.deadline_at,n.status,
-   ht.name AS home_team,at.name AS away_team,p.home_pred,p.away_pred,p.updated_at,
+   ht.name AS home_team,at.name AS away_team,p.home_pred,p.away_pred,p.updated_at,\n   COALESCE(ds.name,ms.name) AS stage_name,COALESCE(dt.name,mt.name,dt.tour_no,mt.tour_no) AS tour_name,
    (n.is_deleted=false AND n.status='scheduled' AND n.deadline_at>now() AND n.kickoff_at>now()) AS editable
    FROM footy_sandbox.calendar_new_matches n
    JOIN migration_source.teams ht ON ht.id=n.home_team_id JOIN migration_source.teams at ON at.id=n.away_team_id
-   LEFT JOIN footy_sandbox.new_match_prediction_drafts p ON p.draft_id=n.draft_id AND p.user_id=${uid}::uuid
+   LEFT JOIN footy_sandbox.new_match_prediction_drafts p ON p.draft_id=n.draft_id AND p.user_id=${uid}::uuid\n   LEFT JOIN footy_sandbox.stage_drafts ds ON ds.draft_id=n.draft_stage_id\n   LEFT JOIN footy_sandbox.tour_drafts dt ON dt.draft_id=n.draft_tour_id\n   LEFT JOIN migration_source.stages ms ON ms.id=n.stage_id\n   LEFT JOIN migration_source.tours mt ON mt.id=n.tour_id
    WHERE n.is_deleted=false ORDER BY n.kickoff_at ASC,n.draft_id ASC LIMIT 200`;
   return NextResponse.json({matches:rows,readonly:!enabled(),sandbox:true},{headers:AUTH_HEADERS});
  }catch{return reply("data_unavailable",503);}
