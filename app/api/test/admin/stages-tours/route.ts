@@ -15,7 +15,15 @@ export async function GET(req:NextRequest){
   // Imported source remains immutable. Overlay tables are required only when the migration is applied.
   const stages=await sql`SELECT s.id::text,s.name,s.status,s.is_current,s.matches_required FROM migration_source.stages s ORDER BY s.id`;
   const tours=await sql`SELECT id::text,stage_id::text,tour_no,name FROM migration_source.tours ORDER BY stage_id,id`;
-  return respond({stages,tours,writeEnabled:enabled(),overlayReady:false});
+  let stageDrafts:unknown[]=[];let stageEdits:unknown[]=[];let tourDrafts:unknown[]=[];let tourEdits:unknown[]=[];let overlayReady=false;
+  try{
+   stageDrafts=await sql`SELECT draft_id::text,name,status,is_current,matches_required FROM footy_sandbox.stage_drafts WHERE NOT is_deleted ORDER BY draft_id`;
+   stageEdits=await sql`SELECT stage_id::text,name,matches_required FROM footy_sandbox.stage_edits`;
+   tourDrafts=await sql`SELECT draft_id::text,imported_stage_id::text,draft_stage_id::text,tour_no,name FROM footy_sandbox.tour_drafts WHERE NOT is_deleted ORDER BY draft_id`;
+   tourEdits=await sql`SELECT tour_id::text,name FROM footy_sandbox.tour_edits`;
+   overlayReady=true;
+  }catch{overlayReady=false;}
+  return respond({stages,tours,stageDrafts,stageEdits,tourDrafts,tourEdits,writeEnabled:enabled()&&overlayReady,overlayReady});
  }catch{return respond({error:"data_unavailable"},503);}
 }
 export async function POST(req:NextRequest){
