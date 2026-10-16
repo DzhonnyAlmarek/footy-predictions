@@ -5,11 +5,17 @@ import { useEffect, useState } from "react";
 export default function TestParticipantLogin() {
   const afterLogin = () => { const requested = new URLSearchParams(window.location.search).get("next") || ""; return requested.startsWith("/test-") && !requested.startsWith("//") && !requested.includes("\\\\") ? requested : "/test-participant-home"; };
   const [username, setUsername] = useState("");
+  const [users, setUsers] = useState<string[]>([]);
+  const [usersError, setUsersError] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    fetch("/api/test/participant-users", { cache: "no-store" })
+      .then(async r => { if (!r.ok) throw new Error("Не удалось загрузить список участников"); return r.json(); })
+      .then(data => setUsers(Array.isArray(data.users) ? data.users : []))
+      .catch(() => setUsersError("Список участников временно недоступен."));
     fetch("/api/test/participant-session", { credentials: "same-origin", cache: "no-store" })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.authenticated) window.location.replace(afterLogin()); })
@@ -47,11 +53,13 @@ export default function TestParticipantLogin() {
     <h1>Тестовый вход участника — Neon</h1>
     <p>Изолированная площадка. Пользовательский кабинет Neon для проверки переноса Footy.</p>
     <form onSubmit={signIn} style={{ display: "grid", gap: 12 }}>
-      <label>Имя участника
-        <input required autoComplete="username" maxLength={100} value={username}
-          onChange={e => setUsername(e.target.value)}
-          style={{ display: "block", width: "100%" }} />
+      <label>Пользователь
+        <select required value={username} onChange={e => setUsername(e.target.value)} style={{ display: "block", width: "100%" }}>
+          <option value="">Выбери пользователя</option>
+          {users.map(user => <option key={user} value={user}>{user}</option>)}
+        </select>
       </label>
+      {usersError && <p role="alert">{usersError}</p>}
       <label>Пароль
         <input required type="password" autoComplete="current-password" value={password}
           onChange={e => setPassword(e.target.value)}
