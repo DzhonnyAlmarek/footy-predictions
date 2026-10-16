@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export default function TestParticipantLogin() {
+export default function TestParticipantLogin() {\n  const afterLogin = () => { const requested = new URLSearchParams(window.location.search).get("next") || ""; return requested.startsWith("/test-") && !requested.startsWith("//") && !requested.includes("\\\\") ? requested : "/test-participant-home"; };
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -11,7 +11,7 @@ export default function TestParticipantLogin() {
   useEffect(() => {
     fetch("/api/test/participant-session", { credentials: "same-origin", cache: "no-store" })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.authenticated) window.location.replace("/test-participant-predictions"); })
+      .then(data => { if (data?.authenticated) window.location.replace(afterLogin()); })
       .catch(() => {});
   }, []);
 
@@ -28,7 +28,7 @@ export default function TestParticipantLogin() {
         body: JSON.stringify({ username, password })
       });
       if (response.ok) {
-        window.location.assign("/test-participant-predictions");
+        window.location.assign(afterLogin());
         return;
       }
       setMessage(response.status === 429 ? "Слишком много попыток. Попробуй позже." :
@@ -44,7 +44,7 @@ export default function TestParticipantLogin() {
 
   return <main style={{ maxWidth: 440, margin: "64px auto", padding: 24 }}>
     <h1>Тестовый вход участника — Neon</h1>
-    <p>Изолированная площадка. Просмотр прогнозов без возможности изменения данных.</p>
+    <p>Изолированная площадка. Пользовательский кабинет Neon для проверки переноса Footy.</p>
     <form onSubmit={signIn} style={{ display: "grid", gap: 12 }}>
       <label>Имя участника
         <input required autoComplete="username" maxLength={100} value={username}
