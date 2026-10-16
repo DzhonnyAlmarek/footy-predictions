@@ -1,16 +1,17 @@
 "use client";
 import {useEffect,useMemo,useState} from "react";
 type Stage={id:string;name:string;status:string};type Tour={id:string;stage_id:string;tour_no:string;name:string|null};type Team={id:string;name:string};type Draft={draft_id:string;stage_id:string;tour_id:string;home_team_id:string;away_team_id:string;kickoff_at:string;deadline_at:string;is_deleted:boolean};
-type DraftStage={draft_id:string;name:string;status:string};type DraftTour={draft_id:string;draft_stage_id:string|null;tour_no:string;name:string|null};type DraftLinks={stages:DraftStage[];tours:DraftTour[];writeEnabled:boolean;schemaReady:boolean};
+type DraftStage={draft_id:string;name:string;status:string};type DraftTour={draft_id:string;draft_stage_id:string|null;tour_no:string;name:string|null};type DraftMatch={draft_id:string;draft_stage_id:string;draft_tour_id:string;home_team_id:string;away_team_id:string;kickoff_at:string;deadline_at:string;is_deleted:boolean;stage_name:string;tour_no:string;tour_name:string|null};type DraftLinks={stages:DraftStage[];tours:DraftTour[];matches:DraftMatch[];writeEnabled:boolean;schemaReady:boolean};
 type Data={readonly:boolean;writeEnabled:boolean;stages:Stage[];tours:Tour[];teams:Team[];newDrafts:Draft[]};
 const explain=(s:string)=>({stage_tour_team_conflict_or_not_draft:"Нельзя создать матч: проверь этап, тур и участие команд в этом туре.",deadline_after_kickoff:"Приём прогнозов должен завершаться не позднее начала матча.",invalid_match:"Проверь обязательные поля и даты.",writes_disabled:"Запись календаря отключена.",forbidden:"Нет доступа ADMIN.",draft_not_editable:"Черновик недоступен для изменения: проверь статус этапа и занятость команд."} as Record<string,string>)[s]||s;
 export default function AdminCalendar(){
  const [data,setData]=useState<Data|null>(null),[message,setMessage]=useState(""),[busy,setBusy]=useState(false);
  const [editing,setEditing]=useState<string|null>(null);
- const [draftLinks,setDraftLinks]=useState<DraftLinks|null>(null),[draftStage,setDraftStage]=useState(""),[draftTour,setDraftTour]=useState("");
+ const [draftLinks,setDraftLinks]=useState<DraftLinks|null>(null),[draftStage,setDraftStage]=useState(""),[draftTour,setDraftTour]=useState(""),[editingDraft,setEditingDraft]=useState<string|null>(null);
  const [stage,setStage]=useState(""),[tour,setTour]=useState(""),[home,setHome]=useState(""),[away,setAway]=useState(""),[kickoff,setKickoff]=useState(""),[deadline,setDeadline]=useState("");
+ async function reloadDraftLinks(){const r=await fetch("/api/test/admin/calendar-draft-links",{credentials:"same-origin",cache:"no-store"});if(r.ok)setDraftLinks(await r.json());}
  async function reload(){const r=await fetch("/api/test/admin/calendar",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(!r.ok)throw Error(explain(d.error||"Ошибка загрузки"));setData(d);}
- useEffect(()=>{void reload().catch(e=>setMessage(String(e.message||e)));fetch("/api/test/admin/calendar-draft-links",{credentials:"same-origin",cache:"no-store"}).then(r=>r.ok?r.json():null).then(setDraftLinks).catch(()=>setDraftLinks(null));},[]);
+ useEffect(()=>{void reload().catch(e=>setMessage(String(e.message||e)));void reloadDraftLinks().catch(()=>setDraftLinks(null));},[]);
  const availableStages=useMemo(()=>data?.stages.filter(s=>s.status==="draft")||[],[data]);
  const tours=useMemo(()=>data?.tours.filter(t=>t.stage_id===stage)||[],[data,stage]);
  const teams=data?.teams||[];
@@ -19,7 +20,8 @@ export default function AdminCalendar(){
  const localDate=(iso:string)=>{const d=new Date(iso);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
  function edit(d:Draft){setEditing(d.draft_id);setStage(d.stage_id);setTour(d.tour_id);setHome(d.home_team_id);setAway(d.away_team_id);setKickoff(localDate(d.kickoff_at));setDeadline(localDate(d.deadline_at));setMessage("Редактируется черновик №"+d.draft_id);window.scrollTo({top:0,behavior:"smooth"});}
  async function action(d:Draft,type:"delete"|"restore"){if(!data?.writeEnabled||busy)return;if(type==="delete"&&!window.confirm("Скрыть тестовый черновик №"+d.draft_id+"?"))return;setBusy(true);try{const r=await fetch("/api/test/admin/calendar",{method:"PATCH",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:type,draftId:Number(d.draft_id)})});const v=await r.json();if(!r.ok)throw Error(explain(v.error||"Ошибка"));await reload();setMessage(type==="delete"?"Черновик скрыт.":"Черновик восстановлен.");if(editing===d.draft_id)setEditing(null);}catch(e){setMessage(e instanceof Error?e.message:"Ошибка");}finally{setBusy(false);}}
- async function saveDraft(e:React.FormEvent){e.preventDefault();if(!draftLinks?.writeEnabled||!draftStage||!draftTour||!home||!away||home===away||!kickoff||!deadline)return;setBusy(true);setMessage("");try{const r=await fetch("/api/test/admin/calendar-draft-links",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({draftStageId:Number(draftStage),draftTourId:Number(draftTour),homeTeamId:Number(home),awayTeamId:Number(away),kickoffAt:new Date(kickoff).toISOString(),deadlineAt:new Date(deadline).toISOString()})});const d=await r.json();if(!r.ok)throw Error(explain(d.error||"Ошибка сохранения"));setMessage("Создан тестовый матч №"+d.draftId+" в новом этапе. Его отображение в общем календаре подключается отдельно.");await reload();}catch(e){setMessage(e instanceof Error?e.message:"Ошибка");}finally{setBusy(false);}}
+ async function saveDraft(e:React.FormEvent){e.preventDefault();if(!draftLinks?.writeEnabled||!draftStage||!draftTour||!home||!away||home===away||!kickoff||!deadline)return;setBusy(true);setMessage("");try{const r=await fetch("/api/test/admin/calendar-draft-links",{method:editingDraft?"PATCH":"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({...(editingDraft?{action:"edit",draftId:Number(editingDraft)}:{}),draftStageId:Number(draftStage),draftTourId:Number(draftTour),homeTeamId:Number(home),awayTeamId:Number(away),kickoffAt:new Date(kickoff).toISOString(),deadlineAt:new Date(deadline).toISOString()})});const d=await r.json();if(!r.ok)throw Error(explain(d.error||"Ошибка сохранения"));setMessage(editingDraft?"Изменён тестовый матч №"+editingDraft:"Создан тестовый матч №"+d.draftId);setEditingDraft(null);await reloadDraftLinks();}catch(e){setMessage(e instanceof Error?e.message:"Ошибка");}finally{setBusy(false);}}
+ async function draftAction(m:DraftMatch,action:"delete"|"restore"){if(!draftLinks?.writeEnabled||busy)return;if(action==="delete"&&!window.confirm("Скрыть тестовый матч №"+m.draft_id+"?"))return;setBusy(true);try{const r=await fetch("/api/test/admin/calendar-draft-links",{method:"PATCH",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,draftId:Number(m.draft_id)})});const v=await r.json();if(!r.ok)throw Error(explain(v.error||"Ошибка"));await reloadDraftLinks();setMessage(action==="delete"?"Матч скрыт":"Матч восстановлен");}catch(e){setMessage(e instanceof Error?e.message:"Ошибка");}finally{setBusy(false);}}
  async function save(e:React.FormEvent){e.preventDefault();if(!canSave)return;setBusy(true);setMessage("");try{
   const r=await fetch("/api/test/admin/calendar",{method:editing?"PATCH":"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({...(editing?{action:"edit",draftId:Number(editing)}:{}),stageId:Number(stage),tourId:Number(tour),homeTeamId:Number(home),awayTeamId:Number(away),kickoffAt:new Date(kickoff).toISOString(),deadlineAt:new Date(deadline).toISOString()})});
   const d=await r.json();if(!r.ok)throw Error(explain(d.error||"Ошибка сохранения"));setMessage(editing?"Черновик №"+editing+" изменён.":"Создан только тестовый черновик №"+d.draftId);setEditing(null);await reload();
@@ -42,14 +44,23 @@ export default function AdminCalendar(){
   </form>
   {draftLinks?.stages.length? <section style={{border:"1px solid #bdd4c2",borderRadius:10,padding:16,marginTop:25}}>
    <h2>Матч в новом тестовом этапе</h2>
-   <p>Отдельная тестовая операция. Для новых этапов пока не поддерживается общий календарь и редактирование созданных матчей.</p>
+   <p>Отдельная тестовая операция. Новые матчи отображаются ниже отдельно от импортированного календаря.</p>
    <form onSubmit={e=>void saveDraft(e)} style={{display:"grid",gap:10,maxWidth:580}}>
     <label>Тестовый этап <select required value={draftStage} onChange={e=>{setDraftStage(e.target.value);setDraftTour("");}}><option value="">Выбери этап</option>{draftLinks.stages.map(s=><option key={s.draft_id} value={s.draft_id}>{s.name}</option>)}</select></label>
     <label>Тестовый тур <select required value={draftTour} onChange={e=>setDraftTour(e.target.value)}><option value="">Выбери тур</option>{draftLinks.tours.filter(t=>t.draft_stage_id===draftStage).map(t=><option key={t.draft_id} value={t.draft_id}>Тур {t.tour_no} · {t.name}</option>)}</select></label>
     <p style={{fontSize:13}}>Команды и время используются из полей формы выше.</p>
-    <button type="submit" disabled={!draftLinks.writeEnabled||busy||!draftStage||!draftTour||!home||!away||home===away||!kickoff||!deadline}>Создать матч в тестовом этапе</button>
+    <button type="submit" disabled={!draftLinks.writeEnabled||busy||!draftStage||!draftTour||!home||!away||home===away||!kickoff||!deadline}>{editingDraft?"Сохранить изменения тестового матча":"Создать матч в тестовом этапе"}</button>
     {!draftLinks.writeEnabled&&<p>Функция отключена до применения миграции и включения отдельного разрешения.</p>}
    </form>
+   {editingDraft&&<button type="button" onClick={()=>setEditingDraft(null)}>Отменить редактирование</button>}
+   <h3>Матчи новых тестовых этапов ({draftLinks.matches?.length||0})</h3>
+   {draftLinks.matches?.map(m=><div key={m.draft_id} style={{padding:12,borderBottom:"1px solid #ddd"}}>
+    <strong>#{m.draft_id}</strong> · {m.stage_name} · Тур {m.tour_no} · {name(m.home_team_id)} — {name(m.away_team_id)} · {new Date(m.kickoff_at).toLocaleString("ru-RU")} {m.is_deleted?"· скрыт":""}
+    <div style={{display:"flex",gap:8,marginTop:8}}>
+     {!m.is_deleted&&<button type="button" disabled={!draftLinks.writeEnabled||busy} onClick={()=>{setEditingDraft(m.draft_id);setDraftStage(m.draft_stage_id);setDraftTour(m.draft_tour_id);setHome(m.home_team_id);setAway(m.away_team_id);setKickoff(localDate(m.kickoff_at));setDeadline(localDate(m.deadline_at));window.scrollTo({top:0,behavior:"smooth"});}}>Изменить</button>}
+     <button type="button" disabled={!draftLinks.writeEnabled||busy} onClick={()=>void draftAction(m,m.is_deleted?"restore":"delete")}>{m.is_deleted?"Восстановить":"Скрыть"}</button>
+    </div>
+   </div>)}
   </section>:null}
   <p role="status">{message}</p>
   <h2>Тестовые черновики ({data?.newDrafts.length||0})</h2>
