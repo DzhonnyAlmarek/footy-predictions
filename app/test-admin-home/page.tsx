@@ -2,6 +2,7 @@
 import {useEffect,useState} from "react";
 type Stats={stages:number;importedMatches:number;newMatches:number;resultOverrides:number;calendarEdits:number;participants:number};
 const sections=[
+ {title:"Этапы и туры",description:"Просмотр импортированных этапов, их статусов и туров",href:"/test-admin-stages"},
  {title:"Результаты матчей",description:"Ввод и отмена тестовых результатов импортированных матчей",href:"/test-admin-results"},
  {title:"Новые матчи",description:"Создание, изменение и скрытие тестовых матчей",href:"/test-admin-calendar"},
  {title:"Импортированный календарь",description:"Изменение дат, команд и туров в песочнице",href:"/test-admin-calendar-imported"},
@@ -18,7 +19,7 @@ export default function TestAdminHome(){
  {stats&&<><section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:12,margin:"24px 0"}}>
  {([["Этапы",stats.stages],["Участники",stats.participants],["Импортированные матчи",stats.importedMatches],["Новые тестовые матчи",stats.newMatches],["Изменения календаря",stats.calendarEdits],["Тестовые результаты",stats.resultOverrides]] as [string,number][]).map(([label,value])=><div key={label} style={{padding:14,borderRadius:11,border:"1px solid #cfdced",background:"#f5f8ff"}}><strong style={{display:"block",fontSize:25}}>{value}</strong><span style={{fontSize:12,color:"#66758a"}}>{label}</span></div>)}</section>
  <h2>Доступные инструменты управления</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(270px,1fr))",gap:12}}>{sections.map(s=><a key={s.href} href={s.href} style={{display:"block",padding:17,border:"1px solid #cfdced",borderRadius:12,textDecoration:"none",color:"#1c3657"}}><strong>{s.title} →</strong><p style={{fontSize:13,color:"#62748a"}}>{s.description}</p></a>)}</div>
- <h2 style={{marginTop:30}}>Пока не реализовано</h2><p>Управление этапами и турами, командами, учётными записями, публикацией, резервными копиями и переносом фоновых задач пока не подключено к Neon как полноценная административная система.</p>
+ <h2 style={{marginTop:30}}>Пока не реализовано</h2><p>Редактирование этапов и туров, управление командами, учётными записями, публикацией, резервными копиями и переносом фоновых задач пока не подключено к Neon как полноценная административная система.</p>
  </>}
  </main>;
 }
