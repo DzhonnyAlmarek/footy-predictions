@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 export default function TestParticipantLogin() {
-  const afterLogin = () => { const requested = new URLSearchParams(window.location.search).get("next") || ""; return requested.startsWith("/test-") && !requested.startsWith("//") && !requested.includes("\\\\") ? requested : "/test-participant-home"; };
+  const afterLogin = (account: string) => { const requested = new URLSearchParams(window.location.search).get("next") || ""; return requested.startsWith("/test-") && !requested.startsWith("//") && !requested.includes("\\\\") ? requested : account === "ADMIN" ? "/test-admin-home" : "/test-participant-home"; };
   const [username, setUsername] = useState("");
   const [users, setUsers] = useState<string[]>([]);
   const [usersError, setUsersError] = useState("");
@@ -18,7 +18,7 @@ export default function TestParticipantLogin() {
       .catch(() => setUsersError("Список участников временно недоступен."));
     fetch("/api/test/participant-session", { credentials: "same-origin", cache: "no-store" })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.authenticated) window.location.replace(afterLogin()); })
+      .then(data => { if (data?.authenticated) window.location.replace(afterLogin(data.username)); })
       .catch(() => {});
   }, []);
 
@@ -35,7 +35,7 @@ export default function TestParticipantLogin() {
         body: JSON.stringify({ username, password })
       });
       if (response.ok) {
-        window.location.assign(afterLogin());
+        window.location.assign(afterLogin(username));
         return;
       }
       setMessage(response.status === 429 ? "Слишком много попыток. Попробуй позже." :
