@@ -29,7 +29,7 @@ export async function middleware(req: NextRequest) {
   // Every participant API independently validates its Neon session and database scope.
   const participantRoutes = new Set([
     "/test-participant-login", "/test-participant-predictions", "/test-participant-home",
-    "/api/test/participant-login", "/api/test/participant-session",
+    "/api/test/participant-login", "/api/test/participant-users", "/api/test/participant-session",
     "/api/test/participant-predictions", "/api/test/participant-logout",
     "/test-participant-drafts", "/api/test/participant-drafts",
     "/test-participant-ratings", "/api/test/participant-ratings",
