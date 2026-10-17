@@ -27,7 +27,7 @@ jobs:
       github.ref == 'refs/heads/feature/yandex-neon-cutover-prep' &&
       ((github.event_name == 'workflow_dispatch' && inputs.confirmation == 'UPLOAD-CUTOVER-PREVIEW') ||
        (github.event_name == 'push' && github.event.head_commit.message == 'ci(cutover): authorize one-time isolated image upload 2026-10-17'))
-    environment: yandex-test
+    environment: yandex-cutover-preview
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
