@@ -1,0 +1,35 @@
+name: Verify cutover preview build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/yandex-neon-cutover-prep
+    paths:
+      - "app/api/cutover/**"
+      - "app/cutover-participant/**"
+      - "lib/cutover-*.ts"
+      - "middleware.ts"
+      - ".github/workflows/verify-cutover-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-cutover-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEPLOY_TARGET: yandex-neon-cutover-preview
+      ENABLE_CUTOVER_PREVIEW: "false"
+      ENABLE_CUTOVER_AUTH: "false"
+      ENABLE_CUTOVER_LOGIN: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
