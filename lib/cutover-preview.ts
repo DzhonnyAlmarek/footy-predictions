@@ -45,3 +45,20 @@ export async function cutoverMatches(limit = 20) {
     LIMIT ${bounded}
   `;
 }
+
+/** Administrative preview only. No user-specific records or credentials returned. */
+export async function cutoverPredictionCoverage() {
+  const sql = previewDatabase();
+  return sql`
+    SELECT
+      (SELECT count(*)::int FROM footy_cutover.predictions) AS predictions,
+      (SELECT count(DISTINCT user_id)::int FROM footy_cutover.predictions) AS participants_with_predictions,
+      (SELECT count(DISTINCT match_id)::int FROM footy_cutover.predictions) AS matches_with_predictions,
+      (SELECT count(*)::int FROM footy_cutover.predictions p
+       LEFT JOIN footy_cutover.matches m ON m.id=p.match_id
+       WHERE m.id IS NULL) AS missing_matches,
+      (SELECT count(*)::int FROM footy_cutover.predictions p
+       LEFT JOIN footy_cutover.profiles u ON u.id=p.user_id
+       WHERE u.id IS NULL) AS missing_participants
+  `;
+}
