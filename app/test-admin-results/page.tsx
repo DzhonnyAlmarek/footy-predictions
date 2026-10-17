@@ -58,7 +58,7 @@ export default function AdminTestResult() {
  return <main style={{maxWidth:1130,margin:"35px auto",padding:20}}>
   <h1>Тестовый ввод результатов — ADMIN</h1>
   <p>Изолированная Neon. Импортированные матчи и рабочий Footy не изменяются.</p>
-  <p><a href="/test-match-overview">← Список матчей</a></p>
+  <p><a href="/test-match-overview">← Список матчей</a> · <a href="/test-admin-new-match-results">Симуляция новых матчей →</a></p>
   <section style={{margin:"20px 0"}}>
    <h2>Матчи — редактирование результатов</h2>
    <div style={{display:"flex",flexWrap:"wrap",gap:12,marginBottom:14,alignItems:"end"}}>
