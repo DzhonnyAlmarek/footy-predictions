@@ -2,10 +2,12 @@
 import { useEffect,useMemo,useState } from "react";
 type ListedMatch={home_score:number|null;away_score:number|null;id:string;home_team:string;away_team:string;stage_name:string|null;tour_name:string|null;kickoff_at:string|null;status:string};
 type ChangedMatch={id:string;home_score:number;away_score:number};
-type Rating={username:string;original_points:string;preview_points:string;delta:string};
+type Rating={username:string;original_points:string;preview_points:string;new_match_points:string;delta:string};
+type NewMatch={id:string;home_team:string;away_team:string;stage_name:string|null;tour_name:string|null;kickoff_at:string;is_deleted:boolean;home_score:number|null;away_score:number|null};
 type Match={match_id:string;original_status:string;original_home_score:number|null;original_away_score:number|null;preview_status:string;preview_home_score:number|null;preview_away_score:number|null;has_test_override:boolean};
 export default function AdminTestResult() {
  const [changedIds,setChangedIds]=useState<string[]>([]);const [changedMatches,setChangedMatches]=useState<ChangedMatch[]>([]);const [ratings,setRatings]=useState<Rating[]>([]);const [overrides,setOverrides]=useState(0);const [ratingError,setRatingError]=useState("");
+ const [newMatches,setNewMatches]=useState<NewMatch[]>([]);const [newId,setNewId]=useState("");const [newHome,setNewHome]=useState("0");const [newAway,setNewAway]=useState("0");
  const [matchList,setMatchList]=useState<ListedMatch[]>([]);const [listError,setListError]=useState("");
  const [search,setSearch]=useState("");const [stage,setStage]=useState("");const [tour,setTour]=useState("");const [page,setPage]=useState(1);const [onlyChanged,setOnlyChanged]=useState(false);const [statusFilter,setStatusFilter]=useState("upcoming");const [sortOrder,setSortOrder]=useState("nearest");
  const [id,setId]=useState("");const [match,setMatch]=useState<Match|null>(null);
@@ -13,7 +15,9 @@ export default function AdminTestResult() {
  const [hp,setHp]=useState("0");const [ap,setAp]=useState("0");
  const [readonly,setReadonly]=useState(true);const [busy,setBusy]=useState(false);const [msg,setMsg]=useState("");
  async function loadRatings(){try{const r=await fetch("/api/test/admin/ratings-preview",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка рейтинга");setRatings(d.ratings);setOverrides(d.overrides);setChangedIds(d.changedMatchIds||[]);setChangedMatches(d.changedMatches||[]);setRatingError("");}catch(e){setRatingError(e instanceof Error?e.message:"Ошибка рейтинга");}}
- useEffect(()=>{void loadRatings();const controller=new AbortController();fetch("/api/test/match-overview",{credentials:"same-origin",cache:"no-store",signal:controller.signal}).then(async r=>{if(!r.ok)throw Error(r.status===401?"Сессия истекла — войди заново.":"Не удалось загрузить список матчей.");return r.json();}).then(d=>{if(!controller.signal.aborted)setMatchList(d.rows||[]);}).catch(e=>{if(!controller.signal.aborted)setListError(e instanceof Error?e.message:"Ошибка списка");});return ()=>controller.abort();},[]);
+ async function loadNewMatches(){try{const r=await fetch("/api/test/admin/new-match-simulations",{credentials:"same-origin",cache:"no-store"});const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка загрузки новых матчей");setNewMatches(d.matches||[]);}catch(e){setListError(e instanceof Error?e.message:"Ошибка новых матчей");}}
+ async function updateNew(remove:boolean){if(!newId||busy)return;setBusy(true);setMsg("");try{const r=await fetch("/api/test/admin/new-match-simulations"+(remove?"?matchId="+encodeURIComponent(newId):""),{method:remove?"DELETE":"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:remove?undefined:JSON.stringify({matchId:Number(newId),homeScore:Number(newHome),awayScore:Number(newAway)})});const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка сохранения");await Promise.all([loadNewMatches(),loadRatings()]);setMsg(remove?"Симуляция отменена.":"Симуляция сохранена.");}catch(e){setMsg(e instanceof Error?e.message:"Ошибка");}finally{setBusy(false);}}
+ useEffect(()=>{void loadNewMatches();void loadRatings();const controller=new AbortController();fetch("/api/test/match-overview",{credentials:"same-origin",cache:"no-store",signal:controller.signal}).then(async r=>{if(!r.ok)throw Error(r.status===401?"Сессия истекла — войди заново.":"Не удалось загрузить список матчей.");return r.json();}).then(d=>{if(!controller.signal.aborted)setMatchList(d.rows||[]);}).catch(e=>{if(!controller.signal.aborted)setListError(e instanceof Error?e.message:"Ошибка списка");});return ()=>controller.abort();},[]);
  const stages=useMemo(()=>Array.from(new Set(matchList.map(m=>m.stage_name).filter((x):x is string=>!!x))).sort((a,b)=>a.localeCompare(b,"ru")),[matchList]);
  const tours=useMemo(()=>Array.from(new Set(matchList.filter(m=>!stage||m.stage_name===stage).map(m=>m.tour_name).filter((x):x is string=>!!x))).sort((a,b)=>a.localeCompare(b,"ru")),[matchList,stage]);
  const filtered=useMemo(()=>{const now=Date.now();return matchList.filter(m=>(!stage||m.stage_name===stage)&&(!tour||m.tour_name===tour)&&(!search||[m.id,m.home_team,m.away_team,m.stage_name||"",m.tour_name||""].join(" ").toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru")))&&(statusFilter==="all"||(statusFilter==="finished"?m.status==="finished":m.status==="scheduled"&&!!m.kickoff_at&&new Date(m.kickoff_at).getTime()>now))).sort((a,b)=>{const ta=a.kickoff_at?new Date(a.kickoff_at).getTime():Number.MAX_SAFE_INTEGER;const tb=b.kickoff_at?new Date(b.kickoff_at).getTime():Number.MAX_SAFE_INTEGER;return sortOrder==="latest"?tb-ta:ta-tb;});},[matchList,search,stage,tour,statusFilter,sortOrder]);
@@ -59,6 +63,7 @@ export default function AdminTestResult() {
   <h1>Тестовый ввод результатов — ADMIN</h1>
   <p>Изолированная Neon. Импортированные матчи и рабочий Footy не изменяются.</p>
   <p><a href="/test-match-overview">← Список матчей</a> · <a href="/test-admin-new-match-results">Симуляция новых матчей →</a></p>
+  <section style={{margin:"20px 0",border:"1px solid #d0d7e2",borderRadius:10,padding:18}}><h2>Новые тестовые матчи — симуляция результата</h2><p>Результаты можно моделировать до начала матча. Рабочие результаты не изменяются.</p><label>Матч <select value={newId} onChange={e=>{const id=e.target.value;const m=newMatches.find(x=>x.id===id);setNewId(id);setNewHome(String(m?.home_score??0));setNewAway(String(m?.away_score??0));}}><option value="">Выбери новый матч</option>{newMatches.filter(x=>!x.is_deleted).map(x=><option key={x.id} value={x.id}>T-{x.id} · {x.home_team} — {x.away_team} · {x.stage_name||"—"} / {x.tour_name||"—"}</option>)}</select></label>{newId&&<div style={{marginTop:12}}><p>Текущая симуляция: {(()=>{const x=newMatches.find(m=>m.id===newId);return x?.home_score==null?"не задана":`${x.home_score} : ${x.away_score}`;})()}</p><label>Хозяева <input type="number" min={0} max={30} value={newHome} onChange={e=>setNewHome(e.target.value)}/></label>{" : "}<label>Гости <input type="number" min={0} max={30} value={newAway} onChange={e=>setNewAway(e.target.value)}/></label><div style={{display:"flex",gap:10,marginTop:12}}><button type="button" disabled={busy||!/^(?:[0-9]|[12][0-9]|30)$/.test(newHome)||!/^(?:[0-9]|[12][0-9]|30)$/.test(newAway)} onClick={()=>void updateNew(false)}>Сохранить симуляцию</button><button type="button" disabled={busy||newMatches.find(x=>x.id===newId)?.home_score==null} onClick={()=>void updateNew(true)}>Отменить симуляцию</button></div></div>}</section>
   <section style={{margin:"20px 0"}}>
    <h2>Матчи — редактирование результатов</h2>
    <div style={{display:"flex",flexWrap:"wrap",gap:12,marginBottom:14,alignItems:"end"}}>
@@ -111,12 +116,12 @@ export default function AdminTestResult() {
   <p role="status">{msg}</p>
   <section style={{marginTop:28,border:"1px solid #d0d7e2",borderRadius:10,padding:18}}>
    <h2>Рейтинг: исходный и тестовый</h2>
-   <p>Тестовых изменений матчей: {overrides}. Расчёт только для просмотра, начисления не изменяются.</p>
+   <p>Тестовых изменений матчей: {overrides}. Рейтинг включает симуляции новых матчей. Рабочие начисления не изменяются.</p>
    <button type="button" onClick={()=>void loadRatings()}>Обновить рейтинг</button>
    {ratingError&&<p role="alert">{ratingError}</p>}
    <div style={{overflowX:"auto",marginTop:12,maxWidth:650}}><table style={{borderCollapse:"collapse",width:"100%",textAlign:"right"}}>
-    <thead><tr><th style={{textAlign:"left"}}>Участник</th><th>Исходный</th><th>Тестовый</th><th>Разница</th></tr></thead>
-    <tbody>{ratings.map(x=><tr key={x.username}><td style={{textAlign:"left",padding:"8px 4px"}}>{x.username}</td><td>{x.original_points}</td><td>{x.preview_points}</td><td style={{color:Number(x.delta)>0?"green":Number(x.delta)<0?"#b42318":"inherit"}}>{Number(x.delta)>0?"+":""}{x.delta}</td></tr>)}</tbody>
+    <thead><tr><th style={{textAlign:"left"}}>Участник</th><th>Исходный</th><th>Новые матчи</th><th>Тестовый</th><th>Разница</th></tr></thead>
+    <tbody>{ratings.map(x=><tr key={x.username}><td style={{textAlign:"left",padding:"8px 4px"}}>{x.username}</td><td>{x.original_points}</td><td>{x.new_match_points}</td><td>{x.preview_points}</td><td style={{color:Number(x.delta)>0?"green":Number(x.delta)<0?"#b42318":"inherit"}}>{Number(x.delta)>0?"+":""}{x.delta}</td></tr>)}</tbody>
    </table></div>
   </section>
  </main>;
