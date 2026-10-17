@@ -1,0 +1,94 @@
+name: Yandex cutover preview image upload (manual only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Enter UPLOAD-CUTOVER-PREVIEW to authorize isolated registry push"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: yandex-cutover-preview-image-publish
+  cancel-in-progress: false
+
+jobs:
+  upload-only:
+    if: github.ref == 'refs/heads/feature/yandex-neon-cutover-prep' && inputs.confirmation == 'UPLOAD-CUTOVER-PREVIEW'
+    environment: yandex-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify isolated image build configuration
+        run: |
+          set -euo pipefail
+          grep -q '^ENV DEPLOY_TARGET=yandex-neon-cutover-preview$' Dockerfile.cutover-preview
+          ! grep -q '^ARG NEXT_PUBLIC_SUPABASE_' Dockerfile.cutover-preview
+          docker build --pull -f Dockerfile.cutover-preview -t footy-cutover-preview:local .
+      - name: Verify production endpoints remain blocked
+        run: |
+          set -euo pipefail
+          docker run -d --name footy-cutover-smoke -p 127.0.0.1:18081:8080 footy-cutover-preview:local
+          trap 'docker logs footy-cutover-smoke || true; docker rm -f footy-cutover-smoke || true' EXIT
+          ready=0
+          for i in {1..45}; do
+            status="$(curl -s -o /tmp/cutover-home.txt -w '%{http_code}' http://127.0.0.1:18081/ || true)"
+            if [[ "$status" == "503" ]]; then ready=1; break; fi
+            sleep 2
+          done
+          [[ "$ready" == "1" ]]
+          status="$(curl -s -o /tmp/cutover-blocked.json -w '%{http_code}' http://127.0.0.1:18081/api/login)"
+          [[ "$status" == "503" ]]
+          grep -q 'isolated_test_api_disabled' /tmp/cutover-blocked.json
+      - name: Request GitHub OIDC token
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(token);
+            core.setOutput('jwt', token);
+      - name: Exchange OIDC token and login to Yandex Registry
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+          SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+        run: |
+          set -euo pipefail
+          response=""
+          for attempt in 1 2 3 4 5; do
+            http_code="$(curl --silent --show-error --max-time 30 --output /tmp/yandex-cutover-token.json --write-out '%{http_code}' \
+              --request POST 'https://auth.yandex.cloud/oauth/token' \
+              --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+              --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+              --data-urlencode "audience=${SERVICE_ACCOUNT_ID}" \
+              --data-urlencode "subject_token=${GITHUB_OIDC_JWT}" \
+              --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')" || http_code="000"
+            echo "Yandex token exchange: HTTP ${http_code}, attempt ${attempt}/5"
+            if [[ "$http_code" == "200" ]]; then response="$(cat /tmp/yandex-cutover-token.json)"; break; fi
+            if [[ "$http_code" != "429" && "$http_code" != "500" && "$http_code" != "502" && "$http_code" != "503" && "$http_code" != "504" && "$http_code" != "000" ]]; then exit 1; fi
+            if [[ "$attempt" == "5" ]]; then exit 1; fi
+            sleep $((attempt * 15))
+          done
+          rm -f /tmp/yandex-cutover-token.json
+          iam_token="$(jq -er '.access_token' <<< "$response")"
+          echo "::add-mask::${iam_token}"
+          printf '%s' "$iam_token" | docker login registry.yandexcloud.net --username iam --password-stdin
+          unset iam_token response GITHUB_OIDC_JWT
+      - name: Upload isolated image (no deployment)
+        run: |
+          set -euo pipefail
+          IMAGE="registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-preview:${GITHUB_SHA}"
+          docker tag footy-cutover-preview:local "$IMAGE"
+          docker push "$IMAGE"
+          echo "Image uploaded: $IMAGE"
+          echo "No Yandex container revision was created."
+      - name: Logout
+        if: always()
+        run: docker logout registry.yandexcloud.net || true
