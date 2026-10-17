@@ -29,3 +29,19 @@ export async function cutoverSnapshotSummary() {
   `;
   return rows[0];
 }
+
+export async function cutoverMatches(limit = 20) {
+  const sql = previewDatabase();
+  const bounded = Math.max(1, Math.min(50, Math.trunc(limit)));
+  return sql`
+    SELECT m.id, m.kickoff_at, m.status, m.home_score, m.away_score,
+           h.name AS home_team, a.name AS away_team,
+           (SELECT count(*)::int FROM footy_cutover.predictions p
+            WHERE p.match_id = m.id) AS prediction_count
+    FROM footy_cutover.matches m
+    LEFT JOIN footy_cutover.teams h ON h.id = m.home_team_id
+    LEFT JOIN footy_cutover.teams a ON a.id = m.away_team_id
+    ORDER BY m.kickoff_at DESC, m.id DESC
+    LIMIT ${bounded}
+  `;
+}
