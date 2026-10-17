@@ -90,7 +90,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // Opt-in, read-only cutover verification endpoint; route enforces its own token.
-  if (pathname === "/api/cutover/summary" &&
+  if ((pathname === "/api/cutover/summary" || pathname === "/api/cutover/matches") &&
       process.env.DEPLOY_TARGET === "yandex-neon-cutover-preview" &&
       process.env.ENABLE_CUTOVER_PREVIEW === "true") {
     return NextResponse.next();
