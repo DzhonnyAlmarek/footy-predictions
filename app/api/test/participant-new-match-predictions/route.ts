@@ -39,9 +39,14 @@ export async function POST(req:NextRequest){
   const rows=await sql`INSERT INTO footy_sandbox.new_match_prediction_drafts(user_id,draft_id,home_pred,away_pred)
    SELECT ${uid}::uuid,n.draft_id,${b.homePred},${b.awayPred}
    FROM footy_sandbox.calendar_new_matches n
-   JOIN migration_source.stages s ON s.id=n.stage_id
+   LEFT JOIN migration_source.stages s ON s.id=n.stage_id
+   LEFT JOIN footy_sandbox.stage_drafts ds ON ds.draft_id=n.draft_stage_id
+   LEFT JOIN footy_sandbox.tour_drafts dt ON dt.draft_id=n.draft_tour_id
    WHERE n.draft_id=${b.matchId} AND n.is_deleted=false AND n.status='scheduled'
-    AND s.status IN ('draft','published') AND n.deadline_at>now() AND n.kickoff_at>now()
+    AND (s.status IN ('draft','published') OR
+      (ds.status IN ('draft','published') AND NOT ds.is_deleted AND
+       dt.draft_stage_id=ds.draft_id AND NOT dt.is_deleted))
+    AND n.deadline_at>now() AND n.kickoff_at>now()
    ON CONFLICT(user_id,draft_id) DO UPDATE SET home_pred=EXCLUDED.home_pred,away_pred=EXCLUDED.away_pred,updated_at=now()
    WHERE EXISTS(SELECT 1 FROM footy_sandbox.calendar_new_matches n WHERE n.draft_id=EXCLUDED.draft_id
     AND n.is_deleted=false AND n.status='scheduled' AND n.deadline_at>now() AND n.kickoff_at>now())
