@@ -10,6 +10,7 @@ type Prediction = {
 
 export default function CutoverParticipantPage() {
   const [username, setUsername] = useState("");
+  const [participants, setParticipants] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
@@ -26,7 +27,13 @@ export default function CutoverParticipantPage() {
     setAuthenticated(true);
     setMessage("Исторический снимок. Новые прогнозы здесь не принимаются.");
   }
-  useEffect(() => { void load().catch(() => setMessage("Сервис пока недоступен.")); }, []);
+  useEffect(() => {
+    void load().catch(() => setMessage("Сервис пока недоступен."));
+    void fetch("/api/cutover/participants", { cache: "no-store" })
+      .then(response => response.ok ? response.json() : { participants: [] })
+      .then(data => setParticipants(Array.isArray(data.participants) ? data.participants : []))
+      .catch(() => setParticipants([]));
+  }, []);
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,8 +65,10 @@ export default function CutoverParticipantPage() {
     <h1>Golden Whistle — проверка переноса</h1>
     <p>{message}</p>
     {!authenticated ? <form onSubmit={login}>
-      <label>Участник <input value={username} onChange={e => setUsername(e.target.value)}
-        autoComplete="username" required maxLength={100} /></label>
+      <label>Участник <select value={username} onChange={e => setUsername(e.target.value)} required>
+        <option value="">Выбери участника</option>
+        {participants.map(name => <option key={name} value={name}>{name}</option>)}
+      </select></label>
       <label>Пароль <input type="password" value={password}
         onChange={e => setPassword(e.target.value)} autoComplete="current-password" required /></label>
       <button type="submit" disabled={busy}>Войти</button>
