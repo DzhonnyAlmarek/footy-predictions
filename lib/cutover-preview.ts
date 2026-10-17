@@ -11,6 +11,8 @@ function previewDatabase() {
   const url = new URL(raw);
   if (!["postgres:", "postgresql:"].includes(url.protocol) ||
       !url.hostname.endsWith(".neon.tech") ||
+      !process.env.CUTOVER_PREVIEW_ALLOWED_HOST ||
+      url.hostname !== process.env.CUTOVER_PREVIEW_ALLOWED_HOST ||
       !["require", "verify-full"].includes(url.searchParams.get("sslmode") || "") ||
       url.hostname.startsWith("ep-holy-smoke-b1y4pzhn")) {
     throw new Error("invalid cutover preview database");
