@@ -20,7 +20,24 @@ export async function GET(req:NextRequest){
   const scores=await sql`SELECT v.draft_id::text AS match_id,p.username,v.home_pred,v.away_pred,v.home_score,v.away_score,v.points_outcome,v.points_diff,v.points_h1,v.points_h2,v.points_bonus,
    (v.points_outcome+v.points_diff+v.points_h1+v.points_h2+v.points_bonus)::numeric(8,2) AS total
    FROM footy_sandbox.new_match_simulated_scores_v1 v JOIN migration_source.profiles p ON p.id=v.user_id ORDER BY v.draft_id DESC,p.username`;
-  return reply({matches,scores,simulation:true});
+  const ratings=await sql`WITH original AS (
+    SELECT user_id,COALESCE(SUM(points),0)::numeric AS points FROM migration_source.points_ledger GROUP BY user_id
+   ), imported_test AS (
+    SELECT user_id,COALESCE(SUM(points),0)::numeric AS points FROM footy_sandbox.score_with_overrides_v1 GROUP BY user_id
+   ), new_test AS (
+    SELECT user_id,COALESCE(SUM(points_outcome+points_diff+points_h1+points_h2+points_bonus),0)::numeric AS points
+    FROM footy_sandbox.new_match_simulated_scores_v1 GROUP BY user_id
+   )
+   SELECT p.username,COALESCE(o.points,0)::numeric(12,2)::text AS original_points,
+    COALESCE(i.points,0)::numeric(12,2)::text AS imported_test_points,
+    COALESCE(n.points,0)::numeric(12,2)::text AS new_match_points,
+    (COALESCE(i.points,0)+COALESCE(n.points,0))::numeric(12,2)::text AS total_test_points,
+    (COALESCE(i.points,0)+COALESCE(n.points,0)-COALESCE(o.points,0))::numeric(12,2)::text AS delta
+   FROM migration_source.profiles p LEFT JOIN original o ON o.user_id=p.id
+   LEFT JOIN imported_test i ON i.user_id=p.id LEFT JOIN new_test n ON n.user_id=p.id
+   WHERE p.role='user' AND p.username IS NOT NULL
+   ORDER BY (COALESCE(i.points,0)+COALESCE(n.points,0)) DESC,p.username`;
+  return reply({matches,scores,ratings,simulation:true});
  }catch{return reply({error:"data_unavailable"},503);}
 }
 export async function POST(req:NextRequest){
