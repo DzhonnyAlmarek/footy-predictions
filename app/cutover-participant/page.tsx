@@ -11,6 +11,8 @@ type Prediction = {
 };
 
 export default function CutoverParticipantPage() {
+  const [activeTab, setActiveTab] = useState<"schedule" | "ranking" | "mine" | "admin">("schedule");
+  const [showAllMatches, setShowAllMatches] = useState(false);
   const [username, setUsername] = useState("");
   const [participants, setParticipants] = useState<string[]>([]);
   const [password, setPassword] = useState("");
@@ -168,8 +170,13 @@ export default function CutoverParticipantPage() {
         onChange={e => setPassword(e.target.value)} autoComplete="current-password" required /></label>
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
-      <button type="button" onClick={logout} disabled={busy}>Выйти</button>
-      {isAdmin && adminData && <section className="card" style={{ padding: 20, marginTop: 18 }}>
+      <div className="card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: 12, marginBottom: 16 }}>
+        {([["schedule", "Матчи"], ["ranking", "Рейтинг"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+          <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
+            style={{ padding: "10px 14px", borderRadius: 10, border: activeTab === id ? "1px solid #2563eb" : "1px solid #d1d5db", background: activeTab === id ? "#dbeafe" : "#fff", fontWeight: 700, cursor: "pointer" }}>{label}</button>)}
+        <button type="button" onClick={logout} disabled={busy} style={{ marginLeft: "auto", padding: "10px 14px", borderRadius: 10 }}>Выйти</button>
+      </div>
+      {activeTab === "admin" && isAdmin && adminData && <section className="card" style={{ padding: 20, marginTop: 18 }}>
         <h2>ADMIN — создание матча</h2>
         <form onSubmit={createMatch} style={{ display: "grid", gap: 10 }}>
           {(["tournament_id", "stage_id", "tour_id", "home_team_id", "away_team_id"] as const).map(field => {
@@ -208,18 +215,19 @@ export default function CutoverParticipantPage() {
           {!resultWritesEnabled && <p>Запись результатов отключена на этой площадке.</p>}
         </form>
       </section>}
-      <h2 style={{ marginTop: 28 }}>Общий рейтинг</h2>
+      {activeTab === "ranking" && <section><h2 style={{ marginTop: 28 }}>Общий рейтинг</h2>
       <div className="tableWrap"><table className="table" style={{ minWidth: 500 }}>
         <thead><tr><th>Участник</th><th>Очки</th><th>Учтённых прогнозов</th></tr></thead>
         <tbody>{leaderboard.map(p => <tr key={p.username}>
           <td>{p.username}</td><td>{p.points}</td><td>{p.scored_predictions}</td>
         </tr>)}</tbody>
-      </table></div>
-      <h2>Расписание матчей ({schedule.length})</h2>
+      </table></div></section>}
+      {activeTab === "schedule" && <section><h2>Расписание матчей ({schedule.length})</h2>
       <p>{writesEnabled ? "Прогнозы можно менять до дедлайна." : "Сохранение новых прогнозов пока отключено."}</p>
+      {schedule.length > 30 && <button type="button" onClick={() => setShowAllMatches(v => !v)} style={{ margin: "12px 0", padding: "10px 14px", borderRadius: 10 }}>{showAllMatches ? "Показать первые 30" : `Показать все ${schedule.length} матчей`}</button>}
       <div className="tableWrap"><table className="table">
         <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th>{writesEnabled && <th>Изменить прогноз</th>}</tr></thead>
-        <tbody>{schedule.map(m => <tr key={m.match_id}>
+        <tbody>{(showAllMatches ? schedule : schedule.slice(0, 30)).map(m => <tr key={m.match_id}>
           <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}</td>
           <td>{m.home_team || "?"} — {m.away_team || "?"}</td>
           <td>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</td>
@@ -235,8 +243,8 @@ export default function CutoverParticipantPage() {
             <button type="button" disabled={busy} onClick={() => void savePrediction(m)}>Сохранить</button>
           </div> : "Закрыто"}</td>}
         </tr>)}</tbody>
-      </table></div>
-      <h2>Мои прогнозы ({predictions.length})</h2>
+      </table></div></section>}
+      {activeTab === "mine" && <section><h2>Мои прогнозы ({predictions.length})</h2>
       <div className="tableWrap"><table className="table" style={{ minWidth: 500 }}>
         <thead><tr><th>Матч</th><th>Прогноз</th><th>Результат</th></tr></thead>
         <tbody>{predictions.map(p => <tr key={p.match_id}>
@@ -244,7 +252,7 @@ export default function CutoverParticipantPage() {
           <td>{p.home_pred ?? "—"} : {p.away_pred ?? "—"}</td>
           <td>{p.home_score ?? "—"} : {p.away_score ?? "—"}</td>
         </tr>)}</tbody>
-      </table></div>
+      </table></div></section>}
     </>}
   </main>;
 }
