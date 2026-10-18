@@ -14,6 +14,10 @@ BEGIN
   IF p_home IS NULL OR p_away IS NULL OR p_home NOT BETWEEN 0 AND 99 OR p_away NOT BETWEEN 0 AND 99 THEN
     RAISE EXCEPTION 'invalid score';
   END IF;
+  -- Defense in depth: the database itself rejects historical matches.
+  IF NOT EXISTS (SELECT 1 FROM cutover_auth.created_matches WHERE match_id = p_match_id) THEN
+    RETURN false;
+  END IF;
   SELECT * INTO v_match FROM footy_cutover.matches WHERE id = p_match_id FOR UPDATE;
   IF NOT FOUND OR v_match.status <> 'scheduled'
      OR v_match.kickoff_at > now()
