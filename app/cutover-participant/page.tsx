@@ -28,7 +28,7 @@ export default function CutoverParticipantPage() {
 
   async function load() {
     const session = await fetch("/api/cutover/session", { cache: "no-store" });
-    if (!session.ok) { setAuthenticated(false); setMessage("Войди, чтобы увидеть свои прогнозы."); return; }
+    if (!session.ok) { setAuthenticated(false); setIsAdmin(false); setAdminData(null); setMessage("Войди, чтобы увидеть свои прогнозы."); return; }
     const sessionData = await session.json();
     setIsAdmin(sessionData.role === "admin");
     if (sessionData.role === "admin") {
@@ -40,7 +40,7 @@ export default function CutoverParticipantPage() {
       }
     }
     const response = await fetch("/api/cutover/my-predictions", { cache: "no-store" });
-    if (!response.ok) { setAuthenticated(false); setMessage("Не удалось получить прогнозы."); return; }
+    if (!response.ok) { setAuthenticated(false); setIsAdmin(false); setAdminData(null); setMessage("Не удалось получить прогнозы."); return; }
     const data = await response.json();
     setPredictions(Array.isArray(data.predictions) ? data.predictions : []);
     const scheduleResponse = await fetch("/api/cutover/schedule", { cache: "no-store" });
