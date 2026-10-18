@@ -5,6 +5,18 @@ import { authenticatedCutoverParticipant, cutoverAuthEnabled, CUTOVER_COOKIE, CU
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+export async function GET(req: NextRequest) {
+  if (!cutoverAuthEnabled()) return NextResponse.json({ enabled: false }, { status: 404, headers: CUTOVER_HEADERS });
+  try {
+    const userId = await authenticatedCutoverParticipant(req.cookies.get(CUTOVER_COOKIE)?.value);
+    if (!userId) return NextResponse.json({ enabled: false }, { status: 401, headers: CUTOVER_HEADERS });
+    return NextResponse.json({ enabled: process.env.ENABLE_CUTOVER_PREDICTION_WRITES === "true" },
+      { headers: CUTOVER_HEADERS });
+  } catch {
+    return NextResponse.json({ enabled: false }, { status: 503, headers: CUTOVER_HEADERS });
+  }
+}
+
 export async function POST(req: NextRequest) {
   if (!cutoverAuthEnabled() || process.env.ENABLE_CUTOVER_PREDICTION_WRITES !== "true")
     return NextResponse.json({ ok: false }, { status: 404, headers: CUTOVER_HEADERS });
