@@ -80,7 +80,7 @@ export default function CutoverParticipantPage() {
         body: JSON.stringify({ username, password })
       });
       setPassword("");
-      if (!response.ok) { setMessage("Вход не выполнен. Проверь данные или попробуй позже."); return; }
+      if (!response.ok) { setMessage(response.status === 429 ? "Слишком много попыток входа. Подожди 15 минут, не повторяя попытки." : response.status === 401 ? "Неверный логин или пароль." : "Вход временно недоступен. Попробуй позже."); return; }
       await load();
     } catch { setMessage("Не удалось подключиться."); }
     finally { setBusy(false); }
@@ -117,7 +117,7 @@ export default function CutoverParticipantPage() {
   }
   async function finishMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!/^\\d{1,2}$/.test(resultForm.home_score) || !/^\\d{1,2}$/.test(resultForm.away_score)) {
+    if (!/^[0-9]{1,2}$/.test(resultForm.home_score) || !/^[0-9]{1,2}$/.test(resultForm.away_score)) {
       setMessage("Укажи счёт от 0 до 99."); return;
     }
     if (!window.confirm("Завершить матч и начислить очки? Изменить результат через эту форму нельзя.")) return;
@@ -152,10 +152,14 @@ export default function CutoverParticipantPage() {
     finally { setBusy(false); }
   }
 
-  return <main style={{ maxWidth: 760, margin: "40px auto", padding: 20, fontFamily: "sans-serif" }}>
-    <h1>Golden Whistle — проверка переноса</h1>
-    <p>{message}</p>
-    {!authenticated ? <form onSubmit={login}>
+  return <main className="page" style={{ maxWidth: 1120 }}>
+    <header className="card" style={{ padding: 22, marginBottom: 18, background: "linear-gradient(120deg, #102d46, #174e6d)", color: "#fff" }}>
+      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, opacity: .8 }}>ФУТБОЛЬНЫЙ КОНКУРС ПРОГНОЗОВ</div>
+    <h1 style={{ margin: "8px 0", color: "#fff" }}>Golden Whistle</h1>
+    <div style={{ fontSize: 13, opacity: .85 }}>Изолированная тестовая версия · Yandex Cloud + Neon</div>
+    </header>
+    <div role="status" className="card" style={{ padding: 14, marginBottom: 18 }}>{message}</div>
+    {!authenticated ? <form onSubmit={login} className="card" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}>
       <label>Участник <select value={username} onChange={e => setUsername(e.target.value)} required>
         <option value="">Выбери участника</option>
         {participants.map(name => <option key={name} value={name}>{name}</option>)}
@@ -165,7 +169,7 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <button type="button" onClick={logout} disabled={busy}>Выйти</button>
-      {isAdmin && adminData && <section>
+      {isAdmin && adminData && <section className="card" style={{ padding: 20, marginTop: 18 }}>
         <h2>ADMIN — создание матча</h2>
         <form onSubmit={createMatch} style={{ display: "grid", gap: 10 }}>
           {(["tournament_id", "stage_id", "tour_id", "home_team_id", "away_team_id"] as const).map(field => {
@@ -204,16 +208,16 @@ export default function CutoverParticipantPage() {
           {!resultWritesEnabled && <p>Запись результатов отключена на этой площадке.</p>}
         </form>
       </section>}
-      <h2>Общий рейтинг</h2>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <h2 style={{ marginTop: 28 }}>Общий рейтинг</h2>
+      <div className="tableWrap"><table className="table" style={{ minWidth: 500 }} style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead><tr><th>Участник</th><th>Очки</th><th>Учтённых прогнозов</th></tr></thead>
         <tbody>{leaderboard.map(p => <tr key={p.username}>
           <td>{p.username}</td><td>{p.points}</td><td>{p.scored_predictions}</td>
         </tr>)}</tbody>
-      </table>
+      </table></div>
       <h2>Расписание матчей ({schedule.length})</h2>
       <p>{writesEnabled ? "Прогнозы можно менять до дедлайна." : "Сохранение новых прогнозов пока отключено."}</p>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="tableWrap"><table className="table">
         <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th>{writesEnabled && <th>Изменить прогноз</th>}</tr></thead>
         <tbody>{schedule.map(m => <tr key={m.match_id}>
           <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}</td>
@@ -231,16 +235,16 @@ export default function CutoverParticipantPage() {
             <button type="button" disabled={busy} onClick={() => void savePrediction(m)}>Сохранить</button>
           </div> : "Закрыто"}</td>}
         </tr>)}</tbody>
-      </table>
+      </table></div>
       <h2>Мои прогнозы ({predictions.length})</h2>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="tableWrap"><table className="table" style={{ minWidth: 500 }}>
         <thead><tr><th>Матч</th><th>Прогноз</th><th>Результат</th></tr></thead>
         <tbody>{predictions.map(p => <tr key={p.match_id}>
           <td>{p.home_team || "?"} — {p.away_team || "?"}</td>
           <td>{p.home_pred ?? "—"} : {p.away_pred ?? "—"}</td>
           <td>{p.home_score ?? "—"} : {p.away_score ?? "—"}</td>
         </tr>)}</tbody>
-      </table>
+      </table></div>
     </>}
   </main>;
 }
