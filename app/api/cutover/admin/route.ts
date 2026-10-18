@@ -51,6 +51,9 @@ export async function POST(req: NextRequest) {
           !Number.isInteger(home) || !Number.isInteger(away) ||
           home < 0 || home > 99 || away < 0 || away > 99)
         return reply({ ok: false, error: "invalid_result" }, 400);
+      // Imported historical matches have IDs at or below the verified cutover baseline (561).
+      // Restrict this isolated test result endpoint to newly created matches only.
+      if (BigInt(id) <= 561n) return reply({ ok: false, error: "historical_match_protected" }, 403);
       // One database transaction scores predictions and finishes the match.
       // Previously finished matches and historical ledger entries are immutable.
       const rows = await sql`
