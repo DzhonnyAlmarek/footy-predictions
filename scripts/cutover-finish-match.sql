@@ -51,3 +51,5 @@ BEGIN
 END;
 $$;
 -- API must enforce admin identity and same-origin checks before calling.
+
+REVOKE ALL ON FUNCTION footy_cutover.finish_new_match(bigint, integer, integer) FROM PUBLIC;
