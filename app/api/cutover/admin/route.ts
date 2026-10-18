@@ -44,10 +44,22 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
     if (body?.action === "result") {
-      // The legacy app recalculates the ledger via Supabase RPC functions.
-      // Those functions are not yet migrated. Never mark a match finished
-      // without updating the leaderboard atomically.
-      return reply({ ok: false, error: "scoring_not_ready" }, 503);
+      const id = String(body.match_id ?? "");
+      const home = body.home_score, away = body.away_score;
+      if (!/^[1-9][0-9]{0,17}$/.test(id) ||
+          !Number.isInteger(home) || !Number.isInteger(away) ||
+          home < 0 || home > 99 || away < 0 || away > 99)
+        return reply({ ok: false, error: "invalid_result" }, 400);
+      // One database transaction scores predictions and finishes the match.
+      // Previously finished matches and historical ledger entries are immutable.
+      const rows = await sql`
+        SELECT footy_cutover.finish_new_match(
+          ${id}::bigint, ${home}::integer, ${away}::integer
+        ) AS finished
+      `;
+      return rows[0]?.finished === true
+        ? reply({ ok: true, finished: true })
+        : reply({ ok: false, error: "match_already_finished_or_open" }, 409);
     }
     if (body?.action === "create_match") {
       const home = String(body.home_team_id ?? ""), away = String(body.away_team_id ?? "");
