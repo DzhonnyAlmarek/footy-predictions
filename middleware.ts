@@ -90,7 +90,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // Opt-in, read-only cutover verification endpoint; route enforces its own token.
-  if ((pathname === "/cutover-participant" || pathname === "/api/cutover/save-prediction" || pathname === "/api/cutover/schedule" || pathname === "/api/cutover/summary" || pathname === "/api/cutover/matches" || pathname === "/api/cutover/prediction-coverage" || pathname === "/api/cutover/validation" || pathname === "/api/cutover/my-predictions" || pathname === "/api/cutover/session" || pathname === "/api/cutover/logout" || pathname === "/api/cutover/login" || pathname === "/api/cutover/participants") &&
+  if ((pathname === "/cutover-participant" || pathname === "/api/cutover/admin" || pathname === "/api/cutover/save-prediction" || pathname === "/api/cutover/schedule" || pathname === "/api/cutover/summary" || pathname === "/api/cutover/matches" || pathname === "/api/cutover/prediction-coverage" || pathname === "/api/cutover/validation" || pathname === "/api/cutover/my-predictions" || pathname === "/api/cutover/session" || pathname === "/api/cutover/logout" || pathname === "/api/cutover/login" || pathname === "/api/cutover/participants") &&
       process.env.DEPLOY_TARGET === "yandex-neon-cutover-preview" &&
       process.env.ENABLE_CUTOVER_PREVIEW === "true") {
     return NextResponse.next();
