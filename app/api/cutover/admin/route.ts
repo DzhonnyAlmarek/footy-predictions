@@ -49,20 +49,6 @@ export async function POST(req: NextRequest) {
       // without updating the leaderboard atomically.
       return reply({ ok: false, error: "scoring_not_ready" }, 503);
     }
-    if (body?.action === "result_disabled_until_scoring_ready") {
-      const id = String(body.match_id ?? "");
-      const home = body.home_score, away = body.away_score;
-      if (!/^[1-9][0-9]{0,17}$/.test(id) || !Number.isInteger(home) ||
-          !Number.isInteger(away) || home < 0 || away < 0 || home > 99 || away > 99)
-        return reply({ ok: false, error: "invalid_result" }, 400);
-      const rows = await sql`
-        UPDATE footy_cutover.matches
-        SET home_score=${home}, away_score=${away}, status='finished'
-        WHERE id=${id}::bigint AND COALESCE(deadline_at,kickoff_at)<=now()
-        RETURNING id
-      `;
-      return rows.length ? reply({ ok: true }) : reply({ ok: false, error: "match_not_found_or_open" }, 409);
-    }
     if (body?.action === "create_match") {
       const home = String(body.home_team_id ?? ""), away = String(body.away_team_id ?? "");
       const tournament = String(body.tournament_id ?? "");
