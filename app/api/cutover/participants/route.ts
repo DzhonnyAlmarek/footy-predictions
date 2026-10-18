@@ -12,9 +12,12 @@ export async function GET() {
   try {
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
     const rows = await sql`
-      SELECT username FROM footy_cutover.profiles
-      WHERE username IS NOT NULL AND btrim(username) <> ''
-      ORDER BY CASE WHEN username = 'ADMIN' THEN 0 ELSE 1 END, username
+      SELECT p.username
+      FROM footy_cutover.profiles p
+      JOIN cutover_auth.participant_credentials c ON c.user_id = p.id
+      WHERE c.enabled = true
+        AND p.username IS NOT NULL AND btrim(p.username) <> ''
+      ORDER BY CASE WHEN p.username = 'ADMIN' THEN 0 ELSE 1 END, p.username
     `;
     return NextResponse.json({
       participants: rows.map(row => row.username).filter((value): value is string => typeof value === "string")
