@@ -16,6 +16,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [schedule, setSchedule] = useState<Prediction[]>([]);
+  const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; scored_predictions: number }[]>([]);
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
   const [writesEnabled, setWritesEnabled] = useState(false);
@@ -36,6 +37,11 @@ export default function CutoverParticipantPage() {
     }
     const readiness = await fetch("/api/cutover/save-prediction", { cache: "no-store" });
     setWritesEnabled(readiness.ok && (await readiness.json()).enabled === true);
+    const rankingResponse = await fetch("/api/cutover/leaderboard", { cache: "no-store" });
+    if (rankingResponse.ok) {
+      const rankingData = await rankingResponse.json();
+      setLeaderboard(Array.isArray(rankingData.leaderboard) ? rankingData.leaderboard : []);
+    }
     setAuthenticated(true);
     setMessage("Исторический снимок. Новые прогнозы здесь не принимаются.");
   }
@@ -86,6 +92,7 @@ export default function CutoverParticipantPage() {
       setAuthenticated(false);
       setPredictions([]);
       setSchedule([]);
+      setLeaderboard([]);
       setWritesEnabled(false);
       setMessage("Ты вышел из системы.");
     } catch { setMessage("Не удалось завершить сессию."); }
@@ -105,6 +112,13 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <button type="button" onClick={logout} disabled={busy}>Выйти</button>
+      <h2>Общий рейтинг</h2>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead><tr><th>Участник</th><th>Очки</th><th>Учтённых прогнозов</th></tr></thead>
+        <tbody>{leaderboard.map(p => <tr key={p.username}>
+          <td>{p.username}</td><td>{p.points}</td><td>{p.scored_predictions}</td>
+        </tr>)}</tbody>
+      </table>
       <h2>Расписание матчей ({schedule.length})</h2>
       <p>{writesEnabled ? "Прогнозы можно менять до дедлайна." : "Сохранение новых прогнозов пока отключено."}</p>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
