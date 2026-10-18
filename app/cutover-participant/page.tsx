@@ -13,6 +13,8 @@ type Prediction = {
 export default function CutoverParticipantPage() {
   const [activeTab, setActiveTab] = useState<"schedule" | "ranking" | "mine" | "admin">("schedule");
   const [showAllMatches, setShowAllMatches] = useState(false);
+  const [matchFilter, setMatchFilter] = useState<"upcoming" | "all">("upcoming");
+  const [savedMatchId, setSavedMatchId] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [participants, setParticipants] = useState<string[]>([]);
   const [password, setPassword] = useState("");
@@ -95,6 +97,7 @@ export default function CutoverParticipantPage() {
       setMessage("Укажи целые значения счёта от 0 до 99."); return;
     }
     setBusy(true);
+    setSavedMatchId(null);
     try {
       const response = await fetch("/api/cutover/save-prediction", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -102,7 +105,8 @@ export default function CutoverParticipantPage() {
       });
       if (!response.ok) { setMessage("Прогноз не сохранён. Проверь дедлайн или попробуй позже."); return; }
       await load();
-      setMessage("Прогноз сохранён.");
+      setSavedMatchId(m.match_id);
+      setMessage(`Прогноз на матч ${m.home_team || "?"} — ${m.away_team || "?"} сохранён.`);
     } catch { setMessage("Ошибка соединения при сохранении."); }
     finally { setBusy(false); }
   }
@@ -233,23 +237,27 @@ export default function CutoverParticipantPage() {
       </table></div></section>}
       {activeTab === "schedule" && <section><h2>Расписание матчей ({schedule.length})</h2>
       <p>{writesEnabled ? "Прогнозы можно менять до дедлайна." : "Сохранение новых прогнозов пока отключено."}</p>
-      {schedule.length > 30 && <button type="button" onClick={() => setShowAllMatches(v => !v)} style={{ margin: "12px 0", padding: "10px 14px", borderRadius: 10 }}>{showAllMatches ? "Показать первые 30" : `Показать все ${schedule.length} матчей`}</button>}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        <button type="button" aria-pressed={matchFilter === "upcoming"} onClick={() => { setMatchFilter("upcoming"); setShowAllMatches(false); }} style={{ padding: "10px 14px", borderRadius: 10, background: matchFilter === "upcoming" ? "#dbeafe" : "#fff" }}>Предстоящие</button>
+        <button type="button" aria-pressed={matchFilter === "all"} onClick={() => { setMatchFilter("all"); setShowAllMatches(false); }} style={{ padding: "10px 14px", borderRadius: 10, background: matchFilter === "all" ? "#dbeafe" : "#fff" }}>Все матчи</button>
+      </div>
+      {(matchFilter === "all" ? schedule : schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now())).length > 30 && <button type="button" onClick={() => setShowAllMatches(v => !v)} style={{ margin: "12px 0", padding: "10px 14px", borderRadius: 10 }}>{showAllMatches ? "Показать первые 30" : "Показать больше матчей"}</button>}
       <div className="tableWrap"><table className="table">
         <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th>{writesEnabled && <th>Изменить прогноз</th>}</tr></thead>
-        <tbody>{(showAllMatches ? schedule : schedule.slice(0, 30)).map(m => <tr key={m.match_id}>
+        <tbody>{(showAllMatches ? (matchFilter === "all" ? schedule : schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now())) : (matchFilter === "all" ? schedule : schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now())).slice(0, 30)).map(m => <tr key={m.match_id}>
           <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}</td>
           <td>{m.home_team || "?"} — {m.away_team || "?"}</td>
           <td>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</td>
           <td>{m.home_score ?? "—"} : {m.away_score ?? "—"}</td>
-          {writesEnabled && <td>{m.predictions_open ? <div>
-            <input aria-label="Голы хозяев" type="number" min="0" max="99" style={{ width: 52 }}
+          {writesEnabled && <td>{m.predictions_open ? <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, minWidth: 210 }}>
+            <input aria-label="Голы хозяев" type="number" min="0" max="99" style={{ width: 62, minHeight: 38, padding: 6, fontSize: 16, borderRadius: 8, border: "1px solid #94a3b8" }}
               value={(drafts[m.match_id] ?? { home: String(m.home_pred ?? ""), away: String(m.away_pred ?? "") }).home}
               onChange={e => setDrafts(prev => ({ ...prev, [m.match_id]: { home: e.target.value, away: (prev[m.match_id]?.away ?? String(m.away_pred ?? "")) } }))} />
             :
             <input aria-label="Голы гостей" type="number" min="0" max="99" style={{ width: 52 }}
               value={(drafts[m.match_id] ?? { home: String(m.home_pred ?? ""), away: String(m.away_pred ?? "") }).away}
               onChange={e => setDrafts(prev => ({ ...prev, [m.match_id]: { home: (prev[m.match_id]?.home ?? String(m.home_pred ?? "")), away: e.target.value } }))} />
-            <button type="button" disabled={busy} onClick={() => void savePrediction(m)}>Сохранить</button>
+            <button type="button" disabled={busy} onClick={() => void savePrediction(m)} style={{ minHeight: 38, padding: "7px 12px", borderRadius: 8, background: "#dbeafe", border: "1px solid #93c5fd", fontWeight: 700 }}>{savedMatchId === m.match_id ? "✓ Сохранено" : "Сохранить"}</button>
           </div> : "Закрыто"}</td>}
         </tr>)}</tbody>
       </table></div></section>}
