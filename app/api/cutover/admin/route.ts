@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       sql`SELECT id::text, name FROM footy_cutover.teams ORDER BY name`,
       sql`SELECT id::text, name FROM footy_cutover.tournaments ORDER BY name`,
       sql`SELECT id::text, name FROM footy_cutover.stages ORDER BY id DESC`,
-      sql`SELECT id::text, stage_id::text, name, tour_no FROM footy_cutover.tours ORDER BY id DESC`,
+      sql`SELECT id::text, stage_id::text, name FROM footy_cutover.tours ORDER BY id DESC`,
       sql`SELECT m.id::text, m.kickoff_at, m.status, m.home_score, m.away_score,
         h.name AS home_team, a.name AS away_team
         FROM footy_cutover.matches m
