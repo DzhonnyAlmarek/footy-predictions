@@ -15,12 +15,14 @@ export async function GET(req: NextRequest) {
       SELECT m.id::text AS match_id, m.kickoff_at, m.deadline_at, m.status,
              m.home_score, m.away_score, h.name AS home_team, a.name AS away_team,
              p.home_pred, p.away_pred,
-             (COALESCE(m.deadline_at, m.kickoff_at) > now()) AS predictions_open
+             (m.status = 'scheduled' AND COALESCE(m.deadline_at, m.kickoff_at) > now()) AS predictions_open
       FROM footy_cutover.matches m
       LEFT JOIN footy_cutover.teams h ON h.id = m.home_team_id
       LEFT JOIN footy_cutover.teams a ON a.id = m.away_team_id
       LEFT JOIN footy_cutover.predictions p ON p.match_id = m.id AND p.user_id = ${userId}::uuid
-      ORDER BY m.kickoff_at DESC NULLS LAST, m.id DESC LIMIT 150
+      ORDER BY CASE WHEN m.status = 'scheduled' AND m.kickoff_at >= now() THEN 0 ELSE 1 END,
+               CASE WHEN m.status = 'scheduled' AND m.kickoff_at >= now() THEN m.kickoff_at END ASC NULLS LAST,
+               m.kickoff_at DESC NULLS LAST, m.id DESC LIMIT 250
     `;
     return NextResponse.json({ ok: true, matches }, { headers: CUTOVER_HEADERS });
   } catch {
