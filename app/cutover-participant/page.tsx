@@ -6,6 +6,7 @@ type Prediction = {
   match_id: string; kickoff_at: string | null; home_team: string | null;
   away_team: string | null; home_pred: number | null; away_pred: number | null;
   home_score: number | null; away_score: number | null;
+  predictions_open?: boolean;
 };
 
 export default function CutoverParticipantPage() {
@@ -17,6 +18,8 @@ export default function CutoverParticipantPage() {
   const [schedule, setSchedule] = useState<Prediction[]>([]);
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
+  const [writesEnabled, setWritesEnabled] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, { home: string; away: string }>>({});
 
   async function load() {
     const session = await fetch("/api/cutover/session", { cache: "no-store" });
@@ -29,7 +32,10 @@ export default function CutoverParticipantPage() {
     if (scheduleResponse.ok) {
       const scheduleData = await scheduleResponse.json();
       setSchedule(Array.isArray(scheduleData.matches) ? scheduleData.matches : []);
+      setDrafts({});
     }
+    const readiness = await fetch("/api/cutover/save-prediction", { cache: "no-store" });
+    setWritesEnabled(readiness.ok && (await readiness.json()).enabled === true);
     setAuthenticated(true);
     setMessage("Исторический снимок. Новые прогнозы здесь не принимаются.");
   }
@@ -55,6 +61,23 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Не удалось подключиться."); }
     finally { setBusy(false); }
   }
+  async function savePrediction(m: Prediction) {
+    const draft = drafts[m.match_id] ?? { home: String(m.home_pred ?? ""), away: String(m.away_pred ?? "") };
+    if (!/^[0-9]{1,2}$/.test(draft.home) || !/^[0-9]{1,2}$/.test(draft.away)) {
+      setMessage("Укажи целые значения счёта от 0 до 99."); return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/save-prediction", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ match_id: m.match_id, home_pred: Number(draft.home), away_pred: Number(draft.away) })
+      });
+      if (!response.ok) { setMessage("Прогноз не сохранён. Проверь дедлайн или попробуй позже."); return; }
+      await load();
+      setMessage("Прогноз сохранён.");
+    } catch { setMessage("Ошибка соединения при сохранении."); }
+    finally { setBusy(false); }
+  }
   async function logout() {
     setBusy(true);
     try {
@@ -63,6 +86,7 @@ export default function CutoverParticipantPage() {
       setAuthenticated(false);
       setPredictions([]);
       setSchedule([]);
+      setWritesEnabled(false);
       setMessage("Ты вышел из системы.");
     } catch { setMessage("Не удалось завершить сессию."); }
     finally { setBusy(false); }
@@ -82,13 +106,24 @@ export default function CutoverParticipantPage() {
     </form> : <>
       <button type="button" onClick={logout} disabled={busy}>Выйти</button>
       <h2>Расписание матчей ({schedule.length})</h2>
+      <p>{writesEnabled ? "Прогнозы можно менять до дедлайна." : "Сохранение новых прогнозов пока отключено."}</p>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th></tr></thead>
+        <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th>{writesEnabled && <th>Изменить прогноз</th>}</tr></thead>
         <tbody>{schedule.map(m => <tr key={m.match_id}>
           <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}</td>
           <td>{m.home_team || "?"} — {m.away_team || "?"}</td>
           <td>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</td>
           <td>{m.home_score ?? "—"} : {m.away_score ?? "—"}</td>
+          {writesEnabled && <td>{m.predictions_open ? <div>
+            <input aria-label="Голы хозяев" type="number" min="0" max="99" style={{ width: 52 }}
+              value={(drafts[m.match_id] ?? { home: String(m.home_pred ?? ""), away: String(m.away_pred ?? "") }).home}
+              onChange={e => setDrafts(prev => ({ ...prev, [m.match_id]: { home: e.target.value, away: (prev[m.match_id]?.away ?? String(m.away_pred ?? "")) } }))} />
+            :
+            <input aria-label="Голы гостей" type="number" min="0" max="99" style={{ width: 52 }}
+              value={(drafts[m.match_id] ?? { home: String(m.home_pred ?? ""), away: String(m.away_pred ?? "") }).away}
+              onChange={e => setDrafts(prev => ({ ...prev, [m.match_id]: { home: (prev[m.match_id]?.home ?? String(m.home_pred ?? "")), away: e.target.value } }))} />
+            <button type="button" disabled={busy} onClick={() => void savePrediction(m)}>Сохранить</button>
+          </div> : "Закрыто"}</td>}
         </tr>)}</tbody>
       </table>
       <h2>Мои прогнозы ({predictions.length})</h2>
