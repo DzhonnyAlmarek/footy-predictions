@@ -209,7 +209,7 @@ export default function CutoverParticipantPage() {
         </form>
       </section>}
       <h2 style={{ marginTop: 28 }}>Общий рейтинг</h2>
-      <div className="tableWrap"><table className="table" style={{ minWidth: 500 }} style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="tableWrap"><table className="table" style={{ minWidth: 500 }}>
         <thead><tr><th>Участник</th><th>Очки</th><th>Учтённых прогнозов</th></tr></thead>
         <tbody>{leaderboard.map(p => <tr key={p.username}>
           <td>{p.username}</td><td>{p.points}</td><td>{p.scored_predictions}</td>
