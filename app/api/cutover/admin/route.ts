@@ -78,10 +78,7 @@ export async function POST(req: NextRequest) {
         SELECT s.id, ${tourNo}, ${"Тур " + tourNo}
         FROM footy_cutover.stages s
         WHERE s.id=${stage}::bigint
-          AND NOT EXISTS (
-            SELECT 1 FROM footy_cutover.tours existing
-            WHERE existing.stage_id=s.id AND existing.tour_no=${tourNo}
-          )
+        ON CONFLICT (stage_id, tour_no) DO NOTHING
         RETURNING id::text
       `;
       return rows.length ? reply({ ok: true, tour_id: rows[0].id })
