@@ -51,9 +51,9 @@ export async function POST(req: NextRequest) {
           !Number.isInteger(home) || !Number.isInteger(away) ||
           home < 0 || home > 99 || away < 0 || away > 99)
         return reply({ ok: false, error: "invalid_result" }, 400);
-      // Imported historical matches have IDs at or below the verified cutover baseline (561).
-      // Restrict this isolated test result endpoint to newly created matches only.
-      if (BigInt(id) <= 561n) return reply({ ok: false, error: "historical_match_protected" }, 403);
+      // Only matches registered by the isolated create-match workflow can receive results.
+      const owned = await sql`SELECT match_id FROM cutover_auth.created_matches WHERE match_id=${id}::bigint`;
+      if (!owned.length) return reply({ ok: false, error: "historical_match_protected" }, 403);
       // One database transaction scores predictions and finishes the match.
       // Previously finished matches and historical ledger entries are immutable.
       const rows = await sql`
@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
           Date.parse(deadline) > Date.parse(kickoff) || Date.parse(deadline) <= Date.now())
         return reply({ ok: false, error: "invalid_match" }, 400);
       const rows = await sql`
+        WITH created AS (
         INSERT INTO footy_cutover.matches
           (tournament_id, stage_id, tour_id, home_team_id, away_team_id, kickoff_at, deadline_at, status)
         SELECT t.id, s.id, tr.id, h.id, a.id, ${kickoff}::timestamptz, ${deadline}::timestamptz, 'scheduled'
@@ -93,6 +94,9 @@ export async function POST(req: NextRequest) {
               AND existing.tournament_id<>t.id
           )
         RETURNING id
+        )
+        INSERT INTO cutover_auth.created_matches(match_id)
+        SELECT id FROM created RETURNING match_id AS id
       `;
       return rows.length ? reply({ ok: true, match_id: String(rows[0].id) }) : reply({ ok: false, error: "invalid_references" }, 400);
     }
