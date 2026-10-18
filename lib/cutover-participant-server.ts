@@ -22,12 +22,14 @@ function cutoverAuthDatabase() {
   return neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
 }
 
-export async function authenticatedCutoverParticipant(token: unknown): Promise<string | null> {
+export type CutoverIdentity = { userId: string; username: string; role: string };
+
+export async function authenticatedCutoverIdentity(token: unknown): Promise<CutoverIdentity | null> {
   if (typeof token !== "string" || !/^[a-f0-9]{64}$/i.test(token)) return null;
   const hash = hashOpaqueToken(token);
   const sql = cutoverAuthDatabase();
   const rows = await sql`
-    SELECT p.id::text AS user_id
+    SELECT p.id::text AS user_id, p.username, p.role
     FROM cutover_auth.participant_sessions s
     JOIN cutover_auth.participant_credentials c ON c.user_id = s.user_id
     JOIN footy_cutover.profiles p ON p.id = s.user_id
@@ -35,7 +37,16 @@ export async function authenticatedCutoverParticipant(token: unknown): Promise<s
       AND s.revoked_at IS NULL AND s.expires_at > now() AND c.enabled = true
     LIMIT 1
   `;
-  return typeof rows[0]?.user_id === "string" ? rows[0].user_id : null;
+  const row = rows[0];
+  return typeof row?.user_id === "string" && typeof row?.username === "string" &&
+    typeof row?.role === "string"
+    ? { userId: row.user_id, username: row.username, role: row.role }
+    : null;
+}
+
+export async function authenticatedCutoverParticipant(token: unknown): Promise<string | null> {
+  const identity = await authenticatedCutoverIdentity(token);
+  return identity?.userId ?? null;
 }
 
 export async function cutoverOwnPredictions(userId: string) {
