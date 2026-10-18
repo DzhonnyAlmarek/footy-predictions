@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 
 type Prediction = {
   match_id: string; kickoff_at: string | null; home_team: string | null;
@@ -68,7 +69,7 @@ export default function CutoverParticipantPage() {
       .catch(() => setParticipants([]));
   }, []);
 
-  async function login(event: React.FormEvent<HTMLFormElement>) {
+  async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     try {
@@ -99,7 +100,7 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Ошибка соединения при сохранении."); }
     finally { setBusy(false); }
   }
-  async function createMatch(event: React.FormEvent<HTMLFormElement>) {
+  async function createMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true);
     try {
       const response = await fetch("/api/cutover/admin", { method: "POST",
@@ -112,7 +113,7 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Не удалось создать матч."); }
     finally { setBusy(false); }
   }
-  async function finishMatch(event: React.FormEvent<HTMLFormElement>) {
+  async function finishMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!/^\\d{1,2}$/.test(resultForm.home_score) || !/^\\d{1,2}$/.test(resultForm.away_score)) {
       setMessage("Укажи счёт от 0 до 99."); return;
