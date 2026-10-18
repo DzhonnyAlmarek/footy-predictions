@@ -25,6 +25,7 @@ export default function CutoverParticipantPage() {
   const [busy, setBusy] = useState(false);
   const [writesEnabled, setWritesEnabled] = useState(false);
   const [adminWritesEnabled, setAdminWritesEnabled] = useState(false);
+  const [resultWritesEnabled, setResultWritesEnabled] = useState(false);
   const [resultForm, setResultForm] = useState({ match_id: "", home_score: "", away_score: "" });
   const [drafts, setDrafts] = useState<Record<string, { home: string; away: string }>>({});
 
@@ -39,6 +40,7 @@ export default function CutoverParticipantPage() {
         const adminPayload = await adminResponse.json();
         setAdminData(adminPayload);
         setAdminWritesEnabled(adminPayload.writes_enabled === true);
+        setResultWritesEnabled(adminPayload.result_writes_enabled === true);
       }
     }
     const response = await fetch("/api/cutover/my-predictions", { cache: "no-store" });
@@ -144,6 +146,7 @@ export default function CutoverParticipantPage() {
       setLeaderboard([]);
       setWritesEnabled(false);
       setAdminWritesEnabled(false);
+      setResultWritesEnabled(false);
       setMessage("Ты вышел из системы.");
     } catch { setMessage("Не удалось завершить сессию."); }
     finally { setBusy(false); }
@@ -197,8 +200,8 @@ export default function CutoverParticipantPage() {
             value={resultForm.home_score} onChange={e => setResultForm(prev => ({ ...prev, home_score: e.target.value }))} /></label>
           <label>Голы гостей <input required type="number" min="0" max="99"
             value={resultForm.away_score} onChange={e => setResultForm(prev => ({ ...prev, away_score: e.target.value }))} /></label>
-          <button type="submit" disabled={busy || !adminWritesEnabled || !resultForm.match_id}>Записать результат и начислить очки</button>
-          {!adminWritesEnabled && <p>Запись результатов отключена на этой площадке.</p>}
+          <button type="submit" disabled={busy || !adminWritesEnabled || !resultWritesEnabled || !resultForm.match_id}>Записать результат и начислить очки</button>
+          {!resultWritesEnabled && <p>Запись результатов отключена на этой площадке.</p>}
         </form>
       </section>}
       <h2>Общий рейтинг</h2>
