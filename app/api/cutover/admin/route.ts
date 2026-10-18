@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
         JOIN footy_cutover.teams a ON a.id=m.away_team_id
         ORDER BY m.kickoff_at DESC LIMIT 150`
     ]);
-    return reply({ ok: true, teams, tournaments, stages, tours, matches });
+    return reply({ ok: true, teams, tournaments, stages, tours, matches, writes_enabled: process.env.ENABLE_CUTOVER_ADMIN_WRITES === "true" });
   } catch { return reply({ ok: false, error: "unavailable" }, 503); }
 }
 
