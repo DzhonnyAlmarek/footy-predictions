@@ -15,7 +15,7 @@ export default function CutoverParticipantPage() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; home_team: string; away_team: string }[] } | null>(null);
   const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [schedule, setSchedule] = useState<Prediction[]>([]);
@@ -24,6 +24,7 @@ export default function CutoverParticipantPage() {
   const [busy, setBusy] = useState(false);
   const [writesEnabled, setWritesEnabled] = useState(false);
   const [adminWritesEnabled, setAdminWritesEnabled] = useState(false);
+  const [resultForm, setResultForm] = useState({ match_id: "", home_score: "", away_score: "" });
   const [drafts, setDrafts] = useState<Record<string, { home: string; away: string }>>({});
 
   async function load() {
@@ -111,6 +112,24 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Не удалось создать матч."); }
     finally { setBusy(false); }
   }
+  async function finishMatch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!/^\\d{1,2}$/.test(resultForm.home_score) || !/^\\d{1,2}$/.test(resultForm.away_score)) {
+      setMessage("Укажи счёт от 0 до 99."); return;
+    }
+    if (!window.confirm("Завершить матч и начислить очки? Изменить результат через эту форму нельзя.")) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "result", match_id: resultForm.match_id,
+          home_score: Number(resultForm.home_score), away_score: Number(resultForm.away_score) }) });
+      if (!response.ok) { setMessage("Результат не записан. Матч уже завершён, не найден или запись отключена."); return; }
+      setResultForm({ match_id: "", home_score: "", away_score: "" });
+      await load(); setMessage("Результат записан, очки рассчитаны.");
+    } catch { setMessage("Ошибка сохранения результата."); }
+    finally { setBusy(false); }
+  }
   async function logout() {
     setBusy(true);
     try {
@@ -165,7 +184,21 @@ export default function CutoverParticipantPage() {
           <button disabled={busy || !adminWritesEnabled} type="submit">Создать матч</button>
           {!adminWritesEnabled && <p>Создание матчей пока отключено на этой площадке.</p>}
         </form>
-        <p>Ввод результатов будет доступен после переноса расчёта очков.</p>
+        <h2>ADMIN — результат матча</h2>
+        <form onSubmit={finishMatch} style={{ display: "grid", gap: 10 }}>
+          <label>Матч <select required value={resultForm.match_id}
+            onChange={e => setResultForm(prev => ({ ...prev, match_id: e.target.value }))}>
+            <option value="">Выбери незавершённый матч</option>
+            {(adminData.matches ?? []).filter(m => m.status === "scheduled").map(m =>
+              <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} ({new Date(m.kickoff_at).toLocaleString("ru-RU")})</option>)}
+          </select></label>
+          <label>Голы хозяев <input required type="number" min="0" max="99"
+            value={resultForm.home_score} onChange={e => setResultForm(prev => ({ ...prev, home_score: e.target.value }))} /></label>
+          <label>Голы гостей <input required type="number" min="0" max="99"
+            value={resultForm.away_score} onChange={e => setResultForm(prev => ({ ...prev, away_score: e.target.value }))} /></label>
+          <button type="submit" disabled={busy || !adminWritesEnabled || !resultForm.match_id}>Записать результат и начислить очки</button>
+          {!adminWritesEnabled && <p>Запись результатов отключена на этой площадке.</p>}
+        </form>
       </section>}
       <h2>Общий рейтинг</h2>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
