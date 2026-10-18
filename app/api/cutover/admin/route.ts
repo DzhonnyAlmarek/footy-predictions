@@ -71,6 +71,11 @@ export async function POST(req: NextRequest) {
         JOIN footy_cutover.teams h ON h.id=${home}::bigint
         JOIN footy_cutover.teams a ON a.id=${away}::bigint
         WHERE t.id=${tournament}::bigint
+          AND NOT EXISTS (
+            SELECT 1 FROM footy_cutover.matches existing
+            WHERE existing.stage_id=s.id AND existing.tournament_id IS NOT NULL
+              AND existing.tournament_id<>t.id
+          )
         RETURNING id
       `;
       return rows.length ? reply({ ok: true, match_id: String(rows[0].id) }) : reply({ ok: false, error: "invalid_references" }, 400);
