@@ -17,6 +17,7 @@ export default function CutoverParticipantPage() {
   const [participants, setParticipants] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
+  const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; home_team: string; away_team: string }[] } | null>(null);
   const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
@@ -33,8 +34,9 @@ export default function CutoverParticipantPage() {
 
   async function load() {
     const session = await fetch("/api/cutover/session", { cache: "no-store" });
-    if (!session.ok) { setAuthenticated(false); setIsAdmin(false); setAdminData(null); setMessage("Войди, чтобы увидеть свои прогнозы."); return; }
+    if (!session.ok) { setSessionUsername(""); setAuthenticated(false); setIsAdmin(false); setAdminData(null); setMessage("Войди, чтобы увидеть свои прогнозы."); return; }
     const sessionData = await session.json();
+    setSessionUsername(typeof sessionData.username === "string" ? sessionData.username : "");
     setIsAdmin(sessionData.role === "admin");
     if (sessionData.role === "admin") {
       const adminResponse = await fetch("/api/cutover/admin", { cache: "no-store" });
@@ -46,7 +48,7 @@ export default function CutoverParticipantPage() {
       }
     }
     const response = await fetch("/api/cutover/my-predictions", { cache: "no-store" });
-    if (!response.ok) { setAuthenticated(false); setIsAdmin(false); setAdminData(null); setMessage("Не удалось получить прогнозы."); return; }
+    if (!response.ok) { setSessionUsername(""); setAuthenticated(false); setIsAdmin(false); setAdminData(null); setMessage("Не удалось получить прогнозы."); return; }
     const data = await response.json();
     setPredictions(Array.isArray(data.predictions) ? data.predictions : []);
     const scheduleResponse = await fetch("/api/cutover/schedule", { cache: "no-store" });
@@ -141,6 +143,10 @@ export default function CutoverParticipantPage() {
       const response = await fetch("/api/cutover/logout", { method: "POST" });
       if (!response.ok) { setMessage("Не удалось завершить сессию."); return; }
       setAuthenticated(false);
+      setSessionUsername("");
+      setUsername("");
+      setPassword("");
+      setActiveTab("schedule");
       setIsAdmin(false);
       setAdminData(null);
       setPredictions([]);
@@ -174,7 +180,10 @@ export default function CutoverParticipantPage() {
         {([["schedule", "Матчи"], ["ranking", "Рейтинг"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             style={{ padding: "10px 14px", borderRadius: 10, border: activeTab === id ? "1px solid #2563eb" : "1px solid #d1d5db", background: activeTab === id ? "#dbeafe" : "#fff", fontWeight: 700, cursor: "pointer" }}>{label}</button>)}
-        <button type="button" onClick={logout} disabled={busy} style={{ marginLeft: "auto", padding: "10px 14px", borderRadius: 10 }}>Выйти</button>
+        <div aria-label="Текущий пользователь" style={{ marginLeft: "auto", padding: "8px 12px", background: isAdmin ? "#fef3c7" : "#eff6ff", borderRadius: 10, fontWeight: 700, color: "#102d46" }}>
+          {sessionUsername || "Неизвестный пользователь"} · {isAdmin ? "Администратор" : "Участник"}
+        </div>
+        <button type="button" onClick={logout} disabled={busy} style={{ padding: "10px 14px", borderRadius: 10 }}>Выйти</button>
       </div>
       {activeTab === "admin" && isAdmin && adminData && <section className="card" style={{ padding: 20, marginTop: 18 }}>
         <h2>ADMIN — создание матча</h2>
