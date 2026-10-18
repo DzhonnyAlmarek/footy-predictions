@@ -23,6 +23,7 @@ export default function CutoverParticipantPage() {
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
   const [writesEnabled, setWritesEnabled] = useState(false);
+  const [adminWritesEnabled, setAdminWritesEnabled] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, { home: string; away: string }>>({});
 
   async function load() {
@@ -32,7 +33,11 @@ export default function CutoverParticipantPage() {
     setIsAdmin(sessionData.role === "admin");
     if (sessionData.role === "admin") {
       const adminResponse = await fetch("/api/cutover/admin", { cache: "no-store" });
-      if (adminResponse.ok) setAdminData(await adminResponse.json());
+      if (adminResponse.ok) {
+        const adminPayload = await adminResponse.json();
+        setAdminData(adminPayload);
+        setAdminWritesEnabled(adminPayload.writes_enabled === true);
+      }
     }
     const response = await fetch("/api/cutover/my-predictions", { cache: "no-store" });
     if (!response.ok) { setAuthenticated(false); setMessage("Не удалось получить прогнозы."); return; }
@@ -52,7 +57,7 @@ export default function CutoverParticipantPage() {
       setLeaderboard(Array.isArray(rankingData.leaderboard) ? rankingData.leaderboard : []);
     }
     setAuthenticated(true);
-    setMessage("Исторический снимок. Новые прогнозы здесь не принимаются.");
+    setMessage("Данные загружены из изолированной Neon.");
   }
   useEffect(() => {
     void load().catch(() => setMessage("Сервис пока недоступен."));
@@ -118,6 +123,7 @@ export default function CutoverParticipantPage() {
       setSchedule([]);
       setLeaderboard([]);
       setWritesEnabled(false);
+      setAdminWritesEnabled(false);
       setMessage("Ты вышел из системы.");
     } catch { setMessage("Не удалось завершить сессию."); }
     finally { setBusy(false); }
@@ -156,7 +162,8 @@ export default function CutoverParticipantPage() {
             onChange={e => setAdminForm(prev => ({ ...prev, kickoff_at: e.target.value }))} /></label>
           <label>Дедлайн прогноза <input required type="datetime-local" value={adminForm.deadline_at}
             onChange={e => setAdminForm(prev => ({ ...prev, deadline_at: e.target.value }))} /></label>
-          <button disabled={busy} type="submit">Создать матч</button>
+          <button disabled={busy || !adminWritesEnabled} type="submit">Создать матч</button>
+          {!adminWritesEnabled && <p>Создание матчей пока отключено на этой площадке.</p>}
         </form>
         <p>Ввод результатов будет доступен после переноса расчёта очков.</p>
       </section>}
