@@ -14,6 +14,7 @@ export default function CutoverParticipantPage() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [schedule, setSchedule] = useState<Prediction[]>([]);
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
 
@@ -24,6 +25,11 @@ export default function CutoverParticipantPage() {
     if (!response.ok) { setAuthenticated(false); setMessage("Не удалось получить прогнозы."); return; }
     const data = await response.json();
     setPredictions(Array.isArray(data.predictions) ? data.predictions : []);
+    const scheduleResponse = await fetch("/api/cutover/schedule", { cache: "no-store" });
+    if (scheduleResponse.ok) {
+      const scheduleData = await scheduleResponse.json();
+      setSchedule(Array.isArray(scheduleData.matches) ? scheduleData.matches : []);
+    }
     setAuthenticated(true);
     setMessage("Исторический снимок. Новые прогнозы здесь не принимаются.");
   }
@@ -56,6 +62,7 @@ export default function CutoverParticipantPage() {
       if (!response.ok) { setMessage("Не удалось завершить сессию."); return; }
       setAuthenticated(false);
       setPredictions([]);
+      setSchedule([]);
       setMessage("Ты вышел из системы.");
     } catch { setMessage("Не удалось завершить сессию."); }
     finally { setBusy(false); }
@@ -74,6 +81,16 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <button type="button" onClick={logout} disabled={busy}>Выйти</button>
+      <h2>Расписание матчей ({schedule.length})</h2>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th></tr></thead>
+        <tbody>{schedule.map(m => <tr key={m.match_id}>
+          <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}</td>
+          <td>{m.home_team || "?"} — {m.away_team || "?"}</td>
+          <td>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</td>
+          <td>{m.home_score ?? "—"} : {m.away_score ?? "—"}</td>
+        </tr>)}</tbody>
+      </table>
       <h2>Мои прогнозы ({predictions.length})</h2>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead><tr><th>Матч</th><th>Прогноз</th><th>Результат</th></tr></thead>
