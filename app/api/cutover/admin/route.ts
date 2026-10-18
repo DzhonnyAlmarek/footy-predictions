@@ -65,6 +65,27 @@ export async function POST(req: NextRequest) {
         ? reply({ ok: true, finished: true })
         : reply({ ok: false, error: "match_already_finished_or_open" }, 409);
     }
+    if (body?.action === "create_tour") {
+      const stage = String(body.stage_id ?? "");
+      const tourNo = typeof body.tour_no === "string" ? body.tour_no.trim() : "";
+      if (!/^[1-9][0-9]{0,17}$/.test(stage) ||
+          !/^[0-9]{1,3}$/.test(tourNo) || Number(tourNo) < 1 ||
+          Number(tourNo) > 999)
+        return reply({ ok: false, error: "invalid_tour" }, 400);
+      const rows = await sql`
+        INSERT INTO footy_cutover.tours (stage_id, tour_no, name)
+        SELECT s.id, ${tourNo}, ${"Тур " + tourNo}
+        FROM footy_cutover.stages s
+        WHERE s.id=${stage}::bigint
+          AND NOT EXISTS (
+            SELECT 1 FROM footy_cutover.tours existing
+            WHERE existing.stage_id=s.id AND existing.tour_no=${tourNo}
+          )
+        RETURNING id::text
+      `;
+      return rows.length ? reply({ ok: true, tour_id: rows[0].id })
+        : reply({ ok: false, error: "tour_exists_or_stage_missing" }, 409);
+    }
     if (body?.action === "create_match") {
       const home = String(body.home_team_id ?? ""), away = String(body.away_team_id ?? "");
       const tournament = String(body.tournament_id ?? "");
