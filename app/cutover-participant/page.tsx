@@ -14,6 +14,9 @@ export default function CutoverParticipantPage() {
   const [participants, setParticipants] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[] } | null>(null);
+  const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [schedule, setSchedule] = useState<Prediction[]>([]);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; scored_predictions: number }[]>([]);
@@ -25,6 +28,12 @@ export default function CutoverParticipantPage() {
   async function load() {
     const session = await fetch("/api/cutover/session", { cache: "no-store" });
     if (!session.ok) { setAuthenticated(false); setMessage("Войди, чтобы увидеть свои прогнозы."); return; }
+    const sessionData = await session.json();
+    setIsAdmin(sessionData.role === "admin");
+    if (sessionData.role === "admin") {
+      const adminResponse = await fetch("/api/cutover/admin", { cache: "no-store" });
+      if (adminResponse.ok) setAdminData(await adminResponse.json());
+    }
     const response = await fetch("/api/cutover/my-predictions", { cache: "no-store" });
     if (!response.ok) { setAuthenticated(false); setMessage("Не удалось получить прогнозы."); return; }
     const data = await response.json();
@@ -84,12 +93,27 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Ошибка соединения при сохранении."); }
     finally { setBusy(false); }
   }
+  async function createMatch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create_match", ...adminForm,
+          kickoff_at: new Date(adminForm.kickoff_at).toISOString(),
+          deadline_at: new Date(adminForm.deadline_at).toISOString() }) });
+      if (!response.ok) { setMessage("Матч не создан. Проверь данные и разрешение на запись."); return; }
+      await load(); setMessage("Матч создан.");
+    } catch { setMessage("Не удалось создать матч."); }
+    finally { setBusy(false); }
+  }
   async function logout() {
     setBusy(true);
     try {
       const response = await fetch("/api/cutover/logout", { method: "POST" });
       if (!response.ok) { setMessage("Не удалось завершить сессию."); return; }
       setAuthenticated(false);
+      setIsAdmin(false);
+      setAdminData(null);
       setPredictions([]);
       setSchedule([]);
       setLeaderboard([]);
@@ -112,6 +136,30 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <button type="button" onClick={logout} disabled={busy}>Выйти</button>
+      {isAdmin && adminData && <section>
+        <h2>ADMIN — создание матча</h2>
+        <form onSubmit={createMatch} style={{ display: "grid", gap: 10 }}>
+          {(["tournament_id", "stage_id", "tour_id", "home_team_id", "away_team_id"] as const).map(field => {
+            const options = field === "tournament_id" ? adminData.tournaments :
+              field === "stage_id" ? adminData.stages : field === "tour_id" ?
+              adminData.tours.filter(t => t.stage_id === adminForm.stage_id) : adminData.teams;
+            const label = { tournament_id: "Турнир", stage_id: "Этап", tour_id: "Тур",
+              home_team_id: "Хозяева", away_team_id: "Гости" }[field];
+            return <label key={field}>{label} <select required value={adminForm[field]}
+              onChange={e => setAdminForm(prev => ({ ...prev, [field]: e.target.value,
+                ...(field === "stage_id" ? { tour_id: "" } : {}) }))}>
+              <option value="">Выбери</option>
+              {options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select></label>;
+          })}
+          <label>Начало матча <input required type="datetime-local" value={adminForm.kickoff_at}
+            onChange={e => setAdminForm(prev => ({ ...prev, kickoff_at: e.target.value }))} /></label>
+          <label>Дедлайн прогноза <input required type="datetime-local" value={adminForm.deadline_at}
+            onChange={e => setAdminForm(prev => ({ ...prev, deadline_at: e.target.value }))} /></label>
+          <button disabled={busy} type="submit">Создать матч</button>
+        </form>
+        <p>Ввод результатов будет доступен после переноса расчёта очков.</p>
+      </section>}
       <h2>Общий рейтинг</h2>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead><tr><th>Участник</th><th>Очки</th><th>Учтённых прогнозов</th></tr></thead>
