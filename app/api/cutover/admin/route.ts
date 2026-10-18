@@ -44,6 +44,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
     if (body?.action === "result") {
+      // The legacy app recalculates the ledger via Supabase RPC functions.
+      // Those functions are not yet migrated. Never mark a match finished
+      // without updating the leaderboard atomically.
+      return reply({ ok: false, error: "scoring_not_ready" }, 503);
+    }
+    if (body?.action === "result_disabled_until_scoring_ready") {
       const id = String(body.match_id ?? "");
       const home = body.home_score, away = body.away_score;
       if (!/^[1-9][0-9]{0,17}$/.test(id) || !Number.isInteger(home) ||
