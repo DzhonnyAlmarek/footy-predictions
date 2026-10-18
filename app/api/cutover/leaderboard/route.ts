@@ -16,6 +16,9 @@ export async function GET(req: NextRequest) {
         COUNT(l.id)::int AS scored_predictions
       FROM footy_cutover.profiles p
       LEFT JOIN footy_cutover.points_ledger l ON l.user_id=p.id
+        AND NOT EXISTS (
+          SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=l.match_id
+        )
       WHERE p.username IS NOT NULL
       GROUP BY p.id,p.username
       ORDER BY points DESC, scored_predictions DESC, p.username
