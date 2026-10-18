@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
       sql`SELECT m.id::text, m.kickoff_at, m.status, m.home_score, m.away_score,
         h.name AS home_team, a.name AS away_team
         FROM footy_cutover.matches m
+        JOIN cutover_auth.created_matches cm ON cm.match_id=m.id
         JOIN footy_cutover.teams h ON h.id=m.home_team_id
         JOIN footy_cutover.teams a ON a.id=m.away_team_id
         ORDER BY m.kickoff_at DESC LIMIT 150`
