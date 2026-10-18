@@ -16,6 +16,7 @@ BEGIN
   END IF;
   SELECT * INTO v_match FROM footy_cutover.matches WHERE id = p_match_id FOR UPDATE;
   IF NOT FOUND OR v_match.status <> 'scheduled'
+     OR v_match.kickoff_at > now()
      OR COALESCE(v_match.deadline_at, v_match.kickoff_at) > now()
      OR EXISTS (SELECT 1 FROM footy_cutover.points_ledger WHERE match_id = p_match_id) THEN
     RETURN false;
