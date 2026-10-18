@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
         JOIN footy_cutover.teams a ON a.id=m.away_team_id
         ORDER BY m.kickoff_at DESC LIMIT 150`
     ]);
-    return reply({ ok: true, teams, tournaments, stages, tours, matches, writes_enabled: process.env.ENABLE_CUTOVER_ADMIN_WRITES === "true" });
+    return reply({ ok: true, teams, tournaments, stages, tours, matches, writes_enabled: process.env.ENABLE_CUTOVER_ADMIN_WRITES === "true", result_writes_enabled: process.env.ENABLE_CUTOVER_RESULT_WRITES === "true" });
   } catch { return reply({ ok: false, error: "unavailable" }, 503); }
 }
 
@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
     if (body?.action === "result") {
+      if (process.env.ENABLE_CUTOVER_RESULT_WRITES !== "true") return reply({ ok: false, error: "result_writes_disabled" }, 404);
       const id = String(body.match_id ?? "");
       const home = body.home_score, away = body.away_score;
       if (!/^[1-9][0-9]{0,17}$/.test(id) ||
