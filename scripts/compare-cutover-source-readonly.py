@@ -13,7 +13,14 @@ try:
 except ImportError:
     sys.exit("Install psycopg[binary] before running.")
 
-TABLES = ("matches", "predictions", "points_ledger")
+COLUMNS = {
+    "matches": ("id", "tournament_id", "stage_id", "tour_id", "home_team_id",
+                "away_team_id", "kickoff_at", "deadline_at", "status", "home_score", "away_score"),
+    "predictions": ("id", "match_id", "user_id", "home_pred", "away_pred", "created_at", "updated_at"),
+    "points_ledger": ("id", "user_id", "match_id", "points", "points_outcome",
+                      "points_diff", "points_h1", "points_h2", "points_bonus"),
+}
+TABLES = tuple(COLUMNS)
 EXPECTED_SOURCE = "dfcfixmvplkhkaayfbbd"
 EXPECTED_NEON_HOST = "ep-holy-smoke-b1y4pzhn.c-5.eu-central-1.aws.neon.tech"
 
@@ -38,14 +45,16 @@ def validate(key, source=False):
 
 def snapshot(url, schema, table):
     # One transaction, read only, stable snapshot for all three tables.
-    with psycopg.connect(url, connect_timeout=12) as conn:
+    with psycopg.connect(url, connect_timeout=12, autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
             cur.execute("SET LOCAL statement_timeout='30000ms'")
             result = {}
             for name in TABLES:
+                cols = ", ".join("t." + col for col in COLUMNS[name])
                 cur.execute(
-                    "SELECT id::text, md5(to_jsonb(t)::text) FROM " + schema + "." + name + " t ORDER BY id"
+                    "SELECT id::text, md5(jsonb_build_array(" + cols +
+                    ")::text) FROM " + schema + "." + name + " t ORDER BY id"
                 )
                 result[name] = dict(cur.fetchall())
             conn.rollback()
