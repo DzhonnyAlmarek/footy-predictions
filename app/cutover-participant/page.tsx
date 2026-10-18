@@ -22,6 +22,7 @@ export default function CutoverParticipantPage() {
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; home_team: string; away_team: string }[] } | null>(null);
+  const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "" });
   const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [schedule, setSchedule] = useState<Prediction[]>([]);
@@ -110,6 +111,25 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Ошибка соединения при сохранении."); }
     finally { setBusy(false); }
   }
+  async function createTour(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create_tour", ...tourForm })
+      });
+      if (!response.ok) {
+        setMessage(response.status === 409
+          ? "Тур уже существует или этап не найден."
+          : "Не удалось создать тур."); return;
+      }
+      setTourForm(prev => ({ ...prev, tour_no: "" }));
+      await load();
+      setMessage("Новый тур создан.");
+    } catch { setMessage("Ошибка соединения при создании тура."); }
+    finally { setBusy(false); }
+  }
   async function createMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true);
     try {
@@ -190,6 +210,17 @@ export default function CutoverParticipantPage() {
         <button type="button" onClick={logout} disabled={busy} style={{ padding: "10px 14px", borderRadius: 10 }}>Выйти</button>
       </div>
       {activeTab === "admin" && isAdmin && adminData && <section className="card" style={{ padding: 20, marginTop: 18 }}>
+        <h2>ADMIN — новый тур в существующем этапе</h2>
+        <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
+          <label>Этап <select required value={tourForm.stage_id}
+            onChange={e => setTourForm(prev => ({ ...prev, stage_id: e.target.value }))}>
+            <option value="">Выбери этап</option>
+            {adminData.stages.map(s => <option key={s.id} value={s.id}>{s.name} (ID {s.id})</option>)}
+          </select></label>
+          <label>Номер тура <input required type="number" min="1" max="999"
+            value={tourForm.tour_no} onChange={e => setTourForm(prev => ({ ...prev, tour_no: e.target.value }))} /></label>
+          <button type="submit" disabled={busy || !adminWritesEnabled}>Создать тур</button>
+        </form>
         <h2>ADMIN — создание матча</h2>
         <form onSubmit={createMatch} style={{ display: "grid", gap: 10 }}>
           {(["tournament_id", "stage_id", "tour_id", "home_team_id", "away_team_id"] as const).map(field => {
