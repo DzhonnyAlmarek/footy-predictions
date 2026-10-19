@@ -22,7 +22,7 @@ export default function CutoverParticipantPage() {
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; home_team: string; away_team: string }[] } | null>(null);
-  const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "" });
+  const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
   const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [schedule, setSchedule] = useState<Prediction[]>([]);
@@ -132,7 +132,7 @@ export default function CutoverParticipantPage() {
           ? "Тур уже существует или этап не найден."
           : "Не удалось создать тур."); return;
       }
-      setTourForm(prev => ({ ...prev, tour_no: "" }));
+      setTourForm(prev => ({ ...prev, tour_no: "", name: "" }));
       await load();
       setMessage("Новый тур создан.");
     } catch { setMessage("Ошибка соединения при создании тура."); }
@@ -229,6 +229,8 @@ export default function CutoverParticipantPage() {
           </select></label>
           <label>Номер тура <input required type="number" min="1" max="999"
             value={tourForm.tour_no} onChange={e => setTourForm(prev => ({ ...prev, tour_no: e.target.value }))} /></label>
+          <label>Название тура <input maxLength={160} value={tourForm.name}
+            onChange={e => setTourForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Тур 31" /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled}>Создать тур</button>
         </form>
         <h2>ADMIN — создание матча</h2>
