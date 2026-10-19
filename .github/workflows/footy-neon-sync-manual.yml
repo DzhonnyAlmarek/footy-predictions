@@ -13,8 +13,9 @@ on:
           - apply
           - candidate-audit
           - candidate-build
+          - candidate-publish
       confirm:
-        description: "For apply type APPLY-ISOLATED-NEON; otherwise leave empty"
+        description: "For apply type APPLY-ISOLATED-NEON; for candidate-publish type PUBLISH-CANDIDATE"
         required: false
         type: string
 
@@ -78,3 +79,51 @@ jobs:
           persist-credentials: false
       - name: Build candidate image only (no registry push or deploy)
         run: bash scripts/build-cutover-candidate.sh
+
+  publish-candidate:
+    if: github.ref == 'refs/heads/deploy/yandex-cloud' && inputs.mode == 'candidate-publish' && inputs.confirm == 'PUBLISH-CANDIDATE'
+    runs-on: ubuntu-24.04
+    environment: yandex-test
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout candidate source
+        uses: actions/checkout@v4
+        with:
+          ref: feature/yandex-neon-production-prep-20261019
+          persist-credentials: false
+      - name: Build isolated candidate image
+        run: bash scripts/build-cutover-candidate.sh
+      - name: Obtain short-lived Yandex IAM token using GitHub OIDC
+        id: yandex-auth
+        env:
+          FEDERATION_ID: ajeig95704l4f4nmeeak
+          YC_AUDIENCE: https://github.com/DzhonnyAlmarek
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          oidc="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${YC_AUDIENCE}" | jq -er '.value')"
+          response="$(jq -nc --arg token "$oidc" --arg federation "$FEDERATION_ID" \
+            '{identityToken:$token,federationId:$federation}' | \
+            curl --fail-with-body --silent --show-error -X POST \
+              -H 'Content-Type: application/json' --data-binary @- \
+              https://iam.api.cloud.yandex.net/iam/v1/tokens)"
+          iam="$(jq -er '.iamToken' <<<"$response")"
+          echo "::add-mask::$iam"
+          echo "$iam" | docker login --username iam --password-stdin cr.yandex
+      - name: Publish candidate image only
+        env:
+          REGISTRY_ID: crpocq57tud830bhe7ck
+        run: |
+          set -euo pipefail
+          commit="$(git rev-parse --short=12 HEAD)"
+          target="cr.yandex/$REGISTRY_ID/footy-cutover-candidate:$commit"
+          docker tag "footy-cutover-candidate:$commit" "$target"
+          docker push "$target"
+          echo "Published image: $target"
+          echo "No container deployed; no DNS or database changes."
