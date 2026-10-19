@@ -1,0 +1,29 @@
+name: Footy candidate read-only audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/yandex-neon-production-prep-20261019
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Compare Supabase to candidate Neon (read-only)
+        env:
+          FOOTY_SOURCE_SUPABASE_DATABASE_URL: ${{ secrets.FOOTY_SOURCE_SUPABASE_DATABASE_URL }}
+          FOOTY_SOURCE_SUPABASE_CA_CERT: ${{ secrets.FOOTY_SOURCE_SUPABASE_CA_CERT }}
+          FOOTY_CANDIDATE_NEON_DATABASE_URL: ${{ secrets.FOOTY_CANDIDATE_NEON_DATABASE_URL }}
+        run: node scripts/footy-cutover-candidate-audit.mjs
