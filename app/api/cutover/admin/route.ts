@@ -21,7 +21,8 @@ export async function GET(req: NextRequest) {
       sql`SELECT id::text, name FROM footy_cutover.tournaments ORDER BY name`,
       sql`SELECT id::text, name FROM footy_cutover.stages ORDER BY id DESC`,
       sql`SELECT id::text, stage_id::text, name, tour_no FROM footy_cutover.tours ORDER BY id DESC`,
-      sql`SELECT m.id::text, m.kickoff_at, m.status, m.home_score, m.away_score,
+      sql`SELECT m.id::text, m.kickoff_at, m.deadline_at, m.status, m.home_score, m.away_score,
+        m.home_team_id::text, m.away_team_id::text,
         h.name AS home_team, a.name AS away_team,
         (cm.match_id IS NOT NULL) AS admin_created
         FROM footy_cutover.matches m
@@ -67,6 +68,30 @@ export async function POST(req: NextRequest) {
       return rows[0]?.finished === true
         ? reply({ ok: true, finished: true })
         : reply({ ok: false, error: "match_already_finished_or_open" }, 409);
+    }
+    if (body?.action === "edit_match_teams") {
+      const matchId = String(body.match_id ?? "");
+      const home = String(body.home_team_id ?? "");
+      const away = String(body.away_team_id ?? "");
+      const validId = (v: string) => /^[1-9][0-9]{0,17}$/.test(v);
+      if (![matchId, home, away].every(validId) || home === away)
+        return reply({ ok: false, error: "invalid_teams" }, 400);
+      // Imported matches, expired fixtures, matches with predictions and scored
+      // matches are immutable. No score recalculation is needed for an untouched fixture.
+      const rows = await sql`
+        UPDATE footy_cutover.matches m
+        SET home_team_id=${home}::bigint, away_team_id=${away}::bigint
+        WHERE m.id=${matchId}::bigint AND m.status='scheduled'
+          AND m.deadline_at > now()
+          AND EXISTS (SELECT 1 FROM cutover_auth.created_matches cm WHERE cm.match_id=m.id)
+          AND EXISTS (SELECT 1 FROM footy_cutover.teams h WHERE h.id=${home}::bigint)
+          AND EXISTS (SELECT 1 FROM footy_cutover.teams a WHERE a.id=${away}::bigint)
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
+        RETURNING m.id::text
+      `;
+      return rows.length ? reply({ ok: true, match_id: rows[0].id })
+        : reply({ ok: false, error: "match_locked_or_not_found" }, 409);
     }
     if (body?.action === "reschedule_match") {
       // A newly created match may be rescheduled only before any predictions exist.
