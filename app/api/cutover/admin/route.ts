@@ -185,6 +185,12 @@ export async function POST(req: NextRequest) {
             WHERE existing.stage_id=s.id AND existing.tournament_id IS NOT NULL
               AND existing.tournament_id<>t.id
           )
+          AND NOT EXISTS (
+            SELECT 1 FROM footy_cutover.matches existing
+            WHERE existing.tour_id=tr.id
+              AND (existing.home_team_id IN (h.id,a.id)
+                OR existing.away_team_id IN (h.id,a.id))
+          )
         RETURNING id
         )
         , owned AS (
