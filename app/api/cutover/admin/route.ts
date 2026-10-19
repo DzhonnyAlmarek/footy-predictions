@@ -68,6 +68,30 @@ export async function POST(req: NextRequest) {
         ? reply({ ok: true, finished: true })
         : reply({ ok: false, error: "match_already_finished_or_open" }, 409);
     }
+    if (body?.action === "reschedule_match") {
+      // A newly created match may be rescheduled only before any predictions exist.
+      // Historical matches and matches whose deadline has passed remain immutable.
+      const matchId = String(body.match_id ?? "");
+      const kickoff = typeof body.kickoff_at === "string" ? body.kickoff_at : "";
+      const deadline = typeof body.deadline_at === "string" ? body.deadline_at : "";
+      const validDate = (s: string) => /^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d+)?(?:Z|[+-]\\d\\d:\\d\\d)$/.test(s) && Number.isFinite(Date.parse(s));
+      if (!/^[1-9][0-9]{0,17}$/.test(matchId) || !validDate(kickoff) ||
+          !validDate(deadline) || Date.parse(deadline) <= Date.now() ||
+          Date.parse(deadline) > Date.parse(kickoff))
+        return reply({ ok: false, error: "invalid_schedule" }, 400);
+      const rows = await sql`
+        UPDATE footy_cutover.matches m
+        SET kickoff_at=${kickoff}::timestamptz, deadline_at=${deadline}::timestamptz
+        WHERE m.id=${matchId}::bigint AND m.status='scheduled'
+          AND m.deadline_at > now()
+          AND EXISTS (SELECT 1 FROM cutover_auth.created_matches cm WHERE cm.match_id=m.id)
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
+        RETURNING m.id::text
+      `;
+      return rows.length ? reply({ ok: true, match_id: rows[0].id })
+        : reply({ ok: false, error: "match_locked_or_not_found" }, 409);
+    }
     if (body?.action === "create_tour") {
       const stage = String(body.stage_id ?? "");
       const tourNo = typeof body.tour_no === "string" ? body.tour_no.trim() : "";
