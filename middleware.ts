@@ -106,6 +106,17 @@ export async function middleware(req: NextRequest) {
     );
   }
 
+  if (pathname === "/" &&
+      process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
+      process.env.ENABLE_CUTOVER_PRODUCTION_CANDIDATE === "true" &&
+      process.env.ENABLE_CUTOVER_PREVIEW === "true" &&
+      process.env.ENABLE_CUTOVER_AUTH === "true") {
+    const response = NextResponse.redirect(new URL("/cutover-participant", req.url));
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return response;
+  }
+
   if (pathname === "/") {
     return new NextResponse(
       "Изолированная тестовая площадка. Вход: /test-login. Основные функции временно отключены.",
