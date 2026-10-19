@@ -21,11 +21,11 @@ Required runtime settings for an **isolated**, access-controlled candidate:
 - ENABLE_CUTOVER_PREDICTION_WRITES=false
 
 Never copy preview credentials or origin. The candidate must NOT use live DNS.
-The candidate's / route is still disabled by middleware; initial UI is /cutover-participant.
+With the candidate flags above, `/` redirects to `/cutover-participant` (HTTP redirect). Without these flags, `/` remains disabled. No live domain changes.
 This is not production ready: routing, isolation, data refresh, and rollback remain blockers.
 
 Smoke tests after an isolated image build/deployment (not performed yet):
-1. GET / returns disabled response (expected).
+1. GET / redirects to /cutover-participant on the isolated candidate; with candidate flags disabled it returns 503.
 2. GET /api/cutover/session without cookie returns 401.
 3. GET /api/cutover/participants lists enabled users.
 4. Login with candidate-only credentials, inspect session and logout.
