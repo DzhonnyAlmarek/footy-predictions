@@ -69,13 +69,14 @@ export async function POST(req: NextRequest) {
     if (body?.action === "create_tour") {
       const stage = String(body.stage_id ?? "");
       const tourNo = typeof body.tour_no === "string" ? body.tour_no.trim() : "";
+      const tourName = typeof body.name === "string" ? body.name.trim() : "";
       if (!/^[1-9][0-9]{0,17}$/.test(stage) ||
           !/^[0-9]{1,3}$/.test(tourNo) || Number(tourNo) < 1 ||
-          Number(tourNo) > 999)
+          Number(tourNo) > 999 || (tourName.length > 160))
         return reply({ ok: false, error: "invalid_tour" }, 400);
       const rows = await sql`
         INSERT INTO footy_cutover.tours (stage_id, tour_no, name)
-        SELECT s.id, ${tourNo}, ${"Тур " + tourNo}
+        SELECT s.id, ${tourNo}, ${tourName || "Тур " + tourNo}
         FROM footy_cutover.stages s
         WHERE s.id=${stage}::bigint
         ON CONFLICT (stage_id, tour_no) DO NOTHING
