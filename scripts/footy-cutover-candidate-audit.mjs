@@ -46,7 +46,7 @@ try {
         for (const id of changed.slice(0, 10)) {
           const aRow = a.get(id), bRow = b.get(id);
           const fields = [...new Set([...Object.keys(aRow), ...Object.keys(bRow)])].filter(k => canonical({v:aRow[k]}) !== canonical({v:bRow[k]}));
-          console.log(JSON.stringify({detail:"match_changed_fields",id,fields}));
+          console.log(JSON.stringify({detail:"match_changed_fields",id,fields,values:Object.fromEntries(fields.map(f=>[f,{source:aRow[f],candidate:bRow[f]}]))}));
         }
       }
       if (table === "points_ledger") {
