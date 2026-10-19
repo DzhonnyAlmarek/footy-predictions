@@ -23,6 +23,7 @@ export default function CutoverParticipantPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; home_team: string; away_team: string; admin_created: boolean }[] } | null>(null);
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
+  const [renameTourForm, setRenameTourForm] = useState({ tour_id: "", name: "" });
   const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [schedule, setSchedule] = useState<Prediction[]>([]);
@@ -137,6 +138,22 @@ export default function CutoverParticipantPage() {
       await load();
       setMessage("Новый тур создан.");
     } catch { setMessage("Ошибка соединения при создании тура."); }
+    finally { setBusy(false); }
+  }
+  async function renameTour(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!renameTourForm.tour_id || !renameTourForm.name.trim()) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rename_tour", ...renameTourForm })
+      });
+      if (!response.ok) { setMessage("Не удалось переименовать тур."); return; }
+      setRenameTourForm({ tour_id: "", name: "" });
+      await load();
+      setMessage("Название тура изменено.");
+    } catch { setMessage("Ошибка соединения при переименовании тура."); }
     finally { setBusy(false); }
   }
   async function createMatch(event: FormEvent<HTMLFormElement>) {
@@ -256,6 +273,20 @@ export default function CutoverParticipantPage() {
           <label>Название тура <input maxLength={160} value={tourForm.name}
             onChange={e => setTourForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Тур 31" /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled}>Создать тур</button>
+        </form>
+        <h2>ADMIN — переименование тура</h2>
+        <form onSubmit={renameTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
+          <label>Тур <select required value={renameTourForm.tour_id}
+            onChange={e => {
+              const tour = adminData.tours.find(t => t.id === e.target.value);
+              setRenameTourForm({ tour_id: e.target.value, name: tour?.name ?? "" });
+            }}>
+            <option value="">Выбери тур</option>
+            {adminData.tours.map(t => <option key={t.id} value={t.id}>{t.name} (ID {t.id})</option>)}
+          </select></label>
+          <label>Новое название <input required maxLength={160} value={renameTourForm.name}
+            onChange={e => setRenameTourForm(prev => ({ ...prev, name: e.target.value }))} /></label>
+          <button type="submit" disabled={busy || !adminWritesEnabled || !renameTourForm.tour_id}>Переименовать тур</button>
         </form>
         <h2>ADMIN — создание матча</h2>
         <form onSubmit={createMatch} style={{ display: "grid", gap: 10 }}>
