@@ -21,7 +21,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; home_team: string; away_team: string; admin_created: boolean }[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean }[] } | null>(null);
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
   const [renameTourForm, setRenameTourForm] = useState({ tour_id: "", name: "" });
   const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
@@ -37,6 +37,7 @@ export default function CutoverParticipantPage() {
   const [resultWritesEnabled, setResultWritesEnabled] = useState(false);
   const [resultForm, setResultForm] = useState({ match_id: "", home_score: "", away_score: "" });
   const [rescheduleForm, setRescheduleForm] = useState({ match_id: "", kickoff_at: "", deadline_at: "" });
+  const [teamsEditForm, setTeamsEditForm] = useState({ match_id: "", home_team_id: "", away_team_id: "" });
   const [drafts, setDrafts] = useState<Record<string, { home: string; away: string }>>({});
 
   async function load() {
@@ -167,6 +168,25 @@ export default function CutoverParticipantPage() {
       if (!response.ok) { setMessage("Матч не создан. Проверь данные и разрешение на запись."); return; }
       await load(); setMessage("Матч создан.");
     } catch { setMessage("Не удалось создать матч."); }
+    finally { setBusy(false); }
+  }
+  async function editMatchTeams(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!teamsEditForm.match_id || !teamsEditForm.home_team_id || !teamsEditForm.away_team_id ||
+        teamsEditForm.home_team_id === teamsEditForm.away_team_id) {
+      setMessage("Выбери матч и две разные команды."); return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "edit_match_teams", ...teamsEditForm })
+      });
+      if (!response.ok) { setMessage("Замена команд отклонена: матч импортирован, закрыт или на него уже есть прогнозы."); return; }
+      setTeamsEditForm({ match_id: "", home_team_id: "", away_team_id: "" });
+      await load();
+      setMessage("Команды матча обновлены.");
+    } catch { setMessage("Ошибка при изменении команд."); }
     finally { setBusy(false); }
   }
   async function rescheduleMatch(event: FormEvent<HTMLFormElement>) {
@@ -320,6 +340,31 @@ export default function CutoverParticipantPage() {
             <td>{m.admin_created ? "Создан в админке" : "Импортирован"}</td>
           </tr>)}</tbody>
         </table></div>
+        <h2>ADMIN — изменение команд нового матча</h2>
+        <p>Команды можно исправить только до появления первого прогноза и до дедлайна.</p>
+        <form onSubmit={editMatchTeams} style={{ display: "grid", gap: 10, marginBottom: 24 }}>
+          <label>Матч <select required value={teamsEditForm.match_id}
+            onChange={e => {
+              const match = adminData.matches.find(m => m.id === e.target.value);
+              setTeamsEditForm({ match_id: e.target.value, home_team_id: match?.home_team_id ?? "",
+                away_team_id: match?.away_team_id ?? "" });
+            }}>
+            <option value="">Выбери новый матч</option>
+            {adminData.matches.filter(m => m.admin_created && m.status === "scheduled").map(m =>
+              <option key={m.id} value={m.id}>{m.home_team} — {m.away_team}</option>)}
+          </select></label>
+          <label>Хозяева <select required value={teamsEditForm.home_team_id}
+            onChange={e => setTeamsEditForm(prev => ({ ...prev, home_team_id: e.target.value }))}>
+            <option value="">Выбери команду</option>
+            {adminData.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select></label>
+          <label>Гости <select required value={teamsEditForm.away_team_id}
+            onChange={e => setTeamsEditForm(prev => ({ ...prev, away_team_id: e.target.value }))}>
+            <option value="">Выбери команду</option>
+            {adminData.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select></label>
+          <button type="submit" disabled={busy || !adminWritesEnabled || !teamsEditForm.match_id}>Сохранить команды</button>
+        </form>
         <h2>ADMIN — перенос нового матча</h2>
         <p>Перенос доступен только для новых незавершённых матчей, на которые ещё нет прогнозов.</p>
         <form onSubmit={rescheduleMatch} style={{ display: "grid", gap: 10 }}>
