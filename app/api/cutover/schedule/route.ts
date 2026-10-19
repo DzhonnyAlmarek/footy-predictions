@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       LEFT JOIN footy_cutover.teams h ON h.id = m.home_team_id
       LEFT JOIN footy_cutover.teams a ON a.id = m.away_team_id
       LEFT JOIN footy_cutover.predictions p ON p.match_id = m.id AND p.user_id = ${userId}::uuid
-      WHERE NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id = m.id)
+      WHERE ( ${process.env.CUTOVER_SHOW_TEST_MATCHES === "true"}::boolean OR NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id = m.id) )
       ORDER BY CASE WHEN m.status = 'scheduled' AND m.kickoff_at >= now() THEN 0 ELSE 1 END,
                CASE WHEN m.status = 'scheduled' AND m.kickoff_at >= now() THEN m.kickoff_at END ASC NULLS LAST,
                m.kickoff_at DESC NULLS LAST, m.id DESC LIMIT 250
