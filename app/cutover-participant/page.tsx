@@ -21,7 +21,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; home_team: string; away_team: string }[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; home_team: string; away_team: string; admin_created: boolean }[] } | null>(null);
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
   const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
   const [predictions, setPredictions] = useState<Prediction[]>([]);
@@ -255,12 +255,22 @@ export default function CutoverParticipantPage() {
           <button disabled={busy || !adminWritesEnabled} type="submit">Создать матч</button>
           {!adminWritesEnabled && <p>Создание матчей пока отключено на этой площадке.</p>}
         </form>
+        <h2>ADMIN — календарь (последние 150 матчей)</h2>
+        <p>Импортированные матчи доступны для просмотра. Запись результатов через эту форму разрешена только для матчей, созданных в новой админке.</p>
+        <div className="tableWrap"><table className="table" style={{ minWidth: 600 }}>
+          <thead><tr><th>Дата</th><th>Матч</th><th>Статус</th><th>Источник</th></tr></thead>
+          <tbody>{(adminData.matches ?? []).map(m => <tr key={m.id}>
+            <td>{new Date(m.kickoff_at).toLocaleString("ru-RU")}</td>
+            <td>{m.home_team} — {m.away_team}</td><td>{m.status}</td>
+            <td>{m.admin_created ? "Создан в админке" : "Импортирован"}</td>
+          </tr>)}</tbody>
+        </table></div>
         <h2>ADMIN — результат матча</h2>
         <form onSubmit={finishMatch} style={{ display: "grid", gap: 10 }}>
           <label>Матч <select required value={resultForm.match_id}
             onChange={e => setResultForm(prev => ({ ...prev, match_id: e.target.value }))}>
             <option value="">Выбери незавершённый матч</option>
-            {(adminData.matches ?? []).filter(m => m.status === "scheduled").map(m =>
+            {(adminData.matches ?? []).filter(m => m.status === "scheduled" && m.admin_created).map(m =>
               <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} ({new Date(m.kickoff_at).toLocaleString("ru-RU")})</option>)}
           </select></label>
           <label>Голы хозяев <input required type="number" min="0" max="99"
