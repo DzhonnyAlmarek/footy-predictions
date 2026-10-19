@@ -22,3 +22,11 @@ Status: BLOCKED. This branch is preparation-only; do not deploy it or point prod
 - Never write to legacy production Supabase, Vercel, GitHub main, or live DNS as part of preparation.
 - Never deploy this preparation branch as the live site.
 - Keep ENABLE_CUTOVER_RESULT_WRITES=false in preview unless a separate controlled test is approved.
+
+## Admin functionality reuse inventory (2026-10-19)
+
+- Existing sandbox admin is implemented at `/test-admin-home` and `/test-admin-stages`, backed by `/api/test/admin/stages-tours`. It supports draft stages and tours, and rename overlays in `footy_sandbox`, reading `migration_source`.
+- Existing sandbox calendar editor `/api/test/admin/calendar-imported` stores imported-match edits in `footy_sandbox.calendar_match_edits`, not in original imported rows.
+- Candidate `/api/cutover/admin` reads/writes `footy_cutover`, currently supports creating tours and matches and finishing only newly created matches. It does not yet provide equivalent imported-calendar overlays or stage editing.
+- Do not copy sandbox endpoints into production: they depend on separate schemas, flags, authentication and semantics. Reuse UX/validation patterns while designing a candidate-specific storage adapter.
+- Launch priority: integrate necessary existing admin flows with the candidate data model, then deploy a complete isolated site; defer nonblocking test infrastructure enhancements.
