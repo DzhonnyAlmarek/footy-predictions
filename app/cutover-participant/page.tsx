@@ -150,7 +150,7 @@ export default function CutoverParticipantPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "rename_tour", ...renameTourForm })
       });
-      if (!response.ok) { setMessage("Не удалось переименовать тур."); return; }
+      if (!response.ok) { setMessage(response.status === 404 ? "Тур не найден или в нём уже есть матчи." : "Не удалось переименовать тур."); return; }
       setRenameTourForm({ tour_id: "", name: "" });
       await load();
       setMessage("Название тура изменено.");
@@ -295,6 +295,7 @@ export default function CutoverParticipantPage() {
           <button type="submit" disabled={busy || !adminWritesEnabled}>Создать тур</button>
         </form>
         <h2>ADMIN — переименование тура</h2>
+        <p>Переименовать можно только тур, в котором ещё нет матчей. Исторические туры защищены.</p>
         <form onSubmit={renameTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Тур <select required value={renameTourForm.tour_id}
             onChange={e => {
