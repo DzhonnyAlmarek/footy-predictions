@@ -1,0 +1,60 @@
+name: Verify isolated production candidate (build only)
+
+on:
+  push:
+    branches:
+      - feature/yandex-neon-production-prep-20261019
+    paths:
+      - "Dockerfile.cutover-production-candidate"
+      - "app/api/cutover/**"
+      - "app/cutover-participant/**"
+      - "lib/cutover-*.ts"
+      - "middleware.ts"
+      - ".github/workflows/verify-cutover-production-candidate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-candidate:
+    if: github.ref == 'refs/heads/feature/yandex-neon-production-prep-20261019'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+        env:
+          DEPLOY_TARGET: yandex-neon-production-candidate
+          ENABLE_CUTOVER_PRODUCTION_CANDIDATE: "false"
+          NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-only-placeholder-not-a-real-key
+      - name: Build standalone candidate Docker image
+        run: |
+          set -euo pipefail
+          grep -q '^ENV DEPLOY_TARGET=yandex-neon-production-candidate$' Dockerfile.cutover-production-candidate
+          docker build -f Dockerfile.cutover-production-candidate -t footy-production-candidate:local .
+      - name: Smoke test fail-closed routes without secrets
+        run: |
+          set -euo pipefail
+          docker run -d --name footy-candidate-smoke -p 127.0.0.1:18082:8080 footy-production-candidate:local
+          trap 'docker logs footy-candidate-smoke || true; docker rm -f footy-candidate-smoke || true' EXIT
+          ready=0
+          for i in {1..45}; do
+            status="$(curl -s -o /tmp/candidate-home.txt -w '%{http_code}' http://127.0.0.1:18082/ || true)"
+            if [[ "$status" == "503" ]]; then ready=1; break; fi
+            sleep 2
+          done
+          [[ "$ready" == "1" ]]
+          status="$(curl -s -o /tmp/candidate-legacy.txt -w '%{http_code}' http://127.0.0.1:18082/api/login)"
+          [[ "$status" == "503" ]]
+          status="$(curl -s -o /tmp/candidate-cutover.txt -w '%{http_code}' http://127.0.0.1:18082/api/cutover/participants)"
+          [[ "$status" == "503" ]]
