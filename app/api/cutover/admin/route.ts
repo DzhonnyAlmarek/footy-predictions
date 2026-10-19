@@ -132,6 +132,7 @@ export async function POST(req: NextRequest) {
       const rows = await sql`
         UPDATE footy_cutover.tours t SET name=${tourName}
         WHERE t.id=${tourId}::bigint
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.matches m WHERE m.tour_id=t.id)
         RETURNING t.id::text
       `;
       return rows.length ? reply({ ok: true, tour_id: rows[0].id })
