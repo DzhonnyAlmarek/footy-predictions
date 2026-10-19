@@ -35,6 +35,7 @@ export default function CutoverParticipantPage() {
   const [adminWritesEnabled, setAdminWritesEnabled] = useState(false);
   const [resultWritesEnabled, setResultWritesEnabled] = useState(false);
   const [resultForm, setResultForm] = useState({ match_id: "", home_score: "", away_score: "" });
+  const [rescheduleForm, setRescheduleForm] = useState({ match_id: "", kickoff_at: "", deadline_at: "" });
   const [drafts, setDrafts] = useState<Record<string, { home: string; away: string }>>({});
 
   async function load() {
@@ -151,6 +152,29 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Не удалось создать матч."); }
     finally { setBusy(false); }
   }
+  async function rescheduleMatch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!rescheduleForm.match_id || !rescheduleForm.kickoff_at || !rescheduleForm.deadline_at) return;
+    const kickoff = new Date(rescheduleForm.kickoff_at);
+    const deadline = new Date(rescheduleForm.deadline_at);
+    if (!Number.isFinite(kickoff.getTime()) || !Number.isFinite(deadline.getTime()) ||
+        deadline.getTime() <= Date.now() || deadline.getTime() > kickoff.getTime()) {
+      setMessage("Проверь даты: дедлайн должен быть в будущем и не позже начала матча."); return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reschedule_match", match_id: rescheduleForm.match_id,
+          kickoff_at: kickoff.toISOString(), deadline_at: deadline.toISOString() })
+      });
+      if (!response.ok) { setMessage("Перенос отклонён: матч уже закрыт, импортирован или на него есть прогнозы."); return; }
+      setRescheduleForm({ match_id: "", kickoff_at: "", deadline_at: "" });
+      await load();
+      setMessage("Дата матча и дедлайн обновлены.");
+    } catch { setMessage("Ошибка переноса матча."); }
+    finally { setBusy(false); }
+  }
   async function finishMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!/^[0-9]{1,2}$/.test(resultForm.home_score) || !/^[0-9]{1,2}$/.test(resultForm.away_score)) {
@@ -265,6 +289,21 @@ export default function CutoverParticipantPage() {
             <td>{m.admin_created ? "Создан в админке" : "Импортирован"}</td>
           </tr>)}</tbody>
         </table></div>
+        <h2>ADMIN — перенос нового матча</h2>
+        <p>Перенос доступен только для новых незавершённых матчей, на которые ещё нет прогнозов.</p>
+        <form onSubmit={rescheduleMatch} style={{ display: "grid", gap: 10 }}>
+          <label>Матч <select required value={rescheduleForm.match_id}
+            onChange={e => setRescheduleForm(prev => ({ ...prev, match_id: e.target.value }))}>
+            <option value="">Выбери новый матч</option>
+            {(adminData.matches ?? []).filter(m => m.admin_created && m.status === "scheduled").map(m =>
+              <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} ({new Date(m.kickoff_at).toLocaleString("ru-RU")})</option>)}
+          </select></label>
+          <label>Новое начало <input required type="datetime-local" value={rescheduleForm.kickoff_at}
+            onChange={e => setRescheduleForm(prev => ({ ...prev, kickoff_at: e.target.value }))} /></label>
+          <label>Новый дедлайн <input required type="datetime-local" value={rescheduleForm.deadline_at}
+            onChange={e => setRescheduleForm(prev => ({ ...prev, deadline_at: e.target.value }))} /></label>
+          <button type="submit" disabled={busy || !adminWritesEnabled || !rescheduleForm.match_id}>Перенести матч</button>
+        </form>
         <h2>ADMIN — результат матча</h2>
         <form onSubmit={finishMatch} style={{ display: "grid", gap: 10 }}>
           <label>Матч <select required value={resultForm.match_id}
