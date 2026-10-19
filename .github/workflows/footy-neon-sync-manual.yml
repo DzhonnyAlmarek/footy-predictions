@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: footy-test-neon-manual-sync
+  group: ${{ inputs.mode == 'candidate-publish' && 'footy-candidate-registry-publish' || 'footy-test-neon-manual-sync' }}
   cancel-in-progress: false
 
 jobs:
