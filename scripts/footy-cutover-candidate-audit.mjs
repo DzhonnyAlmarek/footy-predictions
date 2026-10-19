@@ -42,6 +42,36 @@ try {
       const sourceOnly = [...a.keys()].filter(id => !b.has(id));
       const candidateOnly = [...b.keys()].filter(id => !a.has(id));
       const changed = [...a.keys()].filter(id => b.has(id) && canonical(a.get(id)) !== canonical(b.get(id)));
+      if (table === "matches") {
+        for (const id of changed.slice(0, 10)) {
+          const aRow = a.get(id), bRow = b.get(id);
+          const fields = [...new Set([...Object.keys(aRow), ...Object.keys(bRow)])].filter(k => canonical({v:aRow[k]}) !== canonical({v:bRow[k]}));
+          console.log(JSON.stringify({detail:"match_changed_fields",id,fields}));
+        }
+      }
+      if (table === "points_ledger") {
+        const key = r => String(r.match_id) + ":" + String(r.user_id);
+        const group = rows => {
+          const out = new Map();
+          for (const row of rows.values()) {
+            const k = key(row);
+            if (!out.has(k)) out.set(k, []);
+            const {id, ...value} = row;
+            out.get(k).push(value);
+          }
+          return out;
+        };
+        const aa=group(a), bb=group(b);
+        const onlyA=[...aa.keys()].filter(k=>!bb.has(k));
+        const onlyB=[...bb.keys()].filter(k=>!aa.has(k));
+        const changedKeys=[...aa.keys()].filter(k=>bb.has(k) && canonical({rows:aa.get(k)}) !== canonical({rows:bb.get(k)}));
+        console.log(JSON.stringify({detail:"ledger_business_keys",source_only:onlyA,candidate_only:onlyB,changed:changedKeys.slice(0,50),changed_count:changedKeys.length}));
+        for (const k of changedKeys.slice(0,30)) {
+          const left=aa.get(k)[0],right=bb.get(k)[0];
+          const fields=[...new Set([...Object.keys(left),...Object.keys(right)])].filter(f=>canonical({v:left[f]})!==canonical({v:right[f]}));
+          console.log(JSON.stringify({detail:"ledger_changed_fields",key:k,fields}));
+        }
+      }
       hasDifferences ||= sourceOnly.length > 0 || candidateOnly.length > 0 || changed.length > 0;
       console.log(JSON.stringify({table, source_rows:a.size, candidate_rows:b.size,
         source_only_count:sourceOnly.length, candidate_only_count:candidateOnly.length,
