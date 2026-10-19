@@ -22,11 +22,13 @@ export async function GET(req: NextRequest) {
       sql`SELECT id::text, name FROM footy_cutover.stages ORDER BY id DESC`,
       sql`SELECT id::text, stage_id::text, name, tour_no FROM footy_cutover.tours ORDER BY id DESC`,
       sql`SELECT m.id::text, m.kickoff_at, m.status, m.home_score, m.away_score,
-        h.name AS home_team, a.name AS away_team
+        h.name AS home_team, a.name AS away_team,
+        (cm.match_id IS NOT NULL) AS admin_created
         FROM footy_cutover.matches m
-        JOIN cutover_auth.created_matches cm ON cm.match_id=m.id
+        LEFT JOIN cutover_auth.created_matches cm ON cm.match_id=m.id
         JOIN footy_cutover.teams h ON h.id=m.home_team_id
         JOIN footy_cutover.teams a ON a.id=m.away_team_id
+        WHERE NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
         ORDER BY m.kickoff_at DESC LIMIT 150`
     ]);
     return reply({ ok: true, teams, tournaments, stages, tours, matches, writes_enabled: process.env.ENABLE_CUTOVER_ADMIN_WRITES === "true", result_writes_enabled: process.env.ENABLE_CUTOVER_RESULT_WRITES === "true" });
