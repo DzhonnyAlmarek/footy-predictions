@@ -12,6 +12,7 @@ on:
           - dry-run
           - apply
           - candidate-audit
+          - candidate-build
       confirm:
         description: "For apply type APPLY-ISOLATED-NEON; otherwise leave empty"
         required: false
@@ -62,3 +63,18 @@ jobs:
           test -n "$FOOTY_CANDIDATE_NEON_DATABASE_URL" || { echo "Missing candidate Neon secret"; exit 1; }
           cp candidate-audit/scripts/footy-cutover-candidate-audit.mjs scripts/footy-cutover-candidate-audit.mjs
           node scripts/footy-cutover-candidate-audit.mjs
+
+  build-candidate:
+    if: github.ref == 'refs/heads/deploy/yandex-cloud' && inputs.mode == 'candidate-build'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout isolated candidate source
+        uses: actions/checkout@v4
+        with:
+          ref: feature/yandex-neon-production-prep-20261019
+          persist-credentials: false
+      - name: Build candidate image only (no registry push or deploy)
+        run: bash scripts/build-cutover-candidate.sh
