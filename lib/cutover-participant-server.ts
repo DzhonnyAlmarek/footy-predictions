@@ -7,6 +7,10 @@ export const CUTOVER_HEADERS = { "Cache-Control": "no-store", "X-Robots-Tag": "n
 export function cutoverAuthEnabled(): boolean {
   const raw = process.env.CUTOVER_AUTH_DATABASE_URL;
   const allowed = process.env.CUTOVER_AUTH_ALLOWED_HOST;
+  // Production candidate must be pinned to its dedicated cleaned Neon branch.
+  // Host pinning alone is insufficient because one Neon project has multiple branches.
+  if (process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
+      process.env.CUTOVER_AUTH_ALLOWED_HOST !== "ep-divine-rain-b1d1r892.c-5.eu-central-1.aws.neon.tech") return false;
   const target = process.env.DEPLOY_TARGET;
   const preview = target === "yandex-neon-cutover-preview";
   const candidate = target === "yandex-neon-production-candidate";
