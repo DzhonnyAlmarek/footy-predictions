@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       const matchId = String(body.match_id ?? "");
       const kickoff = typeof body.kickoff_at === "string" ? body.kickoff_at : "";
       const deadline = typeof body.deadline_at === "string" ? body.deadline_at : "";
-      const validDate = (s: string) => /^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d+)?(?:Z|[+-]\\d\\d:\\d\\d)$/.test(s) && Number.isFinite(Date.parse(s));
+      const validDate = (s: string) => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)$/.test(s) && Number.isFinite(Date.parse(s));
       if (!/^[1-9][0-9]{0,17}$/.test(matchId) || !validDate(kickoff) ||
           !validDate(deadline) || Date.parse(deadline) <= Date.now() ||
           Date.parse(deadline) > Date.parse(kickoff))
