@@ -88,6 +88,12 @@ export async function POST(req: NextRequest) {
           AND EXISTS (SELECT 1 FROM footy_cutover.teams a WHERE a.id=${away}::bigint)
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
+          AND NOT EXISTS (
+            SELECT 1 FROM footy_cutover.matches other
+            WHERE other.id<>m.id AND other.tour_id=m.tour_id AND other.status='scheduled'
+              AND (other.home_team_id IN (${home}::bigint, ${away}::bigint)
+                OR other.away_team_id IN (${home}::bigint, ${away}::bigint))
+          )
         RETURNING m.id::text
       `;
       return rows.length ? reply({ ok: true, match_id: rows[0].id })
