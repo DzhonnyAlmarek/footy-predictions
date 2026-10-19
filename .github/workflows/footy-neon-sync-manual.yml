@@ -11,6 +11,7 @@ on:
         options:
           - dry-run
           - apply
+          - candidate-audit
       confirm:
         description: "For apply type APPLY-ISOLATED-NEON; otherwise leave empty"
         required: false
@@ -25,7 +26,7 @@ concurrency:
 
 jobs:
   synchronize:
-    if: github.ref == 'refs/heads/deploy/yandex-cloud' && (inputs.mode == 'dry-run' || (inputs.mode == 'apply' && inputs.confirm == 'APPLY-ISOLATED-NEON'))
+    if: github.ref == 'refs/heads/deploy/yandex-cloud' && (inputs.mode == 'dry-run' || inputs.mode == 'candidate-audit' || (inputs.mode == 'apply' && inputs.confirm == 'APPLY-ISOLATED-NEON'))
     runs-on: ubuntu-24.04
     environment: yandex-test
     timeout-minutes: 15
@@ -44,4 +45,20 @@ jobs:
           npm ci --ignore-scripts
           npm install --no-save --package-lock=false --ignore-scripts pg@8
       - name: Compare and optionally apply isolated sync
+        if: inputs.mode != 'candidate-audit'
         run: node scripts/footy-neon-sync-manual.mjs
+      - name: Checkout candidate audit code
+        if: inputs.mode == 'candidate-audit'
+        uses: actions/checkout@v4
+        with:
+          ref: feature/yandex-neon-production-prep-20261019
+          path: candidate-audit
+          persist-credentials: false
+      - name: Candidate data drift audit (read-only)
+        if: inputs.mode == 'candidate-audit'
+        env:
+          FOOTY_CANDIDATE_NEON_DATABASE_URL: ${{ secrets.FOOTY_CANDIDATE_NEON_DATABASE_URL }}
+        run: |
+          test -n "$FOOTY_CANDIDATE_NEON_DATABASE_URL" || { echo "Missing candidate Neon secret"; exit 1; }
+          cp candidate-audit/scripts/footy-cutover-candidate-audit.mjs scripts/footy-cutover-candidate-audit.mjs
+          node scripts/footy-cutover-candidate-audit.mjs
