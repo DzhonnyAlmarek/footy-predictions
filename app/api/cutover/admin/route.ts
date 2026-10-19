@@ -114,8 +114,17 @@ export async function POST(req: NextRequest) {
           )
         RETURNING id
         )
-        INSERT INTO cutover_auth.created_matches(match_id)
-        SELECT id FROM created RETURNING match_id AS id
+        , owned AS (
+          INSERT INTO cutover_auth.created_matches(match_id)
+          SELECT id FROM created RETURNING match_id AS id
+        ), marked AS (
+          INSERT INTO cutover_auth.test_matches(match_id)
+          SELECT id FROM owned
+          WHERE ${process.env.CUTOVER_SHOW_TEST_MATCHES === "true"}::boolean
+          ON CONFLICT DO NOTHING
+          RETURNING match_id
+        )
+        SELECT owned.id FROM owned LEFT JOIN marked ON marked.match_id = owned.id
       `;
       return rows.length ? reply({ ok: true, match_id: String(rows[0].id) }) : reply({ ok: false, error: "invalid_references" }, 400);
     }
