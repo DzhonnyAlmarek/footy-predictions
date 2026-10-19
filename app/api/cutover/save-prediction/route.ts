@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
       WHERE m.id = ${matchId}::bigint
         AND COALESCE(m.deadline_at, m.kickoff_at) > now()
         AND m.status = 'scheduled'
+        AND ( ${process.env.CUTOVER_SHOW_TEST_MATCHES === "true"}::boolean OR NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id) )
       ON CONFLICT (match_id, user_id) DO UPDATE
         SET home_pred = EXCLUDED.home_pred, away_pred = EXCLUDED.away_pred, updated_at = now()
       WHERE EXISTS (
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
         WHERE m.id = EXCLUDED.match_id
           AND COALESCE(m.deadline_at, m.kickoff_at) > now()
           AND m.status = 'scheduled'
+          AND ( ${process.env.CUTOVER_SHOW_TEST_MATCHES === "true"}::boolean OR NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id) )
       )
       RETURNING id
     `;
