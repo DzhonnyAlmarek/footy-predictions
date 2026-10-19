@@ -11,7 +11,7 @@ type Prediction = {
 };
 
 export default function CutoverParticipantPage() {
-  const [activeTab, setActiveTab] = useState<"schedule" | "ranking" | "mine" | "admin">("schedule");
+  const [activeTab, setActiveTab] = useState<"schedule" | "ranking" | "grand-prix" | "mine" | "admin">("schedule");
   const [showAllMatches, setShowAllMatches] = useState(false);
   const [matchFilter, setMatchFilter] = useState<"upcoming" | "all">("upcoming");
   const [savedMatchId, setSavedMatchId] = useState<string | null>(null);
@@ -26,6 +26,8 @@ export default function CutoverParticipantPage() {
   const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [schedule, setSchedule] = useState<Prediction[]>([]);
+  const [grandPrix, setGrandPrix] = useState<{ seasons: { id: string; name: string }[]; ratings: { season_id: string; username: string; points: string; scored_rounds: number }[] } | null>(null);
+  const [grandPrixUnavailable, setGrandPrixUnavailable] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; scored_predictions: number }[]>([]);
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
@@ -67,6 +69,12 @@ export default function CutoverParticipantPage() {
       const rankingData = await rankingResponse.json();
       setLeaderboard(Array.isArray(rankingData.leaderboard) ? rankingData.leaderboard : []);
     }
+    const grandPrixResponse = await fetch("/api/cutover/grand-prix", { cache: "no-store" }).catch(() => null);
+    if (grandPrixResponse?.ok) {
+      const grandPrixData = await grandPrixResponse.json();
+      setGrandPrix({ seasons: Array.isArray(grandPrixData.seasons) ? grandPrixData.seasons : [], ratings: Array.isArray(grandPrixData.ratings) ? grandPrixData.ratings : [] });
+      setGrandPrixUnavailable(false);
+    } else { setGrandPrix(null); setGrandPrixUnavailable(true); }
     setAuthenticated(true);
     setMessage("Данные загружены из изолированной Neon.");
   }
@@ -176,6 +184,8 @@ export default function CutoverParticipantPage() {
       setPredictions([]);
       setSchedule([]);
       setLeaderboard([]);
+      setGrandPrix(null);
+      setGrandPrixUnavailable(false);
       setWritesEnabled(false);
       setAdminWritesEnabled(false);
       setResultWritesEnabled(false);
@@ -201,7 +211,7 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <div className="card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: 12, marginBottom: 16 }}>
-        {([["schedule", "Матчи"], ["ranking", "Рейтинг"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+        {([["schedule", "Матчи"], ["ranking", "Рейтинг"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             style={{ padding: "10px 14px", borderRadius: 10, border: activeTab === id ? "1px solid #2563eb" : "1px solid #d1d5db", background: activeTab === id ? "#dbeafe" : "#fff", fontWeight: 700, cursor: "pointer" }}>{label}</button>)}
         <div aria-label="Текущий пользователь" style={{ marginLeft: "auto", padding: "8px 12px", background: isAdmin ? "#fef3c7" : "#eff6ff", borderRadius: 10, fontWeight: 700, color: "#102d46" }}>
@@ -266,6 +276,17 @@ export default function CutoverParticipantPage() {
           <td>{p.username}</td><td>{p.points}</td><td>{p.scored_predictions}</td>
         </tr>)}</tbody>
       </table></div></section>}
+      {activeTab === "grand-prix" && <section><h2>Гран-при</h2>
+        {grandPrixUnavailable && <p>Рейтинг Гран-при пока недоступен на этой тестовой площадке.</p>}
+        {grandPrix?.seasons.map(season => <div key={season.id}>
+          <h3>{season.name}</h3>
+          <div className="tableWrap"><table className="table" style={{ minWidth: 450 }}>
+            <thead><tr><th>Участник</th><th>Очки</th><th>Этапов с очками</th></tr></thead>
+            <tbody>{grandPrix.ratings.filter(p => p.season_id === season.id).map(p =>
+              <tr key={p.username}><td>{p.username}</td><td>{p.points}</td><td>{p.scored_rounds}</td></tr>)}</tbody>
+          </table></div>
+        </div>)}
+      </section>}
       {activeTab === "schedule" && <section><h2>Расписание матчей ({schedule.length})</h2>
       <p>{writesEnabled ? "Прогнозы можно менять до дедлайна." : "Сохранение новых прогнозов пока отключено."}</p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
