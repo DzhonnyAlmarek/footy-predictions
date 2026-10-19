@@ -7,7 +7,13 @@ export const CUTOVER_HEADERS = { "Cache-Control": "no-store", "X-Robots-Tag": "n
 export function cutoverAuthEnabled(): boolean {
   const raw = process.env.CUTOVER_AUTH_DATABASE_URL;
   const allowed = process.env.CUTOVER_AUTH_ALLOWED_HOST;
-  if (process.env.DEPLOY_TARGET !== "yandex-neon-cutover-preview" ||
+  const target = process.env.DEPLOY_TARGET;
+  const preview = target === "yandex-neon-cutover-preview";
+  const candidate = target === "yandex-neon-production-candidate";
+  // Candidate auth stays disabled until explicitly gated on an isolated deployment.
+  // Never authorize candidate access using the preview enable flag alone.
+  if ((!preview && !candidate) ||
+      (candidate && process.env.ENABLE_CUTOVER_PRODUCTION_CANDIDATE !== "true") ||
       process.env.ENABLE_CUTOVER_AUTH !== "true" || !raw || !allowed ||
       !allowed.endsWith(".neon.tech")) return false;
   try {
