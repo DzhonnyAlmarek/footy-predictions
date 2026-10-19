@@ -92,6 +92,20 @@ export async function POST(req: NextRequest) {
       return rows.length ? reply({ ok: true, match_id: rows[0].id })
         : reply({ ok: false, error: "match_locked_or_not_found" }, 409);
     }
+    if (body?.action === "rename_tour") {
+      const tourId = String(body.tour_id ?? "");
+      const tourName = typeof body.name === "string" ? body.name.trim() : "";
+      if (!/^[1-9][0-9]{0,17}$/.test(tourId) || !tourName || tourName.length > 160)
+        return reply({ ok: false, error: "invalid_tour" }, 400);
+      // Renaming the display label does not change predictions, deadlines or scoring.
+      const rows = await sql`
+        UPDATE footy_cutover.tours t SET name=${tourName}
+        WHERE t.id=${tourId}::bigint
+        RETURNING t.id::text
+      `;
+      return rows.length ? reply({ ok: true, tour_id: rows[0].id })
+        : reply({ ok: false, error: "tour_not_found" }, 404);
+    }
     if (body?.action === "create_tour") {
       const stage = String(body.stage_id ?? "");
       const tourNo = typeof body.tour_no === "string" ? body.tour_no.trim() : "";
