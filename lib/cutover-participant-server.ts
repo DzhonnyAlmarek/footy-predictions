@@ -60,6 +60,8 @@ export async function cutoverOwnPredictions(userId: string) {
     LEFT JOIN footy_cutover.teams h ON h.id=m.home_team_id
     LEFT JOIN footy_cutover.teams a ON a.id=m.away_team_id
     WHERE p.user_id = ${userId}::uuid
+      AND ( ${process.env.CUTOVER_SHOW_TEST_MATCHES === "true"}::boolean
+            OR NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id = m.id) )
     ORDER BY m.kickoff_at DESC NULLS LAST, p.id DESC LIMIT 500
   `;
 }
