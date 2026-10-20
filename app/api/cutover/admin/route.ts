@@ -123,6 +123,22 @@ export async function POST(req: NextRequest) {
       return rows.length ? reply({ ok: true, match_id: rows[0].id })
         : reply({ ok: false, error: "match_locked_or_not_found" }, 409);
     }
+    if (body?.action === "rename_stage") {
+      const stageId = String(body.stage_id ?? "");
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      if (!/^[1-9][0-9]{0,17}$/.test(stageId) || !name || name.length > 160)
+        return reply({ ok: false, error: "invalid_stage" }, 400);
+      // Only an empty draft stage can be renamed. Historical stage names stay immutable.
+      const rows = await sql`
+        UPDATE footy_cutover.stages s SET name=${name}
+        WHERE s.id=${stageId}::bigint AND s.status='draft'
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.tours t WHERE t.stage_id=s.id)
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.matches m WHERE m.stage_id=s.id)
+        RETURNING s.id::text
+      `;
+      return rows.length ? reply({ ok: true, stage_id: rows[0].id })
+        : reply({ ok: false, error: "stage_locked_or_not_found" }, 409);
+    }
     if (body?.action === "rename_tour") {
       const tourId = String(body.tour_id ?? "");
       const tourName = typeof body.name === "string" ? body.name.trim() : "";
