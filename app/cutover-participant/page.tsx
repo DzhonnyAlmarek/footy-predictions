@@ -30,7 +30,7 @@ export default function CutoverParticipantPage() {
   const [schedule, setSchedule] = useState<Prediction[]>([]);
   const [grandPrix, setGrandPrix] = useState<{ seasons: { id: string; name: string }[]; ratings: { season_id: string; username: string; points: string; scored_rounds: number }[] } | null>(null);
   const [grandPrixUnavailable, setGrandPrixUnavailable] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; scored_predictions: number }[]>([]);
+  const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; bonus_points: string; scored_predictions: number }[]>([]);
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
   const [writesEnabled, setWritesEnabled] = useState(false);
@@ -435,9 +435,9 @@ export default function CutoverParticipantPage() {
       </section>}
       {activeTab === "ranking" && <section><h2 style={{ marginTop: 28 }}>Общий рейтинг</h2>
       <div className="tableWrap"><table className="table" style={{ minWidth: 500 }}>
-        <thead><tr><th>Участник</th><th>Очки</th><th>Учтённых прогнозов</th></tr></thead>
+        <thead><tr><th>Участник</th><th>Очки</th><th>Бонусы (в составе очков)</th><th>Учтённых прогнозов</th></tr></thead>
         <tbody>{leaderboard.map(p => <tr key={p.username}>
-          <td>{p.username}</td><td>{p.points}</td><td>{p.scored_predictions}</td>
+          <td>{p.username}</td><td>{p.points}</td><td>{p.bonus_points ?? "0"}</td><td>{p.scored_predictions}</td>
         </tr>)}</tbody>
       </table></div></section>}
       {activeTab === "grand-prix" && <section><h2>Гран-при</h2>
