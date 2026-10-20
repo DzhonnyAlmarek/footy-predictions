@@ -76,14 +76,13 @@ export async function POST(req: NextRequest) {
       const validId = (v: string) => /^[1-9][0-9]{0,17}$/.test(v);
       if (![matchId, home, away].every(validId) || home === away)
         return reply({ ok: false, error: "invalid_teams" }, 400);
-      // Imported matches, expired fixtures, matches with predictions and scored
-      // matches are immutable. No score recalculation is needed for an untouched fixture.
+      // Allow untouched scheduled fixtures, including imported ones. Matches with
+      // predictions, expired deadlines or scoring history remain immutable.
       const rows = await sql`
         UPDATE footy_cutover.matches m
         SET home_team_id=${home}::bigint, away_team_id=${away}::bigint
         WHERE m.id=${matchId}::bigint AND m.status='scheduled'
           AND m.deadline_at > now()
-          AND EXISTS (SELECT 1 FROM cutover_auth.created_matches cm WHERE cm.match_id=m.id)
           AND EXISTS (SELECT 1 FROM footy_cutover.teams h WHERE h.id=${home}::bigint)
           AND EXISTS (SELECT 1 FROM footy_cutover.teams a WHERE a.id=${away}::bigint)
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
@@ -100,7 +99,7 @@ export async function POST(req: NextRequest) {
         : reply({ ok: false, error: "match_locked_or_not_found" }, 409);
     }
     if (body?.action === "reschedule_match") {
-      // A newly created match may be rescheduled only before any predictions exist.
+      // Only untouched scheduled fixtures (including imported) may be rescheduled.
       // Historical matches and matches whose deadline has passed remain immutable.
       const matchId = String(body.match_id ?? "");
       const kickoff = typeof body.kickoff_at === "string" ? body.kickoff_at : "";
@@ -115,7 +114,6 @@ export async function POST(req: NextRequest) {
         SET kickoff_at=${kickoff}::timestamptz, deadline_at=${deadline}::timestamptz
         WHERE m.id=${matchId}::bigint AND m.status='scheduled'
           AND m.deadline_at > now()
-          AND EXISTS (SELECT 1 FROM cutover_auth.created_matches cm WHERE cm.match_id=m.id)
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
         RETURNING m.id::text
