@@ -24,6 +24,7 @@ export default function CutoverParticipantPage() {
   const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean }[] } | null>(null);
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
   const [renameTourForm, setRenameTourForm] = useState({ tour_id: "", name: "" });
+  const [renameStageForm, setRenameStageForm] = useState({ stage_id: "", name: "" });
   const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [schedule, setSchedule] = useState<Prediction[]>([]);
@@ -155,6 +156,26 @@ export default function CutoverParticipantPage() {
       await load();
       setMessage("Название тура изменено.");
     } catch { setMessage("Ошибка соединения при переименовании тура."); }
+    finally { setBusy(false); }
+  }
+  async function renameStage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!renameStageForm.stage_id || !renameStageForm.name.trim()) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rename_stage", ...renameStageForm })
+      });
+      if (!response.ok) {
+        setMessage(response.status === 409
+          ? "Этап недоступен для переименования: он не черновой либо уже содержит туры или матчи."
+          : "Не удалось переименовать этап."); return;
+      }
+      setRenameStageForm({ stage_id: "", name: "" });
+      await load();
+      setMessage("Название чернового этапа изменено.");
+    } catch { setMessage("Ошибка соединения при переименовании этапа."); }
     finally { setBusy(false); }
   }
   async function createMatch(event: FormEvent<HTMLFormElement>) {
@@ -293,6 +314,21 @@ export default function CutoverParticipantPage() {
           <label>Название тура <input maxLength={160} value={tourForm.name}
             onChange={e => setTourForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Тур 31" /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled}>Создать тур</button>
+        </form>
+        <h2>ADMIN — переименование чернового этапа</h2>
+        <p>Доступно только для пустого чернового этапа, без туров и матчей.</p>
+        <form onSubmit={renameStage} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
+          <label>Этап <select required value={renameStageForm.stage_id}
+            onChange={e => {
+              const stage = adminData.stages.find(s => s.id === e.target.value);
+              setRenameStageForm({ stage_id: e.target.value, name: stage?.name ?? "" });
+            }}>
+            <option value="">Выбери этап</option>
+            {adminData.stages.map(s => <option key={s.id} value={s.id}>{s.name} (ID {s.id})</option>)}
+          </select></label>
+          <label>Новое название <input required maxLength={160} value={renameStageForm.name}
+            onChange={e => setRenameStageForm(prev => ({ ...prev, name: e.target.value }))} /></label>
+          <button type="submit" disabled={busy || !adminWritesEnabled || !renameStageForm.stage_id}>Переименовать этап</button>
         </form>
         <h2>ADMIN — переименование тура</h2>
         <p>Переименовать можно только тур, в котором ещё нет матчей. Исторические туры защищены.</p>
