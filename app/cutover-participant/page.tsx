@@ -203,7 +203,7 @@ export default function CutoverParticipantPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "edit_match_teams", ...teamsEditForm })
       });
-      if (!response.ok) { setMessage("Замена команд отклонена: матч импортирован, закрыт или на него уже есть прогнозы."); return; }
+      if (!response.ok) { setMessage("Замена команд отклонена: матч закрыт, дедлайн истёк, уже есть прогнозы или конфликт команд."); return; }
       setTeamsEditForm({ match_id: "", home_team_id: "", away_team_id: "" });
       await load();
       setMessage("Команды матча обновлены.");
@@ -226,7 +226,7 @@ export default function CutoverParticipantPage() {
         body: JSON.stringify({ action: "reschedule_match", match_id: rescheduleForm.match_id,
           kickoff_at: kickoff.toISOString(), deadline_at: deadline.toISOString() })
       });
-      if (!response.ok) { setMessage("Перенос отклонён: матч уже закрыт, импортирован или на него есть прогнозы."); return; }
+      if (!response.ok) { setMessage("Перенос отклонён: матч закрыт, дедлайн истёк или уже есть прогнозы."); return; }
       setRescheduleForm({ match_id: "", kickoff_at: "", deadline_at: "" });
       await load();
       setMessage("Дата матча и дедлайн обновлены.");
@@ -387,7 +387,7 @@ export default function CutoverParticipantPage() {
                 away_team_id: match?.away_team_id ?? "" });
             }}>
             <option value="">Выбери новый матч</option>
-            {adminData.matches.filter(m => m.admin_created && m.status === "scheduled").map(m =>
+            {adminData.matches.filter(m => m.status === "scheduled" && new Date(m.deadline_at).getTime() > Date.now()).map(m =>
               <option key={m.id} value={m.id}>{m.home_team} — {m.away_team}</option>)}
           </select></label>
           <label>Хозяева <select required value={teamsEditForm.home_team_id}
@@ -408,7 +408,7 @@ export default function CutoverParticipantPage() {
           <label>Матч <select required value={rescheduleForm.match_id}
             onChange={e => setRescheduleForm(prev => ({ ...prev, match_id: e.target.value }))}>
             <option value="">Выбери новый матч</option>
-            {(adminData.matches ?? []).filter(m => m.admin_created && m.status === "scheduled").map(m =>
+            {(adminData.matches ?? []).filter(m => m.status === "scheduled" && new Date(m.deadline_at).getTime() > Date.now()).map(m =>
               <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} ({new Date(m.kickoff_at).toLocaleString("ru-RU")})</option>)}
           </select></label>
           <label>Новое начало <input required type="datetime-local" value={rescheduleForm.kickoff_at}
