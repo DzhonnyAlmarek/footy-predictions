@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
     const leaderboard = await sql`
       SELECT p.username, COALESCE(SUM(l.points),0)::numeric AS points,
+        COALESCE(SUM(l.points_bonus),0)::numeric AS bonus_points,
         COUNT(l.id)::int AS scored_predictions
       FROM footy_cutover.profiles p
       LEFT JOIN footy_cutover.points_ledger l ON l.user_id=p.id
