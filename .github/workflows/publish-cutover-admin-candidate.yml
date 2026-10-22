@@ -1,10 +1,11 @@
 name: Publish candidate admin image (no deployment)
 on:
-  push:
-    branches:
-      - feature/cutover-admin-readiness-20261020
-    paths:
-      - .github/workflows/publish-cutover-admin-candidate.yml
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Enter PUBLISH-CANDIDATE to upload the image only'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -12,6 +13,7 @@ permissions:
 
 jobs:
   publish:
+    if: ${{ github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020' && inputs.confirmation == 'PUBLISH-CANDIDATE' }}
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 35
