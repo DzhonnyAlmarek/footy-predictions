@@ -30,3 +30,9 @@ The presence of a unique ledger pair and nonnegative bonus does not establish sc
 - Across all **1,513** entries, **0** rows violate `points_outcome = points_outcome_base + points_outcome_bonus` or `points_diff = points_diff_base + points_diff_bonus`.
 - **810** rows differ if comparing `points_bonus` with `points_outcome_bonus + points_diff_bonus`: these are **distinct components**, not interchangeable bonus fields. The correct expanded total is `points_outcome_base + points_outcome_bonus + points_diff_base + points_diff_bonus + points_h1 + points_h2 + points_bonus` (0 mismatches).
 - **474** rows have nonzero `points_bonus`; their total is **237.00**. The database includes **18** matches with nonzero penalty-goal fields. The exact penalty scoring rules and source parity remain unverified.
+
+## Penalty fields: interpretation risk
+- **18** matches have nonzero `home_penalty_goals` or `away_penalty_goals`; **90** associated ledger entries, **23** with positive standalone `points_bonus`.
+- **0** matches have both penalty-goal fields nonzero. **0** matches with a nonzero home penalty-goal field lack a regular home score.
+- Do **not** interpret these fields as penalty shootout scores without checking the source rule; they may represent penalties scored in regular time.
+- Do not change historical scores or scoring function on the basis of these aggregate checks.
