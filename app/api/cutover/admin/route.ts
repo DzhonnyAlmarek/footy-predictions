@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
         UPDATE footy_cutover.matches m
         SET home_team_id=${home}::bigint, away_team_id=${away}::bigint
         WHERE m.id=${matchId}::bigint AND m.status='scheduled'
-          AND m.deadline_at > now()
+          AND m.deadline_at > now() AND m.kickoff_at > now()
           AND EXISTS (SELECT 1 FROM footy_cutover.teams h WHERE h.id=${home}::bigint)
           AND EXISTS (SELECT 1 FROM footy_cutover.teams a WHERE a.id=${away}::bigint)
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
@@ -113,7 +113,9 @@ export async function POST(req: NextRequest) {
         UPDATE footy_cutover.matches m
         SET kickoff_at=${kickoff}::timestamptz, deadline_at=${deadline}::timestamptz
         WHERE m.id=${matchId}::bigint AND m.status='scheduled'
-          AND m.deadline_at > now()
+          AND m.deadline_at > now() AND m.kickoff_at > now()
+          AND ${deadline}::timestamptz > now()
+          AND ${deadline}::timestamptz <= ${kickoff}::timestamptz
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
         RETURNING m.id::text
