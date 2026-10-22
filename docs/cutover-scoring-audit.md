@@ -55,3 +55,10 @@ The presence of a unique ledger pair and nonnegative bonus does not establish sc
 - Original Supabase migration `supabase/migrations/20260908193955_add_golden_whistle_penalties.sql` constrains `home_penalty_goals <= home_score` and `away_penalty_goals <= away_score`. These fields count goals scored from penalties **within the final match score**, not penalty shootout tallies.
 - Original `public.score_match_core` in `supabase-backups/schema.sql` and UI calculator `lib/points/breakdown.ts` calculate from regular `home_score`, `away_score` and predictions. They do not award a separate bonus for `home_penalty_goals` / `away_penalty_goals`.
 - The isolated `footy_cutover.finish_new_match` mirrors this core scoring rule. Original source **code parity is now supported**; source database row-by-row parity remains pending.
+
+## Golden Whistle nomination (user-confirmed scope)
+- All penalty-goal fields belong to the separate **Golden Whistle** nomination, **not** the main prediction-scoring formula.
+- Source implementation: `lib/golden-whistle.ts` and `app/_components/golden-whistle-calculation.tsx`.
+- Per participant and finished penalty-goal match: `earned = max(actual ledger points - basePredictionPoints(prediction, home_score-home_penalty_goals, away_score-away_penalty_goals), 0)` **only if** `basePredictionPoints(prediction, actual score) > basePredictionPoints(prediction, score without penalty goals)`; otherwise `earned=0`.
+- The conditional gate matters: it is **not** simply `max(actual - without,0)` for all predictions. Dynamic multiplier bonus is part of actual ledger points, while the counterfactual is base points without multipliers.
+- Nomination totals are separate and must not be added again to the general leaderboard. Verify migration of Golden Whistle UI and its source-data dependencies independently.
