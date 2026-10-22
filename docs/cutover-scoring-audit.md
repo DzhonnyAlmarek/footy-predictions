@@ -44,3 +44,9 @@ The presence of a unique ledger pair and nonnegative bonus does not establish sc
 - The function **does not read** `home_penalty_goals` or `away_penalty_goals`. Penalty-related historical rules are not validated by this function.
 - Idempotency safeguards: admin-created match restriction, `FOR UPDATE` lock, scheduled status, kickoff/deadline passed, and no existing ledger rows. The function returns false on a repeated finish.
 - Important: this confirms the candidate **new-match** implementation, not necessarily the legacy source scoring rules or historical parity.
+
+## Historical ledger recalculation against candidate predictions/results
+- Read-only joined comparison of historical ledger to finished matches and predictions: **0 mismatches** for `points_outcome_base`, `points_diff_base`, `points_h1`, `points_h2`, and standalone `points_bonus` against the exact new-match scoring formula.
+- Independent per-match counts of correct outcomes and goal differences were used to reconstruct dynamic multipliers (1→1.75, 2→1.50, 3→1.25, otherwise 1). **1,513 of 1,513** ledger rows match both reconstructed `points_outcome` and `points_diff`.
+- All **18** matches with nonzero penalty-goal fields have ledger entries. These fields are not used in the verified `finish_new_match` formula, and their legacy semantic meaning still needs source confirmation.
+- This is an **internal candidate consistency** check, not a comparison with the original source system.
