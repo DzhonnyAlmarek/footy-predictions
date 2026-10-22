@@ -36,3 +36,11 @@ The presence of a unique ledger pair and nonnegative bonus does not establish sc
 - **0** matches have both penalty-goal fields nonzero. **0** matches with a nonzero home penalty-goal field lack a regular home score.
 - Do **not** interpret these fields as penalty shootout scores without checking the source rule; they may represent penalties scored in regular time.
 - Do not change historical scores or scoring function on the basis of these aggregate checks.
+
+## Verified implementation of `footy_cutover.finish_new_match` (candidate Neon)
+- Retrieved the full function body from the isolated candidate branch via read-only `pg_get_functiondef` on 2026-10-22.
+- Base score: correct outcome **2**, exact goal difference **1**, correct home goals **0.5**, correct away goals **0.5**, total absolute goal error exactly 1 **+0.5**.
+- Correct outcome and exact goal difference are multiplied independently by the number of participants who guessed each: 1 → **1.75**, 2 → **1.50**, 3 → **1.25**, 4+ → **1.00**.
+- The function **does not read** `home_penalty_goals` or `away_penalty_goals`. Penalty-related historical rules are not validated by this function.
+- Idempotency safeguards: admin-created match restriction, `FOR UPDATE` lock, scheduled status, kickoff/deadline passed, and no existing ledger rows. The function returns false on a repeated finish.
+- Important: this confirms the candidate **new-match** implementation, not necessarily the legacy source scoring rules or historical parity.
