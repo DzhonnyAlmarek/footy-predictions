@@ -18,3 +18,9 @@ Date: 2026-10-22. Scope: feature branch and isolated Neon candidate only. **Do n
 
 ## Known limitation
 The presence of a unique ledger pair and nonnegative bonus does not establish scoring correctness. Do not treat this audit as permission to deploy or switch DNS.
+
+## Candidate reconciliation snapshot (2026-10-22)
+- Profiles: **7**; matches: **461**; predictions: **1,519**; points ledger: **1,513**.
+- All **6** predictions lacking a ledger row belong to unfinished matches; **0** unscored predictions belong to finished matches.
+- Both predictions and points ledger have unique indexes on (match_id, user_id).
+- Source Supabase football project is not available among connected Supabase projects (only `club-murashev` and `Emias Docs` were listed). **Source-to-candidate comparison is still pending**; do not mistake internal consistency for source parity.
