@@ -65,6 +65,8 @@ The presence of a unique ledger pair and nonnegative bonus does not establish sc
 
 ## Golden Whistle migration readiness
 - Existing pages: `app/(user)/golden-whistle/page.tsx` (current stage), `app/(user)/dashboard/archive/[stageId]/golden-whistle/page.tsx` (archived locked stage), `app/admin/golden-whistle/page.tsx` (admin), and components `app/_components/golden-whistle-stage.tsx`, `app/_components/golden-whistle-calculation.tsx`.
-- Existing stage ranking sorts by Golden Whistle points descending, then **main contest place descending** (verify whether this tie-break is intentional), then Russian locale login; first three positions show medals.
+- Existing stage ranking sorts by Golden Whistle points descending, then **main contest place descending** (confirmed competition rule: the participant with the worse/lower position in the main contest wins the tie), then Russian locale login; first three positions show medals.
 - Existing pages/components still depend directly on Supabase (`createClient`, `SUPABASE_SERVICE_ROLE_KEY`, `login_accounts`, legacy cookies), **not isolated Neon cutover auth**. Thus Golden Whistle UI is **not migrated** by copying penalty columns and scoring ledger alone.
 - Migration gate: implement Neon-backed authenticated read-only endpoints/components and preserve stage/archived ranking and calculation; keep legacy site unchanged.
+
+- User explicitly confirmed Golden Whistle tie-break: when nomination points are equal, award priority to the participant with a **lower standing in the main contest** (numerically greater main_place). The original Supabase UI was correct; an accidental ascending-order change in the new Neon API was reverted in commit `de5f633f`.
