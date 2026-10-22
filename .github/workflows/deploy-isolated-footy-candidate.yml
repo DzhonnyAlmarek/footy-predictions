@@ -61,6 +61,16 @@ jobs:
           curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh -o /tmp/install-yc.sh
           bash /tmp/install-yc.sh -i "$HOME/yandex-cloud" -n
           echo "$HOME/yandex-cloud/bin" >> "$GITHUB_PATH"
+      - name: Configure Yandex Cloud CLI for OIDC token
+        run: |
+          set -euo pipefail
+          yc config profile create default
+          yc config set token "$YC_IAM_TOKEN"
+          yc config set cloud-id "$YC_CLOUD_ID"
+          yc config set folder-id "$YC_FOLDER_ID"
+        env:
+          YC_CLOUD_ID: b1ge8jgq7kh768aapao1
+          YC_FOLDER_ID: b1gtdrn5t149v0ckl6ql
       - name: Deploy one isolated candidate revision
         env:
           YC_CLOUD_ID: b1ge8jgq7kh768aapao1
