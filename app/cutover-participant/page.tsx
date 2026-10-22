@@ -30,8 +30,9 @@ export default function CutoverParticipantPage() {
   const [schedule, setSchedule] = useState<Prediction[]>([]);
   const [grandPrix, setGrandPrix] = useState<{ seasons: { id: string; name: string }[]; ratings: { season_id: string; username: string; points: string; scored_rounds: number }[] } | null>(null);
   const [grandPrixUnavailable, setGrandPrixUnavailable] = useState(false);
-  const [whistle, setWhistle] = useState<{ stage: { id: string; name: string }; penalty_matches: number; leaderboard: { username: string; points: number; main_place: number }[] } | null>(null);
+  const [whistle, setWhistle] = useState<{ stage: { id: string; name: string }; available_stages: { id: string; name: string; status: string }[]; penalty_matches: number; leaderboard: { username: string; points: number; main_place: number }[] } | null>(null);
   const [whistleUnavailable, setWhistleUnavailable] = useState(false);
+  const [whistleLoading, setWhistleLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; bonus_points: string; scored_predictions: number }[]>([]);
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
@@ -106,6 +107,17 @@ export default function CutoverParticipantPage() {
       .then(data => setParticipants(Array.isArray(data.participants) ? data.participants : []))
       .catch(() => setParticipants([]));
   }, []);
+
+  async function selectWhistleStage(stageId: string) {
+    setWhistleLoading(true);
+    try {
+      const response = await fetch("/api/cutover/golden-whistle?stageId=" + encodeURIComponent(stageId), { cache: "no-store" });
+      if (!response.ok) { setWhistleUnavailable(true); return; }
+      setWhistle(await response.json());
+      setWhistleUnavailable(false);
+    } catch { setWhistleUnavailable(true); }
+    finally { setWhistleLoading(false); }
+  }
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -290,6 +302,7 @@ export default function CutoverParticipantPage() {
       setGrandPrixUnavailable(false);
       setWhistle(null);
       setWhistleUnavailable(false);
+      setWhistleLoading(false);
       setWritesEnabled(false);
       setAdminWritesEnabled(false);
       setResultWritesEnabled(false);
@@ -464,7 +477,10 @@ export default function CutoverParticipantPage() {
       </table></div></section>}
       {activeTab === "golden-whistle" && <section><h2>Золотой свисток</h2>
         {whistleUnavailable && <p>Номинация пока недоступна на этой площадке.</p>}
-        {whistle && <><p>Этап: {whistle.stage.name} · матчей с забитыми пенальти: {whistle.penalty_matches}</p>
+        {whistle && <><label>Этап <select value={String(whistle.stage.id)} disabled={whistleLoading} onChange={e => void selectWhistleStage(e.target.value)}>
+          {whistle.available_stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select></label>
+          <p>Матчей с забитыми пенальти: {whistle.penalty_matches}{whistleLoading ? " · загрузка..." : ""}</p>
           <p>Отдельная номинация: учитываются очки, которые помогли набрать результативные пенальти. В общий рейтинг эти очки повторно не добавляются.</p>
           <div className="tableWrap"><table className="table" style={{ minWidth: 450 }}>
             <thead><tr><th>Место</th><th>Участник</th><th>Баллы</th><th>Место в основном конкурсе</th></tr></thead>
