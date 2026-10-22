@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
       username: p.username, points: whistleTotals.get(String(p.id)) ?? 0,
       main_points: mainTotals.get(String(p.id)) ?? 0,
       main_place: mainPlaces.get(String(p.id)) ?? profiles.length
-    })).sort((a, b) => b.points - a.points || a.main_place - b.main_place || String(a.username).localeCompare(String(b.username), "ru"));
+    })).sort((a, b) => b.points - a.points || b.main_place - a.main_place || String(a.username).localeCompare(String(b.username), "ru"));
     return NextResponse.json({ ok: true, stage, penalty_matches: matches.filter(m =>
       Number(m.home_penalty_goals) + Number(m.away_penalty_goals) > 0).length, leaderboard }, { headers: CUTOVER_HEADERS });
   } catch {
