@@ -50,3 +50,8 @@ The presence of a unique ledger pair and nonnegative bonus does not establish sc
 - Independent per-match counts of correct outcomes and goal differences were used to reconstruct dynamic multipliers (1→1.75, 2→1.50, 3→1.25, otherwise 1). **1,513 of 1,513** ledger rows match both reconstructed `points_outcome` and `points_diff`.
 - All **18** matches with nonzero penalty-goal fields have ledger entries. These fields are not used in the verified `finish_new_match` formula, and their legacy semantic meaning still needs source confirmation.
 - This is an **internal candidate consistency** check, not a comparison with the original source system.
+
+## Source-code confirmation: penalty fields and original scoring
+- Original Supabase migration `supabase/migrations/20260908193955_add_golden_whistle_penalties.sql` constrains `home_penalty_goals <= home_score` and `away_penalty_goals <= away_score`. These fields count goals scored from penalties **within the final match score**, not penalty shootout tallies.
+- Original `public.score_match_core` in `supabase-backups/schema.sql` and UI calculator `lib/points/breakdown.ts` calculate from regular `home_score`, `away_score` and predictions. They do not award a separate bonus for `home_penalty_goals` / `away_penalty_goals`.
+- The isolated `footy_cutover.finish_new_match` mirrors this core scoring rule. Original source **code parity is now supported**; source database row-by-row parity remains pending.
