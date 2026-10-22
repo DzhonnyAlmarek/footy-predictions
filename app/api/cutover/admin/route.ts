@@ -45,7 +45,9 @@ export async function POST(req: NextRequest) {
   if (Number(req.headers.get("content-length") || 0) > 2048) return reply({ ok: false }, 413);
   try {
     if (!(await admin(req))) return reply({ ok: false }, 403);
-    const body = await req.json();
+    const rawBody = await req.text();
+    if (new TextEncoder().encode(rawBody).byteLength > 2048) return reply({ ok: false, error: "payload_too_large" }, 413);
+    const body = JSON.parse(rawBody);
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
     if (body?.action === "result") {
       if (process.env.ENABLE_CUTOVER_RESULT_WRITES !== "true") return reply({ ok: false, error: "result_writes_disabled" }, 404);
@@ -56,7 +58,9 @@ export async function POST(req: NextRequest) {
           home < 0 || home > 99 || away < 0 || away > 99)
         return reply({ ok: false, error: "invalid_result" }, 400);
       // Only matches registered by the isolated create-match workflow can receive results.
-      const owned = await sql`SELECT match_id FROM cutover_auth.created_matches WHERE match_id=${id}::bigint`;
+      const owned = await sql`SELECT cm.match_id FROM cutover_auth.created_matches cm
+        WHERE cm.match_id=${id}::bigint
+          AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=cm.match_id)`;
       if (!owned.length) return reply({ ok: false, error: "historical_match_protected" }, 403);
       // One database transaction scores predictions and finishes the match.
       // Previously finished matches and historical ledger entries are immutable.
@@ -83,6 +87,7 @@ export async function POST(req: NextRequest) {
         SET home_team_id=${home}::bigint, away_team_id=${away}::bigint
         WHERE m.id=${matchId}::bigint AND m.status='scheduled'
           AND m.deadline_at > now() AND m.kickoff_at > now()
+          AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
           AND EXISTS (SELECT 1 FROM footy_cutover.teams h WHERE h.id=${home}::bigint)
           AND EXISTS (SELECT 1 FROM footy_cutover.teams a WHERE a.id=${away}::bigint)
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
@@ -114,6 +119,7 @@ export async function POST(req: NextRequest) {
         SET kickoff_at=${kickoff}::timestamptz, deadline_at=${deadline}::timestamptz
         WHERE m.id=${matchId}::bigint AND m.status='scheduled'
           AND m.deadline_at > now() AND m.kickoff_at > now()
+          AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
           AND ${deadline}::timestamptz > now()
           AND ${deadline}::timestamptz <= ${kickoff}::timestamptz
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
@@ -166,7 +172,7 @@ export async function POST(req: NextRequest) {
         INSERT INTO footy_cutover.tours (stage_id, tour_no, name)
         SELECT s.id, ${tourNo}, ${tourName || "Тур " + tourNo}
         FROM footy_cutover.stages s
-        WHERE s.id=${stage}::bigint
+        WHERE s.id=${stage}::bigint AND s.status='draft'
         ON CONFLICT (stage_id, tour_no) DO NOTHING
         RETURNING id::text
       `;
@@ -195,7 +201,9 @@ export async function POST(req: NextRequest) {
         JOIN footy_cutover.tours tr ON tr.id=${tour}::bigint AND tr.stage_id=s.id
         JOIN footy_cutover.teams h ON h.id=${home}::bigint
         JOIN footy_cutover.teams a ON a.id=${away}::bigint
-        WHERE t.id=${tournament}::bigint
+        WHERE t.id=${tournament}::bigint AND s.status='draft'
+          AND ${deadline}::timestamptz > now()
+          AND ${deadline}::timestamptz <= ${kickoff}::timestamptz
           AND NOT EXISTS (
             SELECT 1 FROM footy_cutover.matches existing
             WHERE existing.stage_id=s.id AND existing.tournament_id IS NOT NULL
