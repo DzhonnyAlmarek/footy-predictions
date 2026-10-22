@@ -62,3 +62,9 @@ The presence of a unique ledger pair and nonnegative bonus does not establish sc
 - Per participant and finished penalty-goal match: `earned = max(actual ledger points - basePredictionPoints(prediction, home_score-home_penalty_goals, away_score-away_penalty_goals), 0)` **only if** `basePredictionPoints(prediction, actual score) > basePredictionPoints(prediction, score without penalty goals)`; otherwise `earned=0`.
 - The conditional gate matters: it is **not** simply `max(actual - without,0)` for all predictions. Dynamic multiplier bonus is part of actual ledger points, while the counterfactual is base points without multipliers.
 - Nomination totals are separate and must not be added again to the general leaderboard. Verify migration of Golden Whistle UI and its source-data dependencies independently.
+
+## Golden Whistle migration readiness
+- Existing pages: `app/(user)/golden-whistle/page.tsx` (current stage), `app/(user)/dashboard/archive/[stageId]/golden-whistle/page.tsx` (archived locked stage), `app/admin/golden-whistle/page.tsx` (admin), and components `app/_components/golden-whistle-stage.tsx`, `app/_components/golden-whistle-calculation.tsx`.
+- Existing stage ranking sorts by Golden Whistle points descending, then **main contest place descending** (verify whether this tie-break is intentional), then Russian locale login; first three positions show medals.
+- Existing pages/components still depend directly on Supabase (`createClient`, `SUPABASE_SERVICE_ROLE_KEY`, `login_accounts`, legacy cookies), **not isolated Neon cutover auth**. Thus Golden Whistle UI is **not migrated** by copying penalty columns and scoring ledger alone.
+- Migration gate: implement Neon-backed authenticated read-only endpoints/components and preserve stage/archived ranking and calculation; keep legacy site unchanged.
