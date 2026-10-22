@@ -24,3 +24,9 @@ The presence of a unique ledger pair and nonnegative bonus does not establish sc
 - All **6** predictions lacking a ledger row belong to unfinished matches; **0** unscored predictions belong to finished matches.
 - Both predictions and points ledger have unique indexes on (match_id, user_id).
 - Source Supabase football project is not available among connected Supabase projects (only `club-murashev` and `Emias Docs` were listed). **Source-to-candidate comparison is still pending**; do not mistake internal consistency for source parity.
+
+## Arithmetic validation (read-only candidate Neon)
+- Across all **1,513** ledger entries, **0** rows violate `points = points_outcome + points_diff + points_h1 + points_h2 + points_bonus`.
+- Across all **1,513** entries, **0** rows violate `points_outcome = points_outcome_base + points_outcome_bonus` or `points_diff = points_diff_base + points_diff_bonus`.
+- **810** rows differ if comparing `points_bonus` with `points_outcome_bonus + points_diff_bonus`: these are **distinct components**, not interchangeable bonus fields. The correct expanded total is `points_outcome_base + points_outcome_bonus + points_diff_base + points_diff_bonus + points_h1 + points_h2 + points_bonus` (0 mismatches).
+- **474** rows have nonzero `points_bonus`; their total is **237.00**. The database includes **18** matches with nonzero penalty-goal fields. The exact penalty scoring rules and source parity remain unverified.
