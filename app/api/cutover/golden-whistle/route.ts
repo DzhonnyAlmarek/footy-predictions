@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
       : await sql`SELECT id, name, status FROM footy_cutover.stages WHERE is_current = true LIMIT 1`;
     if (!stages.length) return NextResponse.json({ ok: false, error: "stage not found" }, { status: 404, headers: CUTOVER_HEADERS });
     const stage = stages[0];
+    const availableStages = await sql`SELECT id::text AS id, name, status FROM footy_cutover.stages WHERE is_current = true OR status = 'locked' ORDER BY id DESC`;
     const matches = await sql`
       SELECT id, home_score, away_score, home_penalty_goals, away_penalty_goals
       FROM footy_cutover.matches m
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
       main_points: mainTotals.get(String(p.id)) ?? 0,
       main_place: mainPlaces.get(String(p.id)) ?? profiles.length
     })).sort((a, b) => b.points - a.points || b.main_place - a.main_place || String(a.username).localeCompare(String(b.username), "ru"));
-    return NextResponse.json({ ok: true, stage, penalty_matches: matches.filter(m =>
+    return NextResponse.json({ ok: true, stage, available_stages: availableStages, penalty_matches: matches.filter(m =>
       Number(m.home_penalty_goals) + Number(m.away_penalty_goals) > 0).length, leaderboard }, { headers: CUTOVER_HEADERS });
   } catch {
     return NextResponse.json({ ok: false, error: "unavailable" }, { status: 503, headers: CUTOVER_HEADERS });
