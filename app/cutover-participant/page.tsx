@@ -11,7 +11,7 @@ type Prediction = {
 };
 
 export default function CutoverParticipantPage() {
-  const [activeTab, setActiveTab] = useState<"schedule" | "ranking" | "grand-prix" | "mine" | "admin">("schedule");
+  const [activeTab, setActiveTab] = useState<"schedule" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("schedule");
   const [showAllMatches, setShowAllMatches] = useState(false);
   const [matchFilter, setMatchFilter] = useState<"upcoming" | "all">("upcoming");
   const [savedMatchId, setSavedMatchId] = useState<string | null>(null);
@@ -30,6 +30,8 @@ export default function CutoverParticipantPage() {
   const [schedule, setSchedule] = useState<Prediction[]>([]);
   const [grandPrix, setGrandPrix] = useState<{ seasons: { id: string; name: string }[]; ratings: { season_id: string; username: string; points: string; scored_rounds: number }[] } | null>(null);
   const [grandPrixUnavailable, setGrandPrixUnavailable] = useState(false);
+  const [whistle, setWhistle] = useState<{ stage: { id: string; name: string }; penalty_matches: number; leaderboard: { username: string; points: number; main_place: number }[] } | null>(null);
+  const [whistleUnavailable, setWhistleUnavailable] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; bonus_points: string; scored_predictions: number }[]>([]);
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
@@ -88,6 +90,12 @@ export default function CutoverParticipantPage() {
       setGrandPrix({ seasons: Array.isArray(grandPrixData.seasons) ? grandPrixData.seasons : [], ratings: Array.isArray(grandPrixData.ratings) ? grandPrixData.ratings : [] });
       setGrandPrixUnavailable(false);
     } else { setGrandPrix(null); setGrandPrixUnavailable(true); }
+    const whistleResponse = await fetch("/api/cutover/golden-whistle", { cache: "no-store" }).catch(() => null);
+    if (whistleResponse?.ok) {
+      const data = await whistleResponse.json();
+      setWhistle(data);
+      setWhistleUnavailable(false);
+    } else { setWhistle(null); setWhistleUnavailable(true); }
     setAuthenticated(true);
     setMessage("Данные загружены из изолированной Neon.");
   }
@@ -280,6 +288,8 @@ export default function CutoverParticipantPage() {
       setLeaderboard([]);
       setGrandPrix(null);
       setGrandPrixUnavailable(false);
+      setWhistle(null);
+      setWhistleUnavailable(false);
       setWritesEnabled(false);
       setAdminWritesEnabled(false);
       setResultWritesEnabled(false);
@@ -305,7 +315,7 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <div className="card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: 12, marginBottom: 16 }}>
-        {([["schedule", "Матчи"], ["ranking", "Рейтинг"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+        {([["schedule", "Матчи"], ["ranking", "Рейтинг"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             style={{ padding: "10px 14px", borderRadius: 10, border: activeTab === id ? "1px solid #2563eb" : "1px solid #d1d5db", background: activeTab === id ? "#dbeafe" : "#fff", fontWeight: 700, cursor: "pointer" }}>{label}</button>)}
         <div aria-label="Текущий пользователь" style={{ marginLeft: "auto", padding: "8px 12px", background: isAdmin ? "#fef3c7" : "#eff6ff", borderRadius: 10, fontWeight: 700, color: "#102d46" }}>
@@ -452,6 +462,18 @@ export default function CutoverParticipantPage() {
           <td>{p.username}</td><td>{p.points}</td><td>{p.bonus_points ?? "0"}</td><td>{p.scored_predictions}</td>
         </tr>)}</tbody>
       </table></div></section>}
+      {activeTab === "golden-whistle" && <section><h2>Золотой свисток</h2>
+        {whistleUnavailable && <p>Номинация пока недоступна на этой площадке.</p>}
+        {whistle && <><p>Этап: {whistle.stage.name} · матчей с забитыми пенальти: {whistle.penalty_matches}</p>
+          <p>Отдельная номинация: учитываются очки, которые помогли набрать результативные пенальти. В общий рейтинг эти очки повторно не добавляются.</p>
+          <div className="tableWrap"><table className="table" style={{ minWidth: 450 }}>
+            <thead><tr><th>Место</th><th>Участник</th><th>Баллы</th><th>Место в основном конкурсе</th></tr></thead>
+            <tbody>{whistle.leaderboard.map((p, index) => <tr key={p.username}>
+              <td>{index + 1} {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : ""}</td>
+              <td>{p.username}</td><td>{Number(p.points).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td>{p.main_place}</td>
+            </tr>)}</tbody>
+          </table></div></>}
+      </section>}
       {activeTab === "grand-prix" && <section><h2>Гран-при</h2>
         {grandPrixUnavailable && <p>Рейтинг Гран-при пока недоступен на этой тестовой площадке.</p>}
         {grandPrix?.seasons.map(season => <div key={season.id}>
