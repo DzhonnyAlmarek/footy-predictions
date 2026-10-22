@@ -65,6 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           yc config profile create default
+          yc config set endpoint api.cloud.yandex.net:443
           yc config set token "$YC_IAM_TOKEN"
           yc config set cloud-id "$YC_CLOUD_ID"
           yc config set folder-id "$YC_FOLDER_ID"
