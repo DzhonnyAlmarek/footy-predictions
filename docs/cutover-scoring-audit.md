@@ -70,3 +70,9 @@ The presence of a unique ledger pair and nonnegative bonus does not establish sc
 - Migration gate: implement Neon-backed authenticated read-only endpoints/components and preserve stage/archived ranking and calculation; keep legacy site unchanged.
 
 - User explicitly confirmed Golden Whistle tie-break: when nomination points are equal, award priority to the participant with a **lower standing in the main contest** (numerically greater main_place). The original Supabase UI was correct; an accidental ascending-order change in the new Neon API was reverted in commit `de5f633f`.
+
+## Independent read-only Golden Whistle reconciliation on isolated Neon
+- Recomputed nomination directly from predictions, finished matches, penalty-goal columns and ledger using the exact `goldenWhistlePoints` gate; excluded `cutover_auth.test_matches`.
+- Stage 9 (`Этап 1 ЧР 26-27`, locked): 12 penalty-goal matches, 60 scored predictions, 29 positive award rows, 68.75 Golden Whistle points across 5 recipients.
+- Stage 14 (`Этап 2 ЧР 26-27`, current): 6 penalty-goal matches, 30 scored predictions, 12 positive award rows, 19.25 Golden Whistle points across 5 recipients.
+- These are totals across all participants, **not** an individual winner's score. They validate the data and formula inputs, not yet an HTTP/API or browser end-to-end check.
