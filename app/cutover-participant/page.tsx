@@ -47,6 +47,11 @@ export default function CutoverParticipantPage() {
     const sessionData = await session.json();
     setSessionUsername(typeof sessionData.username === "string" ? sessionData.username : "");
     setIsAdmin(sessionData.role === "admin");
+    if (sessionData.role !== "admin") {
+      setAdminData(null);
+      setAdminWritesEnabled(false);
+      setResultWritesEnabled(false);
+    }
     if (sessionData.role === "admin") {
       const adminResponse = await fetch("/api/cutover/admin", { cache: "no-store" });
       if (adminResponse.ok) {
@@ -54,6 +59,10 @@ export default function CutoverParticipantPage() {
         setAdminData(adminPayload);
         setAdminWritesEnabled(adminPayload.writes_enabled === true);
         setResultWritesEnabled(adminPayload.result_writes_enabled === true);
+      } else {
+        setAdminData(null);
+        setAdminWritesEnabled(false);
+        setResultWritesEnabled(false);
       }
     }
     const response = await fetch("/api/cutover/my-predictions", { cache: "no-store" });
@@ -263,6 +272,9 @@ export default function CutoverParticipantPage() {
       setActiveTab("schedule");
       setIsAdmin(false);
       setAdminData(null);
+      setAdminWritesEnabled(false);
+      setResultWritesEnabled(false);
+      setWritesEnabled(false);
       setPredictions([]);
       setSchedule([]);
       setLeaderboard([]);
