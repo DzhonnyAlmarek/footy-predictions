@@ -63,5 +63,37 @@ jobs:
             fi
             echo "::endgroup::"
           done
+          # IAM binding visibility may be restricted independently of resource read access.
+          # A missing direct binding is NOT proof that a role is absent: it may be inherited.
+          echo "::group::IAM role bindings (read only)"
+          check_bindings() {
+            label="$1"; shift
+            if "$YC" "$@" --format json > /tmp/footy-bindings.json 2> /tmp/footy-bindings.err; then
+              echo "$label: READ_OK"
+              jq -r '
+                .. | objects
+                | select(has("role_id") or has("roleId"))
+                | [(.role_id // .roleId), (.subject.id // .subject_id // .subjectId // "unknown")]
+                | @tsv
+              ' /tmp/footy-bindings.json | grep -E '^(serverless-containers\.editor|iam\.serviceAccounts\.user|container-registry\.images\.puller|lockbox\.payloadViewer|lockbox\.viewer|kms\.keys\.encrypterDecrypter)[[:space:]]' || true
+            else
+              echo "$label: BINDINGS_UNREADABLE (not evidence of missing roles)"
+              grep -E 'PermissionDenied|Unauthenticated|request.id|ERROR' /tmp/footy-bindings.err | tail -n 3 || true
+            fi
+          }
+          check_bindings "folder" resource-manager folder list-access-bindings --id b1gtdrn5t149v0ckl6ql
+          check_bindings "runtime-account" iam service-account list-access-bindings --id ajekinma5dcn8agcht7a
+          check_bindings "registry" container registry list-access-bindings --id crpocq57tud830bhe7ck
+          check_bindings "lockbox-secret" lockbox secret list-access-bindings --id e6qht354a446srlm5ge9
+          rm -f /tmp/footy-bindings.json /tmp/footy-bindings.err
+          echo "::endgroup::"
+          echo "::group::Lockbox metadata: custom KMS key"
+          if "$YC" lockbox secret get --id e6qht354a446srlm5ge9 --format json > /tmp/footy-secret-metadata.json; then
+            jq -r '(.kms_key_id // .kmsKeyId // .encryption_key_id // "not-exposed-in-secret-metadata") | "KMS key ID: \(.)"' /tmp/footy-secret-metadata.json
+          else
+            echo "Secret metadata unavailable"
+          fi
+          rm -f /tmp/footy-secret-metadata.json
+          echo "::endgroup::"
           echo "Failed checks: $failures"
           test "$failures" -eq 0
