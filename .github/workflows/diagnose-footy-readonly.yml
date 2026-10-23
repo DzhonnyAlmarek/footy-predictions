@@ -1,0 +1,57 @@
+name: Diagnose Footy Yandex access (read only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  diagnose:
+    if: ${{ github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020' }}
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Request Yandex IAM token
+        id: auth
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(token);
+            core.setOutput('jwt', token);
+      - name: Check Yandex Cloud resource visibility
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.auth.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh -o /tmp/yc-install.sh
+          bash /tmp/yc-install.sh -i "$HOME/yc" -n
+          http_code="$(curl -sS -o /tmp/token.json -w '%{http_code}' -X POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode 'audience=ajefphrico3hogta85jt' \
+            --data-urlencode "subject_token=$GITHUB_OIDC_JWT" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          test "$http_code" = 200
+          token="$(jq -er '.access_token' /tmp/token.json)"
+          echo "::add-mask::$token"
+          export YC_TOKEN="$token"
+          rm -f /tmp/token.json
+          YC="$HOME/yc/bin/yc"
+          "$YC" config profile create default
+          "$YC" config set endpoint api.cloud.yandex.net:443
+          "$YC" config set token "$YC_TOKEN"
+          "$YC" config set cloud-id b1ge8jgq7kh768aapao1
+          "$YC" config set folder-id b1gtdrn5t149v0ckl6ql
+          for label in container runtime-account secret registry; do
+            echo "::group::$label"
+            case "$label" in
+              container) "$YC" serverless container get --id bbaquq5i6l35i5kbiufb >/dev/null ;;
+              runtime-account) "$YC" iam service-account get --id ajekinma5dcn8agcht7a >/dev/null ;;
+              secret) "$YC" lockbox secret get --id e6qht354a446srlm5ge9 >/dev/null ;;
+              registry) "$YC" container registry get --id crpocq57tud830bhe7ck >/dev/null ;;
+            esac
+            echo "::endgroup::"
+          done
