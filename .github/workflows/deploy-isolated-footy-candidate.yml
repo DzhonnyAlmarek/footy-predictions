@@ -80,7 +80,7 @@ jobs:
           set -euo pipefail
           yc serverless container revision deploy \
             --container-id bbaquq5i6l35i5kbiufb \
-            --image cr.yandex/crpocq57tud830bhe7ck/footy-cutover-candidate:c68122ad71e929d4f92648f290eabb5dd39d1307 \
+            --image cr.yandex/crpocq57tud830bhe7ck/footy-cutover-candidate:eb584d5735678f0808d1ce9e3280f2e7a33ab144 \
             --service-account-id ajekinma5dcn8agcht7a \
             --cores 1 --core-fraction 100 --memory 512MB \
             --execution-timeout 30s --concurrency 1 \
