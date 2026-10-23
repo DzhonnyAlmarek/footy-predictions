@@ -37,21 +37,31 @@ jobs:
           test "$http_code" = 200
           token="$(jq -er '.access_token' /tmp/token.json)"
           echo "::add-mask::$token"
-          export YC_TOKEN="$token"
+          export YC_IAM_TOKEN="$token"
           rm -f /tmp/token.json
           YC="$HOME/yc/bin/yc"
           "$YC" config profile create default
           "$YC" config set endpoint api.cloud.yandex.net:443
-          "$YC" config set token "$YC_TOKEN"
           "$YC" config set cloud-id b1ge8jgq7kh768aapao1
           "$YC" config set folder-id b1gtdrn5t149v0ckl6ql
+          failures=0
           for label in container runtime-account secret registry; do
             echo "::group::$label"
-            case "$label" in
+            if (
+              set -e
+              case "$label" in
               container) "$YC" serverless container get --id bbaquq5i6l35i5kbiufb >/dev/null ;;
               runtime-account) "$YC" iam service-account get --id ajekinma5dcn8agcht7a >/dev/null ;;
               secret) "$YC" lockbox secret get --id e6qht354a446srlm5ge9 >/dev/null ;;
               registry) "$YC" container registry get --id crpocq57tud830bhe7ck >/dev/null ;;
             esac
+            ); then
+              echo "RESULT: PASS"
+            else
+              echo "RESULT: FAIL"
+              failures=$((failures+1))
+            fi
             echo "::endgroup::"
           done
+          echo "Failed checks: $failures"
+          test "$failures" -eq 0
