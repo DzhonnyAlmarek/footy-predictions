@@ -1,10 +1,10 @@
 # Isolated Yandex Cloud candidate revision (saved configuration)
 # This file contains no database credentials or passwords.
-# Last manually reviewed: 2026-10-22
+# Last manually reviewed: 2026-10-23
 container_id: bbaquq5i6l35i5kbiufb
 container_name: footy-cutover-candidate
 folder_id: b1gtdrn5t149v0ckl6ql
-image: cr.yandex/crpocq57tud830bhe7ck/footy-cutover-candidate:c68122ad71e929d4f92648f290eabb5dd39d1307
+image: cr.yandex/crpocq57tud830bhe7ck/footy-cutover-candidate:eb584d5735678f0808d1ce9e3280f2e7a33ab144
 runtime_service_account_id: ajekinma5dcn8agcht7a
 resources:
   cores: 1
@@ -34,4 +34,4 @@ logging: enabled
 async_invocation: false
 # The secret's Neon hostname was manually verified by the user:
 expected_neon_host: ep-divine-rain-b1d1r892.c-5.eu-central-1.aws.neon.tech
-# No deployment should occur automatically. Previous attempts returned HTTP 500.
+# No deployment should occur automatically. Prior attempts returned HTTP 500 or PermissionDenied.
