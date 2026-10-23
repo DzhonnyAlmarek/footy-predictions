@@ -1,0 +1,94 @@
+name: Probe isolated Footy revision without Lockbox (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type PROBE-NO-LOCKBOX to authorize one isolated no-secret probe"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: ${{ github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020' && inputs.confirmation == 'PROBE-NO-LOCKBOX' }}
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check saved revision configuration
+        run: |
+          set -euo pipefail
+          test -f deploy/yandex/footy-cutover-candidate.yaml
+          grep -q 'container_id: bbaquq5i6l35i5kbiufb' deploy/yandex/footy-cutover-candidate.yaml
+          grep -q 'ENABLE_CUTOVER_ADMIN_WRITES: "false"' deploy/yandex/footy-cutover-candidate.yaml
+          grep -q 'ENABLE_CUTOVER_PREDICTION_WRITES: "false"' deploy/yandex/footy-cutover-candidate.yaml
+          grep -q 'ENABLE_CUTOVER_RESULT_WRITES: "false"' deploy/yandex/footy-cutover-candidate.yaml
+      - name: Request GitHub OIDC token
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(token);
+            core.setOutput('jwt', token);
+      - name: Authenticate to Yandex Cloud
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+          SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --max-time 30 -o /tmp/yc-token.json -w '%{http_code}' \
+            -X POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${GITHUB_OIDC_JWT}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          test "$code" = 200
+          token="$(jq -er '.access_token' /tmp/yc-token.json)"
+          echo "::add-mask::$token"
+          echo "YC_IAM_TOKEN=$token" >> "$GITHUB_ENV"
+          rm -f /tmp/yc-token.json
+      - name: Install Yandex Cloud CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh -o /tmp/install-yc.sh
+          bash /tmp/install-yc.sh -i "$HOME/yandex-cloud" -n
+          echo "$HOME/yandex-cloud/bin" >> "$GITHUB_PATH"
+      - name: Configure Yandex Cloud CLI for OIDC token
+        run: |
+          set -euo pipefail
+          yc config profile create default
+          yc config set endpoint api.cloud.yandex.net:443
+          # YC_IAM_TOKEN environment variable is read directly by yc CLI.
+          yc config set cloud-id "$YC_CLOUD_ID"
+          yc config set folder-id "$YC_FOLDER_ID"
+        env:
+          YC_CLOUD_ID: b1ge8jgq7kh768aapao1
+          YC_FOLDER_ID: b1gtdrn5t149v0ckl6ql
+      - name: Probe isolated candidate revision without Lockbox
+        env:
+          YC_CLOUD_ID: b1ge8jgq7kh768aapao1
+          YC_FOLDER_ID: b1gtdrn5t149v0ckl6ql
+        run: |
+          set -euo pipefail
+          yc serverless container revision deploy \
+            --container-id bbaquq5i6l35i5kbiufb \
+            --image cr.yandex/crpocq57tud830bhe7ck/footy-cutover-candidate:eb584d5735678f0808d1ce9e3280f2e7a33ab144 \
+            --service-account-id ajekinma5dcn8agcht7a \
+            --cores 1 --core-fraction 100 --memory 512MB \
+            --execution-timeout 30s --concurrency 1 \
+            --environment NODE_ENV=production \
+            --environment DEPLOY_TARGET=yandex-neon-production-candidate \
+            --environment ENABLE_CUTOVER_PREVIEW=true \
+            --environment ENABLE_CUTOVER_AUTH=true \
+            --environment ENABLE_CUTOVER_LOGIN=true \
+            --environment ENABLE_CUTOVER_PREDICTION_WRITES=false \
+            --environment ENABLE_CUTOVER_ADMIN_WRITES=false \
+            --environment ENABLE_CUTOVER_RESULT_WRITES=false
