@@ -11,13 +11,25 @@ function toDatetimeLocalValue(iso?: string | null): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
 
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const hour = String(d.getHours()).padStart(2, "0");
-  const minute = String(d.getMinutes()).padStart(2, "0");
+  // Отображаем фиксированное московское время (UTC+3), независимо от браузера.
+  const msk = new Date(d.getTime() + 3 * 60 * 60 * 1000);
+  const year = msk.getUTCFullYear();
+  const month = String(msk.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(msk.getUTCDate()).padStart(2, "0");
+  const hour = String(msk.getUTCHours()).padStart(2, "0");
+  const minute = String(msk.getUTCMinutes()).padStart(2, "0");
 
   return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+function mskToUtcIso(local: string): string | null {
+  if (!local) return null;
+  const [date, time] = local.split("T");
+  if (!date || !time) return null;
+  const [y, m, d] = date.split("-").map(Number);
+  const [hh, mm] = time.split(":").map(Number);
+  if (![y, m, d, hh, mm].every(Number.isFinite)) return null;
+  return new Date(Date.UTC(y, m - 1, d, hh - 3, mm)).toISOString();
 }
 
 export default function EditMatchForm({
@@ -89,8 +101,8 @@ export default function EditMatchForm({
         body: JSON.stringify({
           tour_id: tId,
           stage_match_no: stageMatchNo === "" ? null : Number(stageMatchNo),
-          kickoff_at: kickoffAt ? new Date(kickoffAt).toISOString() : null,
-          deadline_at: deadlineAt ? new Date(deadlineAt).toISOString() : null,
+          kickoff_at: mskToUtcIso(kickoffAt),
+          deadline_at: mskToUtcIso(deadlineAt),
           status,
           home_team_id: hId,
           away_team_id: aId,
@@ -201,9 +213,10 @@ export default function EditMatchForm({
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <label style={{ display: "grid", gap: 6 }}>
-            <span>Kickoff</span>
+            <span>Начало матча (МСК)</span>
             <input
               type="datetime-local"
+              lang="ru-RU"
               value={kickoffAt}
               onChange={(e) => setKickoffAt(e.target.value)}
               disabled={loading}
@@ -212,9 +225,10 @@ export default function EditMatchForm({
           </label>
 
           <label style={{ display: "grid", gap: 6 }}>
-            <span>Deadline</span>
+            <span>Приём прогнозов до (МСК)</span>
             <input
               type="datetime-local"
+              lang="ru-RU"
               value={deadlineAt}
               onChange={(e) => setDeadlineAt(e.target.value)}
               disabled={loading}
