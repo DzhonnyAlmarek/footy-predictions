@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import "./cutover.css";
 
 type Prediction = {
   match_id: string; kickoff_at: string | null; home_team: string | null;
@@ -311,14 +312,21 @@ export default function CutoverParticipantPage() {
     finally { setBusy(false); }
   }
 
-  return <main className="page" style={{ maxWidth: 1120 }}>
-    <header className="card" style={{ padding: 22, marginBottom: 18, background: "linear-gradient(120deg, #102d46, #174e6d)", color: "#fff" }}>
-      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, opacity: .8 }}>ФУТБОЛЬНЫЙ КОНКУРС ПРОГНОЗОВ</div>
-    <h1 style={{ margin: "8px 0", color: "#fff" }}>Golden Whistle</h1>
-    <div style={{ fontSize: 13, opacity: .85 }}>Изолированная тестовая версия · Yandex Cloud + Neon</div>
+  const upcomingMatches = schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now());
+  const savedForecasts = schedule.filter(m => m.home_pred !== null && m.away_pred !== null).length;
+  const myPlace = leaderboard.findIndex(p => p.username === sessionUsername);
+  const myRanking = myPlace >= 0 ? leaderboard[myPlace] : null;
+
+  return <main className="page cutover-shell">
+    <header className="cutover-hero">
+      <div><div className="cutover-eyebrow">● КЛУБ ФУТБОЛЬНЫХ ПРОГНОЗОВ</div>
+        <h1>Golden <span>Whistle</span> <small aria-hidden="true">⚽</small></h1>
+        <p>Твой матч. Твой прогноз. Твоя история побед.</p>
+      </div>
+      <div className="cutover-hero-aside"><span>СЕЗОН ПРОГНОЗОВ</span><strong>Играй точно.</strong><small>Изолированная версия · Neon</small></div>
     </header>
-    <div role="status" className="card" style={{ padding: 14, marginBottom: 18 }}>{message}</div>
-    {!authenticated ? <form onSubmit={login} className="card" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}>
+    <div role="status" aria-live="polite" className="cutover-notice">{message}</div>
+    {!authenticated ? <form onSubmit={login} className="card cutover-login" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}><div className="cutover-form-heading"><span>ДОБРО ПОЖАЛОВАТЬ</span><h2>Вход в турнир</h2><p>Выбери участника и продолжай игру.</p></div>
       <label>Участник <select value={username} onChange={e => setUsername(e.target.value)} required>
         <option value="">Выбери участника</option>
         {participants.map(name => <option key={name} value={name}>{name}</option>)}
@@ -327,15 +335,21 @@ export default function CutoverParticipantPage() {
         onChange={e => setPassword(e.target.value)} autoComplete="current-password" required /></label>
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
-      <div className="card" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: 12, marginBottom: 16 }}>
+      <nav aria-label="Разделы кабинета" className="card cutover-navigation">
         {([["schedule", "Матчи"], ["ranking", "Рейтинг"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
-            style={{ padding: "10px 14px", borderRadius: 10, border: activeTab === id ? "1px solid #2563eb" : "1px solid #d1d5db", background: activeTab === id ? "#dbeafe" : "#fff", fontWeight: 700, cursor: "pointer" }}>{label}</button>)}
-        <div aria-label="Текущий пользователь" style={{ marginLeft: "auto", padding: "8px 12px", background: isAdmin ? "#fef3c7" : "#eff6ff", borderRadius: 10, fontWeight: 700, color: "#102d46" }}>
+            className={activeTab === id ? "cutover-nav-item is-active" : "cutover-nav-item"} aria-current={activeTab === id ? "page" : undefined}>{label}</button>)}
+        <div aria-label="Текущий пользователь" className={isAdmin ? "cutover-user-chip is-admin" : "cutover-user-chip"}>
           {sessionUsername || "Неизвестный пользователь"} · {isAdmin ? "Администратор" : "Участник"}
         </div>
-        <button type="button" onClick={logout} disabled={busy} style={{ padding: "10px 14px", borderRadius: 10 }}>Выйти</button>
-      </div>
+        <button type="button" onClick={logout} disabled={busy} className="cutover-logout">Выйти</button>
+      </nav>
+      <section className="cutover-overview" aria-label="Обзор участника">
+        <div className="cutover-stat"><span>БЛИЖАЙШИЕ МАТЧИ</span><strong>{upcomingMatches.length}</strong><small>В расписании турнира</small></div>
+        <div className="cutover-stat"><span>МОИ ПРОГНОЗЫ</span><strong>{savedForecasts}</strong><small>Прогнозов в расписании</small></div>
+        <div className="cutover-stat"><span>МОЁ МЕСТО</span><strong>{myPlace >= 0 ? `#${myPlace + 1}` : "—"}</strong><small>{myRanking ? `${myRanking.points} очков` : "Пока без рейтинга"}</small></div>
+        <div className="cutover-stat cutover-stat-accent"><span>МОЙ СТАТУС</span><strong>{isAdmin ? "ADMIN" : "ИГРОК"}</strong><small>{sessionUsername || "Участник"}</small></div>
+      </section>
       {activeTab === "admin" && isAdmin && adminData && <section className="card" style={{ padding: 20, marginTop: 18 }}>
         <h2>ADMIN — новый тур в существующем этапе</h2>
         <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
@@ -501,20 +515,20 @@ export default function CutoverParticipantPage() {
           </table></div>
         </div>)}
       </section>}
-      {activeTab === "schedule" && <section><h2>Расписание матчей ({schedule.length})</h2>
+      {activeTab === "schedule" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ИГРОВОЙ КАЛЕНДАРЬ</span><h2>Расписание матчей <em>{schedule.length}</em></h2></div><p>Каждый прогноз имеет значение</p></div>
       <p>{writesEnabled ? "Прогнозы можно менять до дедлайна." : "Сохранение новых прогнозов пока отключено."}</p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-        <button type="button" aria-pressed={matchFilter === "upcoming"} onClick={() => { setMatchFilter("upcoming"); setShowAllMatches(false); }} style={{ padding: "10px 14px", borderRadius: 10, background: matchFilter === "upcoming" ? "#dbeafe" : "#fff" }}>Предстоящие</button>
-        <button type="button" aria-pressed={matchFilter === "all"} onClick={() => { setMatchFilter("all"); setShowAllMatches(false); }} style={{ padding: "10px 14px", borderRadius: 10, background: matchFilter === "all" ? "#dbeafe" : "#fff" }}>Все матчи</button>
+      <div className="cutover-filters">
+        <button type="button" aria-pressed={matchFilter === "upcoming"} onClick={() => { setMatchFilter("upcoming"); setShowAllMatches(false); }} className={matchFilter === "upcoming" ? "cutover-filter active" : "cutover-filter"}>Предстоящие</button>
+        <button type="button" aria-pressed={matchFilter === "all"} onClick={() => { setMatchFilter("all"); setShowAllMatches(false); }} className={matchFilter === "all" ? "cutover-filter active" : "cutover-filter"}>Все матчи</button>
       </div>
       {(matchFilter === "all" ? schedule : schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now())).length > 30 && <button type="button" onClick={() => setShowAllMatches(v => !v)} style={{ margin: "12px 0", padding: "10px 14px", borderRadius: 10 }}>{showAllMatches ? "Показать первые 30" : "Показать больше матчей"}</button>}
-      <div className="tableWrap"><table className="table">
+      <div className="tableWrap cutover-match-table"><table className="table">
         <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th>{writesEnabled && <th>Изменить прогноз</th>}</tr></thead>
         <tbody>{(showAllMatches ? (matchFilter === "all" ? schedule : schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now())) : (matchFilter === "all" ? schedule : schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now())).slice(0, 30)).map(m => <tr key={m.match_id}>
           <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}</td>
-          <td>{m.home_team || "?"} — {m.away_team || "?"}</td>
-          <td>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</td>
-          <td>{m.home_score ?? "—"} : {m.away_score ?? "—"}</td>
+          <td><div className="cutover-match-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div></td>
+          <td><span className={m.home_pred !== null && m.away_pred !== null ? "cutover-score has-prediction" : "cutover-score"}>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</span></td>
+          <td><span className="cutover-score">{m.home_score ?? "—"} : {m.away_score ?? "—"}</span></td>
           {writesEnabled && <td>{m.predictions_open ? <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, minWidth: 210 }}>
             <input aria-label="Голы хозяев" type="number" min="0" max="99" style={{ width: 62, minHeight: 38, padding: 6, fontSize: 16, borderRadius: 8, border: "1px solid #94a3b8" }}
               value={(drafts[m.match_id] ?? { home: String(m.home_pred ?? ""), away: String(m.away_pred ?? "") }).home}
@@ -523,7 +537,7 @@ export default function CutoverParticipantPage() {
             <input aria-label="Голы гостей" type="number" min="0" max="99" style={{ width: 52 }}
               value={(drafts[m.match_id] ?? { home: String(m.home_pred ?? ""), away: String(m.away_pred ?? "") }).away}
               onChange={e => setDrafts(prev => ({ ...prev, [m.match_id]: { home: (prev[m.match_id]?.home ?? String(m.home_pred ?? "")), away: e.target.value } }))} />
-            <button type="button" disabled={busy} onClick={() => void savePrediction(m)} style={{ minHeight: 38, padding: "7px 12px", borderRadius: 8, background: "#dbeafe", border: "1px solid #93c5fd", fontWeight: 700 }}>{savedMatchId === m.match_id ? "✓ Сохранено" : "Сохранить"}</button>
+            <button type="button" disabled={busy} onClick={() => void savePrediction(m)} className="cutover-save">{savedMatchId === m.match_id ? "✓ Сохранено" : "Сохранить"}</button>
           </div> : "Закрыто"}</td>}
         </tr>)}</tbody>
       </table></div></section>}
