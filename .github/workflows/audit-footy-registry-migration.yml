@@ -1,0 +1,64 @@
+name: Audit Footy registry migration readiness (read only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  audit:
+    if: ${{ github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020' }}
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 15
+    steps:
+      - name: Request OIDC token
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(token);
+            core.setOutput('jwt', token);
+      - name: Authenticate and inspect registries (no changes)
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh -o /tmp/install-yc.sh
+          bash /tmp/install-yc.sh -i "$HOME/yandex-cloud" -n
+          code="$(curl --silent --show-error --max-time 30 -o /tmp/yc-token.json -w '%{http_code}' \
+            --request POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode 'audience=ajefphrico3hogta85jt' \
+            --data-urlencode "subject_token=$GITHUB_OIDC_JWT" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          test "$code" = 200
+          export YC_IAM_TOKEN="$(jq -er '.access_token' /tmp/yc-token.json)"
+          echo "::add-mask::$YC_IAM_TOKEN"
+          rm -f /tmp/yc-token.json
+          YC="$HOME/yandex-cloud/bin/yc"
+          "$YC" config profile create default
+          "$YC" config set endpoint api.cloud.yandex.net:443
+          "$YC" config set cloud-id b1ge8jgq7kh768aapao1
+          "$YC" config set folder-id b1gtdrn5t149v0ckl6ql
+          echo "::group::Container registries in default folder"
+          if "$YC" container registry list --folder-id b1gtdrn5t149v0ckl6ql --format json > /tmp/registries.json; then
+            jq -r '.[] | [.id, .name, (.status // "unknown")] | @tsv' /tmp/registries.json
+            echo "Count: $(jq 'length' /tmp/registries.json)"
+          else
+            echo "Unable to list registries using the GitHub service account"
+          fi
+          rm -f /tmp/registries.json
+          echo "::endgroup::"
+          echo "::group::Existing folder migration status (read only)"
+          if "$YC" cloud-registry v1 migration get-folder-migration-status-dashboard b1gtdrn5t149v0ckl6ql --format json > /tmp/migration.json 2> /tmp/migration.err; then
+            echo "Migration dashboard available:"
+            jq '{status: (.status // .migration_status // "unknown"), registries: (.registries // .registry_stats // null), repositories: (.repositories // .repository_stats // null), tags: (.tags // .tag_stats // null)}' /tmp/migration.json
+          else
+            echo "Migration status unavailable or migration not started (cannot distinguish without additional permissions)"
+            grep -E 'ERROR|PermissionDenied|NotFound|request.id' /tmp/migration.err | tail -n 4 || true
+          fi
+          rm -f /tmp/migration.json /tmp/migration.err
+          echo "::endgroup::"
+          echo "Audit complete. No migration or resource modification was requested."
