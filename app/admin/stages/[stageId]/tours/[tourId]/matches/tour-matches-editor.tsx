@@ -275,7 +275,7 @@ export default function TourMatchesEditor({
                   padding: 10,
                   borderRadius: 10,
                   border: "1px solid #ddd",
-                  minWidth: 220,
+                  minWidth: 0, flex: "1 1 220px", maxWidth: "100%",
                 }}
               >
                 <option value="">Хозяева…</option>
@@ -294,7 +294,7 @@ export default function TourMatchesEditor({
                   padding: 10,
                   borderRadius: 10,
                   border: "1px solid #ddd",
-                  minWidth: 220,
+                  minWidth: 0, flex: "1 1 220px", maxWidth: "100%",
                 }}
               >
                 <option value="">Гости…</option>
@@ -347,7 +347,7 @@ export default function TourMatchesEditor({
                     padding: 10,
                     borderRadius: 10,
                     border: "1px solid #ddd",
-                    minWidth: 180,
+                    minWidth: 0, flex: "1 1 180px", maxWidth: "100%",
                   }}
                 >
                   <option value="draft">draft</option>
