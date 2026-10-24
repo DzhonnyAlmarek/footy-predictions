@@ -1,0 +1,59 @@
+name: Capture real Golden Whistle UI previews (isolated)
+on:
+  push:
+    branches:
+      - feature/cutover-admin-readiness-20261020
+    paths:
+      - 'scripts/capture-golden-whistle-ui.cjs'
+      - '.github/workflows/capture-golden-whistle-ui.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  screenshots:
+    if: github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install app and ephemeral browser runner
+        run: |
+          npm ci
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Start isolated app without credentials
+        env:
+          NODE_ENV: development
+          DEPLOY_TARGET: yandex-neon-cutover-preview
+          ENABLE_CUTOVER_PREVIEW: "true"
+          ENABLE_CUTOVER_AUTH: "false"
+          ENABLE_CUTOVER_LOGIN: "false"
+          ENABLE_CUTOVER_PREDICTION_WRITES: "false"
+          ENABLE_CUTOVER_ADMIN_WRITES: "false"
+          ENABLE_CUTOVER_RESULT_WRITES: "false"
+        run: |
+          set -euo pipefail
+          nohup ./node_modules/.bin/next dev --hostname 127.0.0.1 --port 3100 > /tmp/golden-whistle-ui.log 2>&1 &
+          for i in {1..60}; do
+            if curl --silent --max-time 2 http://127.0.0.1:3100/cutover-participant >/dev/null; then break; fi
+            sleep 2
+          done
+      - name: Capture desktop and mobile from actual app
+        run: node scripts/capture-golden-whistle-ui.cjs
+      - name: Upload screenshots (preview only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-whistle-real-ui-screenshots
+          path: ui-preview/*.png
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Show app diagnostics on failure
+        if: failure()
+        run: tail -n 100 /tmp/golden-whistle-ui.log || true
