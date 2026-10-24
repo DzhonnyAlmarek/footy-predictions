@@ -36,7 +36,14 @@ jobs:
           }
           for key, value in expected.items():
               assert re.search(rf"(?m)^{key}: {re.escape(value)}$", config), f"Incorrect {key}"
-              assert value in workflow, f"{key} missing from deploy workflow"
+              if key != "image":
+                  assert value in workflow, f"{key} missing from deploy workflow"
+          assert "image_tag:" in workflow, "Explicit image tag input required"
+          assert "required: true" in workflow, "Manual image tag must be required"
+          assert "IMAGE_TAG=\"${{ inputs.image_tag }}\"" in workflow, "Missing image tag input binding"
+          assert "^[0-9a-f]{40}$" in workflow, "Image tag must be immutable full commit SHA"
+          assert "footy-cutover-candidate:${IMAGE_TAG}" in workflow, "Deploy must use selected image tag"
+          assert expected["image"] not in workflow, "Old image must not be hardcoded in deploy"
           for key in ("ENABLE_CUTOVER_PREDICTION_WRITES", "ENABLE_CUTOVER_ADMIN_WRITES", "ENABLE_CUTOVER_RESULT_WRITES"):
               assert re.search(rf'(?m)^  {key}: "false"$', config), f"Unsafe {key}"
               assert f"--environment {key}=false" in workflow, f"Unsafe deployment {key}"
