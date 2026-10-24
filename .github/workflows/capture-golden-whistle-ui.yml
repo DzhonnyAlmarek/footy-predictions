@@ -5,6 +5,7 @@ on:
       - feature/cutover-admin-readiness-20261020
     paths:
       - 'scripts/capture-golden-whistle-ui.cjs'
+      - 'scripts/capture-legacy-admin-fixture.cjs'
       - '.github/workflows/capture-golden-whistle-ui.yml'
       - 'app/globals.css'
       - 'app/admin/**'
@@ -52,6 +53,8 @@ jobs:
           done
       - name: Capture desktop and mobile from actual app
         run: node scripts/capture-golden-whistle-ui.cjs
+      - name: Capture offline legacy admin visual fixtures
+        run: node scripts/capture-legacy-admin-fixture.cjs
       - name: Upload screenshots (preview only)
         if: always()
         uses: actions/upload-artifact@v4
