@@ -12,7 +12,7 @@ type Prediction = {
 };
 
 export default function CutoverParticipantPage() {
-  const [activeTab, setActiveTab] = useState<"schedule" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("schedule");
+  const [activeTab, setActiveTab] = useState<"schedule" | "archive" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("schedule");
   const [showAllMatches, setShowAllMatches] = useState(false);
   const [matchFilter, setMatchFilter] = useState<"upcoming" | "all">("upcoming");
   const [savedMatchId, setSavedMatchId] = useState<string | null>(null);
@@ -349,7 +349,7 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <nav aria-label="Разделы кабинета" className="card cutover-navigation">
-        {([["schedule", "Прогнозы"], ["ranking", "Текущая таблица"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+        {([["schedule", "Прогнозы"], ["archive", "Архив"], ["ranking", "Текущая таблица"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             className={activeTab === id ? "cutover-nav-item is-active" : "cutover-nav-item"} aria-current={activeTab === id ? "page" : undefined}>{label}</button>)}
         <div aria-label="Текущий пользователь" className={isAdmin ? "cutover-user-chip is-admin" : "cutover-user-chip"}>
@@ -579,6 +579,17 @@ export default function CutoverParticipantPage() {
           </div> : <div className="cutover-mobile-closed">Приём прогнозов закрыт</div>)}
         </article>)}
       </div>
+      </section>}
+      {activeTab === "archive" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ЗАВЕРШЁННЫЕ МАТЧИ</span><h2>Архив матчей</h2></div><p>Результаты завершённых матчей в доступном расписании</p></div>
+        {schedule.filter(m => m.home_score !== null && m.away_score !== null).length === 0
+          ? <p>Завершённых матчей пока нет. Исторические этапы подключим отдельно.</p>
+          : <div className="cutover-mobile-personal-list">
+              {schedule.filter(m => m.home_score !== null && m.away_score !== null).map(m =>
+                <article className="cutover-mobile-match" key={m.match_id}>
+                  <div className="cutover-mobile-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div>
+                  <div className="cutover-mobile-scoreline"><div><span>Результат</span><strong>{m.home_score} : {m.away_score}</strong></div></div>
+                </article>)}
+            </div>}
       </section>}
       {activeTab === "mine" && <section className="cutover-content cutover-my-predictions"><div className="cutover-section-heading"><div><span>ЛИЧНАЯ СТАТИСТИКА</span><h2>Мои прогнозы <em>{predictions.length}</em></h2></div><p>Все твои прогнозы и результаты</p></div>
       <div className="tableWrap cutover-personal-table"><table className="table" style={{ minWidth: 500 }}>
