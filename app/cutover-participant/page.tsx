@@ -360,8 +360,10 @@ export default function CutoverParticipantPage() {
         <div className="cutover-stat"><span>МОЁ МЕСТО</span><strong>{myPlace >= 0 ? `#${myPlace + 1}` : "—"}</strong><small>{myRanking ? `${myRanking.points} очков` : "Пока без рейтинга"}</small></div>
         <div className="cutover-stat cutover-stat-accent"><span>МОЙ СТАТУС</span><strong>{isAdmin ? "ADMIN" : "ИГРОК"}</strong><small>{sessionUsername || "Участник"}</small></div>
       </section>
-      {activeTab === "admin" && isAdmin && adminData && <section className="card" style={{ padding: 20, marginTop: 18 }}>
-        <h2>ADMIN — новый тур в существующем этапе</h2>
+      {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
+        <div className="cutover-section-heading"><div><span>УПРАВЛЕНИЕ ТУРНИРОМ</span><h2>Панель администратора</h2></div><p>Матчи, туры и результаты — в одном месте</p></div>
+        <div className="cutover-admin-summary"><span>Участники: {participants.length}</span><span>Матчи: {adminData.matches.length}</span><span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span></div>
+        <h2>Новый тур в существующем этапе</h2>
         <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Этап <select required value={tourForm.stage_id}
             onChange={e => setTourForm(prev => ({ ...prev, stage_id: e.target.value }))}>
@@ -492,14 +494,14 @@ export default function CutoverParticipantPage() {
           {!resultWritesEnabled && <p>Запись результатов отключена на этой площадке.</p>}
         </form>
       </section>}
-      {activeTab === "ranking" && <section><h2 style={{ marginTop: 28 }}>Общий рейтинг</h2>
+      {activeTab === "ranking" && <section className="cutover-content cutover-rankings"><div className="cutover-section-heading"><div><span>ТУРНИРНАЯ ТАБЛИЦА</span><h2>Общий рейтинг</h2></div><p>Каждое очко влияет на место</p></div>
       <div className="tableWrap"><table className="table" style={{ minWidth: 500 }}>
         <thead><tr><th>Участник</th><th>Очки</th><th>Бонусы (в составе очков)</th><th>Учтённых прогнозов</th></tr></thead>
-        <tbody>{leaderboard.map(p => <tr key={p.username}>
-          <td>{p.username}</td><td>{p.points}</td><td>{p.bonus_points ?? "0"}</td><td>{p.scored_predictions}</td>
+        <tbody>{leaderboard.map((p, index) => <tr key={p.username} className={p.username === sessionUsername ? "cutover-own-row" : undefined}>
+          <td><span className="cutover-place">{index + 1}</span><strong>{p.username}</strong>{p.username === sessionUsername && <span className="cutover-self-badge">ты</span>}</td><td className="cutover-points">{p.points}</td><td>{p.bonus_points ?? "0"}</td><td>{p.scored_predictions}</td>
         </tr>)}</tbody>
       </table></div></section>}
-      {activeTab === "golden-whistle" && <section><h2>Золотой свисток</h2>
+      {activeTab === "golden-whistle" && <section className="cutover-content cutover-awards"><div className="cutover-section-heading"><div><span>СПЕЦИАЛЬНАЯ НОМИНАЦИЯ</span><h2>Золотой свисток <span aria-hidden="true">🏆</span></h2></div><p>За решающие пенальти</p></div>
         {whistleUnavailable && <p>Номинация пока недоступна на этой площадке.</p>}
         {whistle && <><label>Этап <select value={String(whistle.stage.id)} disabled={whistleLoading} onChange={e => void selectWhistleStage(e.target.value)}>
           {whistle.available_stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -514,7 +516,7 @@ export default function CutoverParticipantPage() {
             </tr>)}</tbody>
           </table></div></>}
       </section>}
-      {activeTab === "grand-prix" && <section><h2>Гран-при</h2>
+      {activeTab === "grand-prix" && <section className="cutover-content cutover-grand-prix"><div className="cutover-section-heading"><div><span>СЕЗОННЫЙ ЗАЧЁТ</span><h2>Гран-при <span aria-hidden="true">🏁</span></h2></div><p>Очки за этапы соревнования</p></div>
         {grandPrixUnavailable && <p>Рейтинг Гран-при пока недоступен на этой тестовой площадке.</p>}
         {grandPrix?.seasons.map(season => <div key={season.id}>
           <h3>{season.name}</h3>
@@ -551,8 +553,8 @@ export default function CutoverParticipantPage() {
           </div> : "Закрыто"}</td>}
         </tr>)}</tbody>
       </table></div></section>}
-      {activeTab === "mine" && <section><h2>Мои прогнозы ({predictions.length})</h2>
-      <div className="tableWrap"><table className="table" style={{ minWidth: 500 }}>
+      {activeTab === "mine" && <section className="cutover-content cutover-my-predictions"><div className="cutover-section-heading"><div><span>ЛИЧНАЯ СТАТИСТИКА</span><h2>Мои прогнозы <em>{predictions.length}</em></h2></div><p>Все твои прогнозы и результаты</p></div>
+      <div className="tableWrap cutover-personal-table"><table className="table" style={{ minWidth: 500 }}>
         <thead><tr><th>Матч</th><th>Прогноз</th><th>Результат</th></tr></thead>
         <tbody>{predictions.map(p => <tr key={p.match_id}>
           <td>{p.home_team || "?"} — {p.away_team || "?"}</td>
