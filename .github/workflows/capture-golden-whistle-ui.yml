@@ -12,6 +12,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: golden-whistle-ui-preview-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   screenshots:
     if: github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020'
