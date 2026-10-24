@@ -196,9 +196,10 @@ export default function CreateMatchForm({
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
           <label style={{ display: "grid", gap: 6 }}>
-            <span>Kickoff (МСК)</span>
+            <span>Начало матча (МСК)</span>
             <input
               type="datetime-local"
+              lang="ru-RU"
               value={kickoffAt}
               onChange={(e) => onKickoffChange(e.target.value)}
               disabled={loading}
@@ -207,9 +208,10 @@ export default function CreateMatchForm({
           </label>
 
           <label style={{ display: "grid", gap: 6 }}>
-            <span>Deadline (МСК)</span>
+            <span>Приём прогнозов до (МСК)</span>
             <input
               type="datetime-local"
+              lang="ru-RU"
               value={deadlineAt}
               onChange={(e) => {
                 setAutoDeadline(false);
@@ -235,7 +237,7 @@ export default function CreateMatchForm({
               onChange={(e) => setAutoDeadline(e.target.checked)}
               disabled={loading}
             />
-            <span>Дедлайн = kickoff − 1 минута</span>
+            <span>Приём прогнозов заканчивается за 1 минуту до матча</span>
           </label>
 
           <button
