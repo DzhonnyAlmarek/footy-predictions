@@ -318,6 +318,16 @@ export default function CutoverParticipantPage() {
   const myRanking = myPlace >= 0 ? leaderboard[myPlace] : null;
 
   return <main className="page cutover-shell">
+    <div className="cutover-club-banner" aria-label="Название клуба и дата основания">
+      <div className="cutover-club-identity">
+        <span className="cutover-club-symbol" aria-hidden="true">⚽</span>
+        <div className="cutover-club-copy">
+          <strong>Клуб им. А.Н. Мурашева</strong>
+          <span>Основан 6 июня 2008 года</span>
+        </div>
+      </div>
+      <span className="cutover-club-since">С 2008 ГОДА</span>
+    </div>
     <header className="cutover-hero">
       <div><div className="cutover-eyebrow">● КЛУБ ФУТБОЛЬНЫХ ПРОГНОЗОВ</div>
         <h1>Golden <span>Whistle</span> <small aria-hidden="true">⚽</small></h1>
