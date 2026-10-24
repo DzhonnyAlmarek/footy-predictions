@@ -14,6 +14,10 @@ on:
         type: string
 
 
+concurrency:
+  group: isolated-candidate-registry-publish
+  cancel-in-progress: false
+
 permissions:
   contents: read
   id-token: write
