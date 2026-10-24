@@ -307,3 +307,37 @@ p{ color:var(--muted) }
 .navRow{
   display:none !important;
 }
+
+/* Admin navigation: compact, accessible and usable on narrow screens. */
+.adminTopNav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+.adminTopNav .pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  white-space: nowrap;
+}
+.adminTopNav .pill:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+@media (max-width: 760px) {
+  .adminTopNav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    padding: 2px 0 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .adminTopNav .pill { flex: 0 0 auto; }
+  .adminContent > main { padding: 12px 0 24px !important; min-width: 0; }
+  .adminContent input,
+  .adminContent select { max-width: 100%; }
+}
