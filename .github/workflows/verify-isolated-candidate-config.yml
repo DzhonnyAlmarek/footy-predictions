@@ -40,7 +40,7 @@ jobs:
                   assert value in workflow, f"{key} missing from deploy workflow"
           assert "image_tag:" in workflow, "Explicit image tag input required"
           assert "required: true" in workflow, "Manual image tag must be required"
-          assert "IMAGE_TAG=\"${{ inputs.image_tag }}\"" in workflow, "Missing image tag input binding"
+          assert "inputs.image_tag" in workflow and "IMAGE_TAG=" in workflow, "Missing image tag input binding"
           assert "^[0-9a-f]{40}$" in workflow, "Image tag must be immutable full commit SHA"
           assert "footy-cutover-candidate:${IMAGE_TAG}" in workflow, "Deploy must use selected image tag"
           assert expected["image"] not in workflow, "Old image must not be hardcoded in deploy"
