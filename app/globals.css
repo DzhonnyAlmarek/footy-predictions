@@ -358,3 +358,17 @@ p{ color:var(--muted) }
     pointer-events: none;
   }
 }
+
+/* Stages, tours and matches: keep admin actions usable on narrow screens. */
+.adminManagementPage { min-width: 0; }
+.adminManagementPage details { max-width: 100%; }
+.adminManagementPage summary { min-height: 44px; }
+.adminManagementPage a,
+.adminManagementPage button { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .adminManagementPage { padding: 12px 0 24px !important; }
+  .adminManagementPage h1 { font-size: 25px !important; line-height: 1.2; overflow-wrap: anywhere; }
+  .adminManagementPage input,
+  .adminManagementPage select,
+  .adminManagementPage textarea { max-width: 100%; }
+}
