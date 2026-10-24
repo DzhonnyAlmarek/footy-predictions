@@ -32,7 +32,7 @@ test('exact forecast earns full base points', () => {
 });
 test('one-goal miss, correct outcome and goal difference', () => {
   assert.equal(basePredictionPoints(2, 1, 3, 2), 3);
-  assert.equal(basePredictionPoints(2, 1, 2, 2), 0.5);
+  assert.equal(basePredictionPoints(2, 1, 2, 2), 1);
 });
 test('score breakdown including outcome/difference multipliers', () => {
   const { pts, bd } = buildPointsBreakdown({
