@@ -146,7 +146,7 @@ export default async function AdminTourMatchesPage({
     })) ?? [];
 
   return (
-    <main className="page" style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
+    <main className="page adminManagementPage" style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
       <p>
         <Link href={`/admin/stages/${sid}/tours`}>← Назад к турам</Link>
       </p>
