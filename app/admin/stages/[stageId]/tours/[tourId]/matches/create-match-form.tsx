@@ -167,7 +167,7 @@ export default function CreateMatchForm({
             onFocus={ensureTeams}
             onClick={ensureTeams}
             disabled={loading}
-            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 240 }}
+            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 0, flex: "1 1 240px", maxWidth: "100%" }}
           >
             <option value="">Хозяева…</option>
             {(teams ?? []).map((t) => (
@@ -183,7 +183,7 @@ export default function CreateMatchForm({
             onFocus={ensureTeams}
             onClick={ensureTeams}
             disabled={loading}
-            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 240 }}
+            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 0, flex: "1 1 240px", maxWidth: "100%" }}
           >
             <option value="">Гости…</option>
             {(teams ?? []).map((t) => (
