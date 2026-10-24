@@ -95,5 +95,24 @@ jobs:
           fi
           rm -f /tmp/footy-secret-metadata.json
           echo "::endgroup::"
+          echo "::group::Published candidate image (read only)"
+          if "$YC" container image get --name "crpocq57tud830bhe7ck/footy-cutover-candidate:244adfa8eb4158f73ff14f0449585d2656af1ecf" --format json > /tmp/footy-image-metadata.json 2> /tmp/footy-image.err; then
+            echo "Candidate image metadata: READ_OK"
+            jq -r '[.id // "unknown", .digest // "unknown"] | @tsv' /tmp/footy-image-metadata.json
+          else
+            echo "Candidate image metadata: UNAVAILABLE"
+            tail -n 4 /tmp/footy-image.err
+          fi
+          rm -f /tmp/footy-image-metadata.json /tmp/footy-image.err
+          echo "::endgroup::"
+          echo "::group::Referenced Lockbox version metadata (read only)"
+          if "$YC" lockbox secret list-versions --id e6qht354a446srlm5ge9 --format json > /tmp/footy-versions.json 2> /tmp/footy-versions.err; then
+            jq -r '.. | objects | select(.id? == "e6qgv896cvs5t8n3jbpo") | [.id, (.status // "unknown")] | @tsv' /tmp/footy-versions.json
+          else
+            echo "Secret version metadata: UNAVAILABLE"
+            tail -n 4 /tmp/footy-versions.err
+          fi
+          rm -f /tmp/footy-versions.json /tmp/footy-versions.err
+          echo "::endgroup::"
           echo "Failed checks: $failures"
           test "$failures" -eq 0
