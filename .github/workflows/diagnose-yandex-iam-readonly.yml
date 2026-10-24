@@ -1,0 +1,68 @@
+name: Diagnose Yandex IAM access (read only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  inspect:
+    if: ${{ github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020' }}
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Request GitHub OIDC token
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(token);
+            core.setOutput('jwt', token);
+      - name: Exchange token
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 --output /tmp/yc-token.json \
+            --request POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode 'audience=ajefphrico3hogta85jt' \
+            --data-urlencode "subject_token=${GITHUB_OIDC_JWT}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token'
+          token="$(jq -er '.access_token' /tmp/yc-token.json)"
+          echo "::add-mask::$token"
+          echo "YC_IAM_TOKEN=$token" >> "$GITHUB_ENV"
+          rm -f /tmp/yc-token.json
+      - name: Install YC CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh -o /tmp/install-yc.sh
+          bash /tmp/install-yc.sh -i "$HOME/yandex-cloud" -n
+          echo "$HOME/yandex-cloud/bin" >> "$GITHUB_PATH"
+      - name: Inspect resource access without changing anything
+        env:
+          YC_CLOUD_ID: b1ge8jgq7kh768aapao1
+          YC_FOLDER_ID: b1gtdrn5t149v0ckl6ql
+        run: |
+          set +e
+          echo "::group::Folder access bindings"
+          yc resource-manager folder list-access-bindings --id "$YC_FOLDER_ID" --format json
+          echo "Folder bindings exit: $?"
+          echo "::endgroup::"
+          echo "::group::Runtime service account bindings"
+          yc iam service-account list-access-bindings --id ajekinma5dcn8agcht7a --format json
+          echo "Runtime service account bindings exit: $?"
+          echo "::endgroup::"
+          echo "::group::Candidate container metadata"
+          yc serverless container get --id bbaquq5i6l35i5kbiufb --format json
+          echo "Container metadata exit: $?"
+          echo "::endgroup::"
+          echo "Read-only diagnostics complete. No roles, images, revisions or containers changed."
