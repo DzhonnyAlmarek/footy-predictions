@@ -1,0 +1,76 @@
+name: Verify Cloud Registry image pull (manual read only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Enter VERIFY-REGISTRY-PULL to test pulling the existing image'
+        required: true
+        type: string
+
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify-pull: 
+    if: ${{ github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020' && inputs.confirmation == 'VERIFY-REGISTRY-PULL' }}
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 15
+    steps:
+      - name: Request GitHub OIDC token
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(token);
+            core.setOutput('jwt', token);
+
+      - name: Exchange OIDC token and login to Yandex Registry
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+          SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+        run: |
+          set -euo pipefail
+          response=""
+          for attempt in 1 2 3 4 5; do
+            http_code="$(curl --silent --show-error --max-time 30 --output /tmp/yandex-cutover-token.json --write-out '%{http_code}' \
+              --request POST 'https://auth.yandex.cloud/oauth/token' \
+              --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+              --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+              --data-urlencode "audience=${SERVICE_ACCOUNT_ID}" \
+              --data-urlencode "subject_token=${GITHUB_OIDC_JWT}" \
+              --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')" || http_code="000"
+            echo "Yandex token exchange: HTTP ${http_code}, attempt ${attempt}/5"
+            if [[ "$http_code" == "200" ]]; then response="$(cat /tmp/yandex-cutover-token.json)"; break; fi
+            if [[ "$http_code" != "429" && "$http_code" != "500" && "$http_code" != "502" && "$http_code" != "503" && "$http_code" != "504" && "$http_code" != "000" ]]; then exit 1; fi
+            if [[ "$attempt" == "5" ]]; then exit 1; fi
+            sleep $((attempt * 15))
+          done
+          rm -f /tmp/yandex-cutover-token.json
+          iam_token="$(jq -er '.access_token' <<< "$response")"
+          echo "::add-mask::${iam_token}"
+          printf '%s' "$iam_token" | docker login registry.yandexcloud.net --username iam --password-stdin
+          unset iam_token response GITHUB_OIDC_JWT
+
+      - name: Pull existing smoke image and check HTTP response (no cloud changes)
+        run: |
+          set -euo pipefail
+          IMAGE="registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-revision-smoke:1ade38b349cf3a33ca2816edff7e2d58e5f26842"
+          docker pull "$IMAGE"
+          test "$(docker image inspect "$IMAGE" --format '{{.Os}}/{{.Architecture}}')" = 'linux/amd64'
+          docker run -d --rm --name registry-smoke -p 127.0.0.1:18091:8080 "$IMAGE"
+          trap 'docker logs registry-smoke || true; docker stop registry-smoke || true' EXIT
+          ready=0
+          for attempt in {1..20}; do
+            if [[ "$(curl -fsS --max-time 2 http://127.0.0.1:18091/ 2>/dev/null || true)" == "OK" ]]; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = "1"
+          echo "PASS: Cloud Registry image pull + local HTTP OK. No cloud resources were changed."
+      - name: Logout
+        if: always()
+        run: docker logout registry.yandexcloud.net || true
