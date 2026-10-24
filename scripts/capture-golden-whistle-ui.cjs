@@ -36,7 +36,19 @@ function respond(path, role){
  if(path==="/api/cutover/admin")return role==="admin"?[200,admin]:[403,{ok:false}];
  return [404,{ok:false}];
 }
-async function snap(page,name){await page.screenshot({path:"ui-preview/"+name+".png",fullPage:true,animations:"disabled"});console.log("CAPTURED "+name);}
+async function snap(page,name){
+  const layout = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    page: document.documentElement.scrollWidth,
+    body: document.body.scrollWidth
+  }));
+  console.log("LAYOUT "+name+" "+JSON.stringify(layout));
+  if(name.startsWith("mobile-") && Math.max(layout.page,layout.body) > layout.viewport + 2){
+    console.warn("MOBILE_HORIZONTAL_OVERFLOW "+name+" "+JSON.stringify(layout));
+  }
+  await page.screenshot({path:"ui-preview/"+name+".png",fullPage:true,animations:"disabled"});
+  console.log("CAPTURED "+name);
+}
 (async()=>{
  const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
  try {
