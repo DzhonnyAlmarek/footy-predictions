@@ -52,3 +52,13 @@
 @media(max-width:900px){.cutover-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.cutover-navigation{overflow-x:auto;flex-wrap:nowrap}.cutover-user-chip{margin-left:0}.cutover-hero{padding:30px}}
 @media(max-width:620px){.cutover-shell{padding:12px 12px 110px}.cutover-hero{padding:28px 23px;min-height:210px;border-radius:19px}.cutover-hero-aside{display:none}.cutover-hero h1{font-size:47px}.cutover-hero h1 small{font-size:20px}.cutover-overview{gap:9px}.cutover-stat{padding:15px;min-height:118px;border-radius:13px}.cutover-stat strong{font-size:30px}.cutover-stat-accent strong{font-size:22px}.cutover-stat small{font-size:11px}.cutover-stat span{font-size:9px}.cutover-navigation{border-radius:13px!important}.cutover-nav-item{padding:10px!important}.cutover-section-heading h2{font-size:23px}.cutover-section-heading>p{display:none}}
 @media(prefers-reduced-motion:reduce){.cutover-shell button{transition:none}}
+
+/* The club identity remains visible across all participant tabs and login. */
+.cutover-club-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 14px;padding:13px 19px;border:1px solid #dce6e3;border-radius:15px;background:#fff;box-shadow:0 4px 18px rgba(9,35,43,.04)}
+.cutover-club-identity{display:flex;align-items:center;gap:12px;min-width:0}
+.cutover-club-symbol{display:grid;place-items:center;width:39px;height:39px;flex:0 0 39px;border-radius:11px;background:#e1f2e9;font-size:20px}
+.cutover-club-copy{display:flex;flex-direction:column;gap:3px}
+.cutover-club-copy strong{color:#173b39;font-size:15px;line-height:1.25;font-weight:900;letter-spacing:-.015em}
+.cutover-club-copy span{font-size:12px;font-weight:650;color:#628078}
+.cutover-club-since{font-size:10px;font-weight:850;letter-spacing:.14em;color:#32735f;white-space:nowrap}
+@media(max-width:620px){.cutover-club-banner{padding:11px 12px;border-radius:12px}.cutover-club-symbol{width:34px;height:34px;flex-basis:34px;font-size:18px}.cutover-club-copy strong{font-size:13px}.cutover-club-copy span{font-size:11px}.cutover-club-since{display:none}}
