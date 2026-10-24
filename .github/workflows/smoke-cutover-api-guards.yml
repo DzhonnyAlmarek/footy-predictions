@@ -1,0 +1,65 @@
+name: Verify cutover API security guards (offline HTTP)
+on:
+  push:
+    branches:
+      - feature/cutover-admin-readiness-20261020
+    paths:
+      - '.github/workflows/smoke-cutover-api-guards.yml'
+      - 'app/api/cutover/**'
+      - 'lib/cutover-participant-server.ts'
+      - 'middleware.ts'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  api-guards:
+    if: github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build isolated preview Docker without credentials
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 -f Dockerfile.cutover-production-candidate -t footy-api-guard:local .
+      - name: Check authentication and origin enforcement via HTTP
+        run: |
+          set -euo pipefail
+          docker run -d --name footy-api-guard -p 127.0.0.1:18084:8080 \
+            -e DEPLOY_TARGET=yandex-neon-cutover-preview \
+            -e ENABLE_CUTOVER_PREVIEW=true \
+            -e ENABLE_CUTOVER_AUTH=true \
+            -e ENABLE_CUTOVER_LOGIN=true \
+            -e ENABLE_CUTOVER_PREDICTION_WRITES=true \
+            -e ENABLE_CUTOVER_ADMIN_WRITES=true \
+            -e ENABLE_CUTOVER_RESULT_WRITES=false \
+            -e CUTOVER_AUTH_ORIGIN=https://isolated.invalid \
+            -e CUTOVER_RATE_PEPPER=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJ \
+            -e CUTOVER_AUTH_ALLOWED_HOST=not-real-isolated.neon.tech \
+            -e CUTOVER_AUTH_DATABASE_URL='postgresql://dummy:dummy@not-real-isolated.neon.tech/neondb?sslmode=require' \
+            footy-api-guard:local
+          trap 'docker logs footy-api-guard || true; docker rm -f footy-api-guard || true' EXIT
+          for i in {1..45}; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:18084/ || true)"
+            if [[ "$code" != "000" ]]; then break; fi
+            sleep 2
+          done
+          assert_http() {
+            local expected="$1" label="$2"; shift 2
+            local actual
+            actual="$(curl --silent --show-error --max-time 8 --output /dev/null --write-out '%{http_code}' "$@")"
+            printf '%s -> HTTP %s (expected %s)\n' "$label" "$actual" "$expected"
+            test "$actual" = "$expected"
+          }
+          BASE=http://127.0.0.1:18084
+          assert_http 401 'session without cookie' "$BASE/api/cutover/session"
+          assert_http 401 'prediction without cookie' "$BASE/api/cutover/save-prediction"
+          assert_http 403 'admin GET without cookie' "$BASE/api/cutover/admin"
+          assert_http 403 'login POST without origin' -X POST -H 'Content-Type: application/json' --data '{"username":"x","password":"x"}' "$BASE/api/cutover/login"
+          assert_http 403 'prediction POST without origin' -X POST -H 'Content-Type: application/json' --data '{"match_id":"1","home_pred":1,"away_pred":0}' "$BASE/api/cutover/save-prediction"
+          assert_http 403 'admin POST without origin' -X POST -H 'Content-Type: application/json' --data '{"action":"result","match_id":"1","home_score":1,"away_score":0}' "$BASE/api/cutover/admin"
+          assert_http 401 'prediction POST correct origin but no cookie' -X POST -H 'Origin: https://isolated.invalid' -H 'Content-Type: application/json' --data '{"match_id":"1","home_pred":1,"away_pred":0}' "$BASE/api/cutover/save-prediction"
+          assert_http 403 'admin POST correct origin but no cookie' -X POST -H 'Origin: https://isolated.invalid' -H 'Content-Type: application/json' --data '{"action":"result","match_id":"1","home_score":1,"away_score":0}' "$BASE/api/cutover/admin"
+          echo 'PASS: HTTP session, admin role, mutation origin, and anonymous write protections enforced offline.'
