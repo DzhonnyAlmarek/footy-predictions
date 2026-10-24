@@ -81,7 +81,7 @@ export default function StageRowActions(props: {
   }
 
   return (
-    <div style={{ minWidth: 320 }}>
+    <div style={{ minWidth: 0, width: "100%", maxWidth: "100%" }}>
       <div style={{ display: "grid", gap: 10 }}>
         <div>
           <div style={{ fontWeight: 900, marginBottom: 6 }}>Название</div>
