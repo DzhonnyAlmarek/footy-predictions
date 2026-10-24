@@ -23,7 +23,7 @@ export default async function AdminStagesPage() {
     .limit(200);
 
   return (
-    <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+    <main className="adminManagementPage" style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
       <header style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 800 }}>Этапы</h1>
