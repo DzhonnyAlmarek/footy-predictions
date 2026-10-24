@@ -12,7 +12,7 @@ type Prediction = {
 };
 
 export default function CutoverParticipantPage() {
-  const [activeTab, setActiveTab] = useState<"schedule" | "archive" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("schedule");
+  const [activeTab, setActiveTab] = useState<"schedule" | "archive" | "golden-boot" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("schedule");
   const [showAllMatches, setShowAllMatches] = useState(false);
   const [matchFilter, setMatchFilter] = useState<"upcoming" | "all">("upcoming");
   const [savedMatchId, setSavedMatchId] = useState<string | null>(null);
@@ -29,6 +29,7 @@ export default function CutoverParticipantPage() {
   const [adminForm, setAdminForm] = useState({ tournament_id: "", stage_id: "", tour_id: "", home_team_id: "", away_team_id: "", kickoff_at: "", deadline_at: "" });
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [schedule, setSchedule] = useState<Prediction[]>([]);
+  const [boot, setBoot] = useState<{ username: string; exact: number }[]>([]);
   const [grandPrix, setGrandPrix] = useState<{ seasons: { id: string; name: string }[]; ratings: { season_id: string; username: string; points: string; scored_rounds: number }[] } | null>(null);
   const [grandPrixUnavailable, setGrandPrixUnavailable] = useState(false);
   const [whistle, setWhistle] = useState<{ stage: { id: string; name: string }; available_stages: { id: string; name: string; status: string }[]; penalty_matches: number; leaderboard: { username: string; points: number; main_place: number }[] } | null>(null);
@@ -81,6 +82,8 @@ export default function CutoverParticipantPage() {
     }
     const readiness = await fetch("/api/cutover/save-prediction", { cache: "no-store" });
     setWritesEnabled(readiness.ok && (await readiness.json()).enabled === true);
+    const bootResponse = await fetch("/api/cutover/golden-boot", { cache: "no-store" }).catch(() => null);
+    if (bootResponse?.ok) { const bootData = await bootResponse.json(); setBoot(Array.isArray(bootData.leaderboard) ? bootData.leaderboard : []); }
     const rankingResponse = await fetch("/api/cutover/leaderboard", { cache: "no-store" });
     if (rankingResponse.ok) {
       const rankingData = await rankingResponse.json();
@@ -349,7 +352,7 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <nav aria-label="Разделы кабинета" className="card cutover-navigation">
-        {([["schedule", "Прогнозы"], ["archive", "Архив"], ["ranking", "Текущая таблица"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+        {([["schedule", "Прогнозы"], ["archive", "Архив"], ["ranking", "Текущая таблица"], ["golden-boot", "Бутса"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             className={activeTab === id ? "cutover-nav-item is-active" : "cutover-nav-item"} aria-current={activeTab === id ? "page" : undefined}>{label}</button>)}
         <div aria-label="Текущий пользователь" className={isAdmin ? "cutover-user-chip is-admin" : "cutover-user-chip"}>
@@ -579,6 +582,12 @@ export default function CutoverParticipantPage() {
           </div> : <div className="cutover-mobile-closed">Приём прогнозов закрыт</div>)}
         </article>)}
       </div>
+      </section>}
+      {activeTab === "golden-boot" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ТОЧНЫЕ СЧЕТА</span><h2>Золотая бутса</h2></div><p>Количество точно угаданных результатов в доступных матчах</p></div>
+        {boot.length === 0 ? <p>Точных прогнозов пока нет.</p> :
+          <div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Точных счетов</th></tr></thead>
+            <tbody>{boot.map((p, i) => <tr key={p.username}><td>{i + 1}</td><td>{p.username}</td><td>{p.exact}</td></tr>)}</tbody>
+          </table></div>}
       </section>}
       {activeTab === "archive" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ЗАВЕРШЁННЫЕ МАТЧИ</span><h2>Архив матчей</h2></div><p>Результаты завершённых матчей в доступном расписании</p></div>
         {schedule.filter(m => m.home_score !== null && m.away_score !== null).length === 0
