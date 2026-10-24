@@ -1,0 +1,55 @@
+name: Smoke isolated Golden Whistle Docker candidate (offline)
+on:
+  push:
+    branches:
+      - feature/cutover-admin-readiness-20261020
+    paths:
+      - '.github/workflows/smoke-footy-candidate-local.yml'
+      - 'Dockerfile.cutover-production-candidate'
+      - 'middleware.ts'
+      - 'app/api/cutover/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    if: github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build standalone candidate without production credentials
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 -f Dockerfile.cutover-production-candidate -t footy-offline-smoke:local .
+      - name: Test candidate startup and deny-by-default access (no external database)
+        run: |
+          set -euo pipefail
+          docker run -d --name footy-offline-smoke -p 127.0.0.1:18083:8080 \
+            -e ENABLE_CUTOVER_PREVIEW=false \
+            -e ENABLE_CUTOVER_PRODUCTION_CANDIDATE=false \
+            -e ENABLE_CUTOVER_AUTH=false \
+            -e ENABLE_CUTOVER_LOGIN=false \
+            -e ENABLE_CUTOVER_PREDICTION_WRITES=false \
+            -e ENABLE_CUTOVER_ADMIN_WRITES=false \
+            -e ENABLE_CUTOVER_RESULT_WRITES=false \
+            footy-offline-smoke:local
+          trap 'docker logs footy-offline-smoke || true; docker rm -f footy-offline-smoke || true' EXIT
+          ready=0
+          for i in {1..45}; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:18083/ || true)"
+            if [[ "$code" == "503" ]]; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = "1"
+          for route in \
+            / /api/login /api/cutover/session /api/cutover/login \
+            /api/cutover/participants /api/cutover/leaderboard \
+            /api/cutover/save-prediction /api/cutover/admin; do
+            code="$(curl -s -o /tmp/footy-smoke-response -w '%{http_code}' --max-time 5 "http://127.0.0.1:18083$route")"
+            echo "$route -> HTTP $code"
+            test "$code" = "503"
+          done
+          echo 'PASS: local candidate boots; public and mutation endpoints stay disabled without credentials.'
