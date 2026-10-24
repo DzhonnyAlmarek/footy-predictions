@@ -167,7 +167,7 @@ export default function TourRowActions(props: {
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={loading || locked}
-            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 220 }}
+            style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd", minWidth: 0, flex: "1 1 220px", maxWidth: "100%" }}
           />
         </div>
 
