@@ -167,9 +167,10 @@ export default async function AdminStageToursPage({
         <SetCurrentStageButton stageId={sid} isCurrent={!!stage.is_current} />
       </section>
 
-      <section style={{ marginTop: 18 }}>
+      <details style={{ marginTop: 18 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 800, padding: "12px 0" }}>Настройки этапа</summary>
         <StageActions stageId={sid} initialName={stage.name} initialStatus={stage.status} />
-      </section>
+      </details>
 
       <section style={{ marginTop: 18 }}>
         <PublishStage
@@ -180,9 +181,10 @@ export default async function AdminStageToursPage({
         />
       </section>
 
-      <section style={{ marginTop: 18 }}>
+      <details style={{ marginTop: 18 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 800, padding: "12px 0" }}>＋ Создать новый тур</summary>
         <CreateTourForm stageId={sid} />
-      </section>
+      </details>
 
       {error && (
         <p style={{ marginTop: 16, color: "crimson" }}>Ошибка туров: {error.message}</p>
@@ -214,7 +216,7 @@ export default async function AdminStageToursPage({
                       alignItems: "flex-start",
                     }}
                   >
-                    <div style={{ minWidth: 320 }}>
+                    <div style={{ minWidth: 0, flex: "1 1 260px" }}>
                       <div style={{ fontSize: 18, fontWeight: 800 }}>
                         Тур {t.tour_no}
                         {t.name ? ` — ${t.name}` : ""}{" "}
@@ -241,7 +243,7 @@ export default async function AdminStageToursPage({
                       </div>
                     </div>
 
-                    <div style={{ minWidth: 360 }}>
+                    <div style={{ minWidth: 0, flex: "1 1 280px" }}>
                       <TourRowActions
                         tourId={t.id}
                         stageId={sid}
