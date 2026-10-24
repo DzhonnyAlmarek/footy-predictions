@@ -341,3 +341,20 @@ p{ color:var(--muted) }
   .adminContent input,
   .adminContent select { max-width: 100%; }
 }
+
+/* Mobile admin navigation: visible scroll hint without covering links. */
+.adminNavShell { position: relative; min-width: 0; }
+.adminNavHint { display: none; }
+@media (max-width: 760px) {
+  .adminNavShell { padding-bottom: 20px; }
+  .adminNavHint {
+    display: block;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    font-size: 11px;
+    font-weight: 800;
+    color: #475569;
+    pointer-events: none;
+  }
+}
