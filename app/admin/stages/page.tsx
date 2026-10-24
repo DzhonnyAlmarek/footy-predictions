@@ -33,9 +33,10 @@ export default async function AdminStagesPage() {
         </div>
       </header>
 
-      <section style={{ marginTop: 18 }}>
+      <details style={{ marginTop: 18 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 800, padding: "12px 0" }}>＋ Создать новый этап</summary>
         <CreateStageForm />
-      </section>
+      </details>
 
       {error && <p style={{ marginTop: 16, color: "crimson" }}>Ошибка: {error.message}</p>}
 
@@ -58,7 +59,7 @@ export default async function AdminStagesPage() {
                   flexWrap: "wrap",
                 }}
               >
-                <div style={{ minWidth: 340 }}>
+                <div style={{ minWidth: 0, flex: "1 1 280px" }}>
                   <div style={{ fontSize: 18, fontWeight: 800 }}>
                     #{s.id} • {s.name} {s.is_current ? <span style={{ marginLeft: 6 }}>⭐</span> : null}
                   </div>
