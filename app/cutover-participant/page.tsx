@@ -349,7 +349,7 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <nav aria-label="Разделы кабинета" className="card cutover-navigation">
-        {([["schedule", "Прогнозы"], ["ranking", "Рейтинг"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+        {([["schedule", "Прогнозы"], ["ranking", "Текущая таблица"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             className={activeTab === id ? "cutover-nav-item is-active" : "cutover-nav-item"} aria-current={activeTab === id ? "page" : undefined}>{label}</button>)}
         <div aria-label="Текущий пользователь" className={isAdmin ? "cutover-user-chip is-admin" : "cutover-user-chip"}>
@@ -497,7 +497,7 @@ export default function CutoverParticipantPage() {
           {!resultWritesEnabled && <p>Запись результатов отключена на этой площадке.</p>}
         </form>
       </section>}
-      {activeTab === "ranking" && <section className="cutover-content cutover-rankings"><div className="cutover-section-heading"><div><span>ТУРНИРНАЯ ТАБЛИЦА</span><h2>Общий рейтинг</h2></div><p>Каждое очко влияет на место</p></div>
+      {activeTab === "ranking" && <section className="cutover-content cutover-rankings"><div className="cutover-section-heading"><div><span>ТУРНИРНАЯ ТАБЛИЦА</span><h2>Текущая таблица</h2></div><p>Каждое очко влияет на место</p></div>
       <div className="tableWrap"><table className="table" style={{ minWidth: 500 }}>
         <thead><tr><th>Участник</th><th>Очки</th><th>Бонусы (в составе очков)</th><th>Учтённых прогнозов</th></tr></thead>
         <tbody>{leaderboard.map((p, index) => <tr key={p.username} className={p.username === sessionUsername ? "cutover-own-row" : undefined}>
