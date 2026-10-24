@@ -359,7 +359,7 @@ export default function TourMatchesEditor({
               </label>
             </div>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div className="adminMatchActions" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
               <button
                 type="button"
                 onClick={() => saveRow(row.id)}
