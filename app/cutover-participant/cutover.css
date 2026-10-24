@@ -1,0 +1,54 @@
+/* Scoped styles for the isolated Golden Whistle participant experience. */
+.cutover-shell{max-width:1180px!important;padding-top:26px;padding-bottom:80px}
+.cutover-shell button,.cutover-shell input,.cutover-shell select{font:inherit}
+.cutover-shell button{cursor:pointer;transition:background .15s ease,transform .15s ease,border-color .15s ease}
+.cutover-shell button:disabled{cursor:not-allowed;opacity:.55}
+.cutover-shell button:focus-visible,.cutover-shell input:focus-visible,.cutover-shell select:focus-visible{outline:3px solid #f1b64b;outline-offset:2px}
+.cutover-hero{min-height:216px;display:flex;justify-content:space-between;align-items:center;gap:26px;position:relative;overflow:hidden;padding:35px 42px;border-radius:24px;color:#fff;background:radial-gradient(circle at 77% 12%,rgba(58,146,127,.38),transparent 42%),linear-gradient(116deg,#081f31,#143f46 74%,#176354);box-shadow:0 20px 45px rgba(8,31,49,.2)}
+.cutover-hero:after{content:"";position:absolute;width:330px;height:330px;right:-165px;top:-135px;border:1px solid rgba(255,255,255,.12);border-radius:50%;pointer-events:none;box-shadow:0 0 0 68px rgba(255,255,255,.024),0 0 0 136px rgba(255,255,255,.018)}
+.cutover-eyebrow{font-size:11px;font-weight:850;letter-spacing:.17em;color:#aee7cb}
+.cutover-hero h1{font-size:clamp(40px,5vw,68px);line-height:1.05;letter-spacing:-.055em;margin:13px 0 10px;font-weight:900;color:#fff}
+.cutover-hero h1 span{color:#f4c56a}.cutover-hero h1 small{font-size:26px;vertical-align:middle;letter-spacing:0}
+.cutover-hero p{color:#d1e7e5;font-size:15px}
+.cutover-hero-aside{z-index:1;display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:20px 23px;min-width:218px;border-radius:17px;background:rgba(255,255,255,.085);border:1px solid rgba(255,255,255,.13);backdrop-filter:blur(8px)}
+.cutover-hero-aside span{font-size:10px;letter-spacing:.12em;color:#c5dfdf;font-weight:800}
+.cutover-hero-aside strong{font-size:23px;letter-spacing:-.03em}
+.cutover-hero-aside small{font-size:11px;color:#c5dfdf}
+.cutover-notice{margin:14px 0 18px;padding:12px 18px;background:#eaf5f2;border:1px solid #cde7dd;border-radius:13px;color:#27544b;font-size:13px;font-weight:600}
+.cutover-login{border-radius:21px!important;padding:30px!important;box-shadow:0 16px 35px rgba(14,44,55,.09)}
+.cutover-form-heading span,.cutover-section-heading span{font-size:11px;color:#177863;font-weight:850;letter-spacing:.13em}
+.cutover-form-heading h2{margin:7px 0 5px;font-size:29px}
+.cutover-login label{display:grid;gap:7px;font-weight:750;color:#263c4a}
+.cutover-login select,.cutover-login input{width:100%;min-height:45px;padding:9px 12px;border:1px solid #d3dfe1;border-radius:11px;background:#fff}
+.cutover-login button[type=submit]{min-height:46px;color:#fff;background:#166b5a;border:0;border-radius:11px;font-weight:800}
+.cutover-navigation{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px!important;margin-bottom:16px;border-radius:17px!important;box-shadow:0 4px 22px rgba(9,35,43,.045)!important}
+.cutover-nav-item,.cutover-logout{border:1px solid transparent;background:transparent;border-radius:10px;padding:11px 13px;font-size:13px!important;font-weight:800;color:#395462;white-space:nowrap}
+.cutover-nav-item:hover{background:#f0f7f4}.cutover-nav-item.is-active{color:#fff;background:#116954;box-shadow:0 3px 10px rgba(17,105,84,.17)}
+.cutover-user-chip{margin-left:auto;white-space:nowrap;border-radius:9px;background:#eaf5f1;color:#236453;font-size:12px;font-weight:850;padding:10px}
+.cutover-user-chip.is-admin{background:#fff2d8;color:#8a5b11}
+.cutover-logout{border:1px solid #e2e9e9}.cutover-logout:hover{background:#f6f8f8}
+.cutover-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:26px}
+.cutover-stat{display:flex;flex-direction:column;gap:8px;min-height:137px;background:#fff;border:1px solid #e0e9e8;border-radius:17px;padding:19px 20px;box-shadow:0 5px 20px rgba(9,35,43,.035)}
+.cutover-stat span{font-size:10px;letter-spacing:.12em;font-weight:850;color:#697d86}
+.cutover-stat strong{font-size:36px;line-height:1.1;letter-spacing:-.04em;color:#112d3b}
+.cutover-stat small{font-size:12px;color:#7c8e93}
+.cutover-stat-accent{background:#e6f1eb;border-color:#c6dfd4}.cutover-stat-accent strong{font-size:27px;color:#14735e;margin-top:7px}
+.cutover-content,.cutover-shell section:not(.cutover-overview){margin-top:15px}
+.cutover-section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:0 0 15px}
+.cutover-section-heading h2{font-size:26px;letter-spacing:-.04em;margin:5px 0 0}
+.cutover-section-heading h2 em{font-size:13px;letter-spacing:0;font-style:normal;background:#e4f2ea;color:#12624e;padding:4px 9px;border-radius:999px;vertical-align:middle}
+.cutover-section-heading>p{font-size:12px}
+.cutover-filters{display:flex;flex-wrap:wrap;gap:9px;margin:17px 0}
+.cutover-filter{border:1px solid #d8e5e0;background:#fff;color:#30534b;font-weight:750;border-radius:999px;padding:10px 17px;font-size:13px}
+.cutover-filter.active{background:#dceddf;border-color:#a9d2bd;color:#12624e}
+.cutover-match-table{border:1px solid #e2e9e9!important;border-radius:16px!important;box-shadow:0 7px 25px rgba(9,35,43,.04)!important}
+.cutover-match-table .table{min-width:780px}
+.cutover-match-table th{background:#eef5f2!important;color:#4a6664!important}
+.cutover-match-table td{padding:15px 12px!important;vertical-align:middle!important}
+.cutover-match-teams{display:flex;align-items:center;gap:9px;font-size:13px;color:#152e39}
+.cutover-match-teams span{color:#88a4a6}.cutover-score{display:inline-flex;align-items:center;justify-content:center;min-width:60px;padding:8px 10px;background:#f1f5f6;color:#284655;font-weight:900;font-variant-numeric:tabular-nums;border-radius:9px}
+.cutover-score.has-prediction{background:#e1f5e9;color:#11704f}
+.cutover-save{min-height:40px;padding:8px 14px;border:0;border-radius:9px;background:#146e59;color:#fff;font-size:12px!important;font-weight:850}.cutover-save:hover{background:#0d5343}
+@media(max-width:900px){.cutover-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.cutover-navigation{overflow-x:auto;flex-wrap:nowrap}.cutover-user-chip{margin-left:0}.cutover-hero{padding:30px}}
+@media(max-width:620px){.cutover-shell{padding:12px 12px 110px}.cutover-hero{padding:28px 23px;min-height:210px;border-radius:19px}.cutover-hero-aside{display:none}.cutover-hero h1{font-size:47px}.cutover-hero h1 small{font-size:20px}.cutover-overview{gap:9px}.cutover-stat{padding:15px;min-height:118px;border-radius:13px}.cutover-stat strong{font-size:30px}.cutover-stat-accent strong{font-size:22px}.cutover-stat small{font-size:11px}.cutover-stat span{font-size:9px}.cutover-navigation{border-radius:13px!important}.cutover-nav-item{padding:10px!important}.cutover-section-heading h2{font-size:23px}.cutover-section-heading>p{display:none}}
+@media(prefers-reduced-motion:reduce){.cutover-shell button{transition:none}}
