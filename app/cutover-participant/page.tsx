@@ -12,7 +12,7 @@ type Prediction = {
 };
 
 export default function CutoverParticipantPage() {
-  const [activeTab, setActiveTab] = useState<"schedule" | "archive" | "golden-boot" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("schedule");
+  const [activeTab, setActiveTab] = useState<"schedule" | "archive" | "analytics" | "golden-boot" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("schedule");
   const [showAllMatches, setShowAllMatches] = useState(false);
   const [matchFilter, setMatchFilter] = useState<"upcoming" | "all">("upcoming");
   const [savedMatchId, setSavedMatchId] = useState<string | null>(null);
@@ -352,7 +352,7 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <nav aria-label="Разделы кабинета" className="card cutover-navigation">
-        {([["schedule", "Прогнозы"], ["archive", "Архив"], ["ranking", "Текущая таблица"], ["golden-boot", "Бутса"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+        {([["schedule", "Прогнозы"], ["archive", "Архив"], ["analytics", "Аналитика"], ["ranking", "Текущая таблица"], ["golden-boot", "Бутса"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             className={activeTab === id ? "cutover-nav-item is-active" : "cutover-nav-item"} aria-current={activeTab === id ? "page" : undefined}>{label}</button>)}
         <div aria-label="Текущий пользователь" className={isAdmin ? "cutover-user-chip is-admin" : "cutover-user-chip"}>
@@ -582,6 +582,19 @@ export default function CutoverParticipantPage() {
           </div> : <div className="cutover-mobile-closed">Приём прогнозов закрыт</div>)}
         </article>)}
       </div>
+      </section>}
+      {activeTab === "analytics" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>СТАТИСТИКА УЧАСТНИКА</span><h2>Аналитика прогнозов</h2></div><p>Показатели рассчитаны по доступным завершённым матчам, а не по всей истории турнира</p></div>
+        {(() => {
+          const completed = predictions.filter(p => p.home_score !== null && p.away_score !== null && p.home_pred !== null && p.away_pred !== null);
+          const exact = completed.filter(p => p.home_pred === p.home_score && p.away_pred === p.away_score).length;
+          const outcome = (h: number, a: number) => Math.sign(h - a);
+          const outcomes = completed.filter(p => outcome(p.home_pred!, p.away_pred!) === outcome(p.home_score!, p.away_score!)).length;
+          return <div className="cutover-overview" aria-label="Статистика прогнозов">
+            <div className="cutover-stat"><span>ПРОВЕРЕНО ПРОГНОЗОВ</span><strong>{completed.length}</strong><small>Завершённых матчей</small></div>
+            <div className="cutover-stat"><span>ТОЧНЫЙ СЧЁТ</span><strong>{exact}</strong><small>{completed.length ? Math.round(exact / completed.length * 100) : 0}% прогнозов</small></div>
+            <div className="cutover-stat"><span>УГАДАН ИСХОД</span><strong>{outcomes}</strong><small>{completed.length ? Math.round(outcomes / completed.length * 100) : 0}% прогнозов</small></div>
+          </div>;
+        })()}
       </section>}
       {activeTab === "golden-boot" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ТОЧНЫЕ СЧЕТА</span><h2>Золотая бутса</h2></div><p>Количество точно угаданных результатов в доступных матчах</p></div>
         {boot.length === 0 ? <p>Точных прогнозов пока нет.</p> :
