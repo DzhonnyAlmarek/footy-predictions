@@ -349,7 +349,7 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : <>
       <nav aria-label="Разделы кабинета" className="card cutover-navigation">
-        {([["schedule", "Матчи"], ["ranking", "Рейтинг"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+        {([["schedule", "Прогнозы"], ["ranking", "Рейтинг"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             className={activeTab === id ? "cutover-nav-item is-active" : "cutover-nav-item"} aria-current={activeTab === id ? "page" : undefined}>{label}</button>)}
         <div aria-label="Текущий пользователь" className={isAdmin ? "cutover-user-chip is-admin" : "cutover-user-chip"}>
