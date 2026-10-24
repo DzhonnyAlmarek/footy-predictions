@@ -6,6 +6,9 @@ on:
     paths:
       - 'scripts/capture-golden-whistle-ui.cjs'
       - '.github/workflows/capture-golden-whistle-ui.yml'
+      - 'app/globals.css'
+      - 'app/admin/**'
+      - 'app/_components/**'
   workflow_dispatch:
 permissions:
   contents: read
