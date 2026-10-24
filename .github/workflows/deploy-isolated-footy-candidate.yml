@@ -6,6 +6,10 @@ on:
         description: "Type DEPLOY-ISOLATED-CANDIDATE to authorize one revision attempt"
         required: true
         type: string
+      image_tag:
+        description: "Full 40-character Git commit SHA of an already published candidate image"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -78,9 +82,14 @@ jobs:
           YC_FOLDER_ID: b1gtdrn5t149v0ckl6ql
         run: |
           set -euo pipefail
+          IMAGE_TAG="${{ inputs.image_tag }}"
+          if [[ ! "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid image tag: expected full Git commit SHA" >&2
+            exit 1
+          fi
           yc serverless container revision deploy \
             --container-id bbaquq5i6l35i5kbiufb \
-            --image cr.yandex/crpocq57tud830bhe7ck/footy-cutover-candidate:eb584d5735678f0808d1ce9e3280f2e7a33ab144 \
+            --image "cr.yandex/crpocq57tud830bhe7ck/footy-cutover-candidate:${IMAGE_TAG}" \
             --service-account-id ajekinma5dcn8agcht7a \
             --cores 1 --core-fraction 100 --memory 512MB \
             --execution-timeout 30s --concurrency 1 \
