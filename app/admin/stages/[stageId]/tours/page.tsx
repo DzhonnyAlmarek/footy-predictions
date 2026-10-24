@@ -147,7 +147,7 @@ export default async function AdminStageToursPage({
   }
 
   return (
-    <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+    <main className="adminManagementPage" style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
       <p>
         <Link href="/admin/stages">← К этапам</Link>
       </p>
