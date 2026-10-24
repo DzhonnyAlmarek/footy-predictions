@@ -1,0 +1,29 @@
+name: Verify Golden Whistle scoring offline
+on:
+  push:
+    branches:
+      - feature/cutover-admin-readiness-20261020
+    paths:
+      - 'scripts/test-footy-points-offline.cjs'
+      - 'lib/golden-whistle.ts'
+      - 'lib/points/breakdown.ts'
+      - '.github/workflows/verify-footy-scoring-offline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scoring:
+    if: github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Verify pure match scoring and Golden Whistle calculation
+        run: node --test scripts/test-footy-points-offline.cjs
