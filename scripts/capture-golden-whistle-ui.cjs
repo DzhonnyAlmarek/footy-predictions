@@ -56,7 +56,7 @@ async function snap(page,name){await page.screenshot({path:"ui-preview/"+name+".
    role="user";
    await page.reload({waitUntil:"domcontentloaded"});
    await page.getByText("БЛИЖАЙШИЕ МАТЧИ").waitFor({timeout:20000});
-   await page.getByText("Спартак").first().waitFor({timeout:20000});
+   await page.locator(prefix === "mobile" ? ".cutover-mobile-match" : ".cutover-match-table tbody tr").first().waitFor({timeout:20000});
    await snap(page,prefix+"-matches");
    const tabs=[["Рейтинг","ranking"],["Золотой свисток","whistle"],["Гран-при","grand-prix"],["Мои прогнозы","predictions"]];
    for(const [label,filename] of tabs){await page.getByRole("button",{name:label,exact:true}).click();await page.waitForTimeout(250);await snap(page,prefix+"-"+filename);}
