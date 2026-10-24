@@ -372,3 +372,10 @@ p{ color:var(--muted) }
   .adminManagementPage select,
   .adminManagementPage textarea { max-width: 100%; }
 }
+
+/* Match management actions: comfortably tappable on phones. */
+.adminMatchActions button { min-height: 44px; }
+@media (max-width: 760px) {
+  .adminMatchActions { width: 100%; }
+  .adminMatchActions button { flex: 1 1 130px; }
+}
