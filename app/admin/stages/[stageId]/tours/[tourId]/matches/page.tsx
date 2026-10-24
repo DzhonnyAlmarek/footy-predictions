@@ -164,9 +164,10 @@ export default async function AdminTourMatchesPage({
         </div>
       </header>
 
-      <section style={{ marginTop: 18 }}>
+      <details style={{ marginTop: 18 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 800, padding: "12px 0" }}>＋ Добавить матч в тур</summary>
         <CreateMatchForm stageId={sid} tourId={tid} />
-      </section>
+      </details>
 
       <section style={{ marginTop: 22 }}>
         <h2 style={{ fontSize: 18, fontWeight: 900 }}>Матчи тура</h2>
