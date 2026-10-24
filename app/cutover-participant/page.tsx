@@ -317,6 +317,9 @@ export default function CutoverParticipantPage() {
   const myPlace = leaderboard.findIndex(p => p.username === sessionUsername);
   const myRanking = myPlace >= 0 ? leaderboard[myPlace] : null;
 
+  const scheduleSelection = matchFilter === "all" ? schedule : upcomingMatches;
+  const displayedSchedule = showAllMatches ? scheduleSelection : scheduleSelection.slice(0, 30);
+
   return <main className="page cutover-shell">
     <div className="cutover-club-banner" aria-label="Название клуба и дата основания">
       <div className="cutover-club-identity">
@@ -536,7 +539,7 @@ export default function CutoverParticipantPage() {
       {(matchFilter === "all" ? schedule : schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now())).length > 30 && <button type="button" onClick={() => setShowAllMatches(v => !v)} style={{ margin: "12px 0", padding: "10px 14px", borderRadius: 10 }}>{showAllMatches ? "Показать первые 30" : "Показать больше матчей"}</button>}
       <div className="tableWrap cutover-match-table"><table className="table">
         <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th>{writesEnabled && <th>Изменить прогноз</th>}</tr></thead>
-        <tbody>{(showAllMatches ? (matchFilter === "all" ? schedule : schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now())) : (matchFilter === "all" ? schedule : schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now())).slice(0, 30)).map(m => <tr key={m.match_id}>
+        <tbody>{displayedSchedule.map(m => <tr key={m.match_id}>
           <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}</td>
           <td><div className="cutover-match-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div></td>
           <td><span className={m.home_pred !== null && m.away_pred !== null ? "cutover-score has-prediction" : "cutover-score"}>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</span></td>
@@ -552,7 +555,31 @@ export default function CutoverParticipantPage() {
             <button type="button" disabled={busy} onClick={() => void savePrediction(m)} className="cutover-save">{savedMatchId === m.match_id ? "✓ Сохранено" : "Сохранить"}</button>
           </div> : "Закрыто"}</td>}
         </tr>)}</tbody>
-      </table></div></section>}
+      </table></div>
+      <div className="cutover-mobile-match-list" aria-label="Матчи — мобильный вид">
+        {displayedSchedule.map(m => <article className="cutover-mobile-match" key={m.match_id}>
+          <div className="cutover-mobile-date">{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Дата не назначена"}</div>
+          <div className="cutover-mobile-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div>
+          <div className="cutover-mobile-scoreline">
+            <div><span>Мой прогноз</span><strong>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</strong></div>
+            <div><span>Результат</span><strong>{m.home_score ?? "—"} : {m.away_score ?? "—"}</strong></div>
+          </div>
+          {writesEnabled && (m.predictions_open ? <div className="cutover-mobile-editor">
+            <span className="cutover-mobile-field-label">Изменить прогноз</span>
+            <div className="cutover-mobile-edit-controls">
+              <input aria-label={`Голы хозяев: ${m.home_team || "команда"}`} inputMode="numeric" type="number" min="0" max="99"
+                value={(drafts[m.match_id] ?? { home: String(m.home_pred ?? ""), away: String(m.away_pred ?? "") }).home}
+                onChange={e => setDrafts(prev => ({ ...prev, [m.match_id]: { home: e.target.value, away: (prev[m.match_id]?.away ?? String(m.away_pred ?? "")) } }))} />
+              <span aria-hidden="true">:</span>
+              <input aria-label={`Голы гостей: ${m.away_team || "команда"}`} inputMode="numeric" type="number" min="0" max="99"
+                value={(drafts[m.match_id] ?? { home: String(m.home_pred ?? ""), away: String(m.away_pred ?? "") }).away}
+                onChange={e => setDrafts(prev => ({ ...prev, [m.match_id]: { home: (prev[m.match_id]?.home ?? String(m.home_pred ?? "")), away: e.target.value } }))} />
+              <button type="button" disabled={busy} onClick={() => void savePrediction(m)} className="cutover-save">{savedMatchId === m.match_id ? "✓ Сохранено" : "Сохранить"}</button>
+            </div>
+          </div> : <div className="cutover-mobile-closed">Приём прогнозов закрыт</div>)}
+        </article>)}
+      </div>
+      </section>}
       {activeTab === "mine" && <section className="cutover-content cutover-my-predictions"><div className="cutover-section-heading"><div><span>ЛИЧНАЯ СТАТИСТИКА</span><h2>Мои прогнозы <em>{predictions.length}</em></h2></div><p>Все твои прогнозы и результаты</p></div>
       <div className="tableWrap cutover-personal-table"><table className="table" style={{ minWidth: 500 }}>
         <thead><tr><th>Матч</th><th>Прогноз</th><th>Результат</th></tr></thead>
@@ -561,7 +588,16 @@ export default function CutoverParticipantPage() {
           <td>{p.home_pred ?? "—"} : {p.away_pred ?? "—"}</td>
           <td>{p.home_score ?? "—"} : {p.away_score ?? "—"}</td>
         </tr>)}</tbody>
-      </table></div></section>}
+      </table></div>
+      <div className="cutover-mobile-personal-list" aria-label="Мои прогнозы — мобильный вид">
+        {predictions.map(p => <article className="cutover-mobile-match" key={p.match_id}>
+          <div className="cutover-mobile-teams"><strong>{p.home_team || "?"}</strong><span>—</span><strong>{p.away_team || "?"}</strong></div>
+          <div className="cutover-mobile-scoreline">
+            <div><span>Мой прогноз</span><strong>{p.home_pred ?? "—"} : {p.away_pred ?? "—"}</strong></div>
+            <div><span>Результат</span><strong>{p.home_score ?? "—"} : {p.away_score ?? "—"}</strong></div>
+          </div>
+        </article>)}
+      </div></section>}
     </>}
   </main>;
 }
