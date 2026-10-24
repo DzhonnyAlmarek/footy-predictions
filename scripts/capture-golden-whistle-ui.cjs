@@ -49,9 +49,45 @@ async function snap(page,name){
   await page.screenshot({path:"ui-preview/"+name+".png",fullPage:true,animations:"disabled"});
   console.log("CAPTURED "+name);
 }
+
+async function captureAdminNavigationShell(browser) {
+  // Visual check of the actual admin navigation markup/styles, without opening protected /admin routes.
+  const layout = fs.readFileSync("app/admin/layout.tsx", "utf8");
+  const styles = fs.readFileSync("app/globals.css", "utf8");
+  const links = [...layout.matchAll(/\{ href: "(\/admin[^"]+)", label: "([^"]+)" \}/g)]
+    .map(([, href, label]) => ({ href, label }));
+  if (links.length < 6) throw new Error("Admin navigation links not found");
+  const escape = (v) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  const linkHtml = links.map((x) => '<a class="pill" href="' + escape(x.href) + '">' + escape(x.label) + '</a>').join("");
+  const markup = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>' +
+    styles + '</style></head><body><div class="page"><div class="adminNavShell"><nav class="adminTopNav" aria-label="Разделы администрирования">' +
+    linkHtml + '<a class="pill" href="/logout">Выйти</a></nav><span class="adminNavHint" aria-hidden="true">Листай →</span></div>' +
+    '<div class="adminContent" style="margin-top:16px"><main class="page"><h1>Админ-панель</h1><div class="pageMeta">Тестовая оболочка без подключения к базе</div></main></div></div></body></html>';
+  for (const [device, width, height] of [["desktop", 1440, 900], ["mobile", 390, 844]]) {
+    const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+    try {
+      await page.setContent(markup);
+      const layoutMetrics = await page.evaluate(() => ({
+        viewport: document.documentElement.clientWidth,
+        document: document.documentElement.scrollWidth,
+        navClient: document.querySelector(".adminTopNav").clientWidth,
+        navScroll: document.querySelector(".adminTopNav").scrollWidth,
+        hintVisible: getComputedStyle(document.querySelector(".adminNavHint")).display !== "none",
+      }));
+      console.log("ADMIN_NAV_LAYOUT " + device + " " + JSON.stringify(layoutMetrics));
+      await page.screenshot({ path: "ui-preview/" + device + "-admin-navigation-shell.png", fullPage: true });
+      if (layoutMetrics.document > layoutMetrics.viewport + 2) throw new Error("Admin page overflows viewport: " + device);
+      if (device === "mobile" && (layoutMetrics.navScroll <= layoutMetrics.navClient || !layoutMetrics.hintVisible)) {
+        throw new Error("Mobile admin scroll indicator or horizontal navigation missing");
+      }
+    } finally { await page.close(); }
+  }
+}
+
 (async()=>{
  const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
  try {
+  await captureAdminNavigationShell(browser);
   const desktop=await browser.newContext({viewport:{width:1440,height:900},deviceScaleFactor:1,reducedMotion:"reduce"});
   const mobile=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:"reduce"});
   for(const [context,prefix] of [[desktop,"desktop"],[mobile,"mobile"]]){
