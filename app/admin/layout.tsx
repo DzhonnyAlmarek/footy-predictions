@@ -41,7 +41,8 @@ export default async function AdminLayout({
 
   return (
     <div className="page">
-      <div className="adminNavShell">\n        <nav className="adminTopNav" aria-label="Разделы администрирования">
+      <div className="adminNavShell">
+        <nav className="adminTopNav" aria-label="Разделы администрирования">
         {adminLinks.map((l) => (
           <Link key={l.href} href={l.href} className="pill">
             {l.label}
@@ -51,7 +52,9 @@ export default async function AdminLayout({
         <a className="pill" href="/logout">
           Выйти
         </a>
-      </nav>
+        </nav>
+        <span className="adminNavHint" aria-hidden="true">Листай →</span>
+      </div>
 
       <div className="adminContent" style={{ marginTop: 16 }}>{children}</div>
     </div>
