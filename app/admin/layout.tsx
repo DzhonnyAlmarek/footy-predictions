@@ -41,7 +41,7 @@ export default async function AdminLayout({
 
   return (
     <div className="page">
-      <nav className="adminTopNav" aria-label="Разделы администрирования" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", maxWidth: "100%", overflowWrap: "anywhere" }}>
+      <nav className="adminTopNav" aria-label="Разделы администрирования">
         {adminLinks.map((l) => (
           <Link key={l.href} href={l.href} className="pill">
             {l.label}
@@ -53,7 +53,7 @@ export default async function AdminLayout({
         </a>
       </nav>
 
-      <div style={{ marginTop: 16 }}>{children}</div>
+      <div className="adminContent" style={{ marginTop: 16 }}>{children}</div>
     </div>
   );
 }
