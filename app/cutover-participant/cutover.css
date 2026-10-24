@@ -102,3 +102,26 @@
   .cutover-shell .cutover-admin-panel form button[type=submit]{width:100%;align-self:stretch}
   .cutover-shell .cutover-rankings .table,.cutover-shell .cutover-awards .table,.cutover-shell .cutover-grand-prix .table,.cutover-shell .cutover-personal-table .table{min-width:470px}
 }
+
+/* Mobile-first match and personal forecast cards; desktop tables remain intact. */
+.cutover-mobile-match-list,.cutover-mobile-personal-list{display:none}
+@media(max-width:760px){
+  .cutover-match-table,.cutover-personal-table{display:none}
+  .cutover-mobile-match-list,.cutover-mobile-personal-list{display:grid;gap:12px;margin-top:17px}
+  .cutover-mobile-match{display:flex;flex-direction:column;gap:14px;padding:16px;background:#fff;border:1px solid #dce8e3;border-radius:15px;box-shadow:0 3px 15px rgba(12,43,46,.05)}
+  .cutover-mobile-date{font-size:12px;text-transform:none;font-weight:800;color:#5d7970}
+  .cutover-mobile-teams{display:grid;grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr);align-items:center;text-align:center;gap:5px;padding:5px 0}
+  .cutover-mobile-teams strong{font-size:15px;line-height:1.3;color:#183c36;overflow-wrap:anywhere}
+  .cutover-mobile-teams span{color:#95a9a2;font-size:18px;font-weight:700}
+  .cutover-mobile-scoreline{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cutover-mobile-scoreline>div{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:12px;background:#f0f7f3;border-radius:11px}
+  .cutover-mobile-scoreline span{color:#55736a;font-size:11px;font-weight:700}
+  .cutover-mobile-scoreline strong{color:#19604e;font-size:17px;font-weight:900;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .cutover-mobile-editor{padding-top:14px;border-top:1px solid #e3ede7}
+  .cutover-mobile-field-label{display:block;margin-bottom:10px;font-size:12px;color:#466d5f;font-weight:800}
+  .cutover-mobile-edit-controls{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .cutover-shell .cutover-mobile-edit-controls input{width:64px;min-width:0;text-align:center;font-size:17px;font-weight:850;border-radius:9px;padding:8px 6px}
+  .cutover-mobile-edit-controls>span{font-weight:900;color:#577568}
+  .cutover-mobile-edit-controls .cutover-save{flex:1;min-height:43px}
+  .cutover-mobile-closed{font-size:12px;font-weight:700;color:#8c685c;background:#fcf4eb;border-radius:9px;padding:9px 11px}
+}
