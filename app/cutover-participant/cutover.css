@@ -62,3 +62,43 @@
 .cutover-club-copy span{font-size:12px;font-weight:650;color:#628078}
 .cutover-club-since{font-size:10px;font-weight:850;letter-spacing:.14em;color:#32735f;white-space:nowrap}
 @media(max-width:620px){.cutover-club-banner{padding:11px 12px;border-radius:12px}.cutover-club-symbol{width:34px;height:34px;flex-basis:34px;font-size:18px}.cutover-club-copy strong{font-size:13px}.cutover-club-copy span{font-size:11px}.cutover-club-since{display:none}}
+
+/* One cohesive system for the sign-in screen, player area, standings, awards, and admin. */
+.cutover-shell{--gw-ink:#143238;--gw-green:#146d56;--gw-green-soft:#e9f5ef;--gw-gold:#d8a33e;--gw-line:#dce9e5;color:var(--gw-ink)}
+.cutover-shell .cutover-content,.cutover-shell .cutover-admin-panel{background:#fff;border:1px solid var(--gw-line);border-radius:18px;padding:24px;box-shadow:0 8px 24px rgba(12,43,46,.045)}
+.cutover-shell .cutover-content .cutover-section-heading,.cutover-shell .cutover-admin-panel .cutover-section-heading{padding-bottom:15px;border-bottom:1px solid #e8eeee}
+.cutover-shell .cutover-content .tableWrap,.cutover-shell .cutover-admin-panel .tableWrap{border-radius:13px;border-color:#dfeae6;box-shadow:none;margin-top:16px}
+.cutover-shell .cutover-content .table thead th,.cutover-shell .cutover-admin-panel .table thead th{background:#eef5f2;color:#41645c;font-weight:850;letter-spacing:.045em}
+.cutover-shell .cutover-content .table tbody td,.cutover-shell .cutover-admin-panel .table tbody td{vertical-align:middle}
+.cutover-shell .cutover-content .table tbody tr:hover td,.cutover-shell .cutover-admin-panel .table tbody tr:hover td{background:#f4faf7}
+.cutover-shell .cutover-content h3,.cutover-shell .cutover-admin-panel h3{color:#204b44}
+.cutover-shell .cutover-content label,.cutover-shell .cutover-admin-panel label{color:#315149;font-size:13px;font-weight:750}
+.cutover-shell .cutover-content select,.cutover-shell .cutover-content input,.cutover-shell .cutover-admin-panel select,.cutover-shell .cutover-admin-panel input{max-width:100%;min-height:42px;background:#fff;color:#173d34;border:1px solid #ccdcd5;border-radius:10px;padding:8px 10px}
+.cutover-shell .cutover-admin-panel>h2{padding-top:22px;margin:23px 0 14px;border-top:1px solid #e5eeea;color:#153e35;font-size:20px;letter-spacing:-.03em}
+.cutover-shell .cutover-admin-panel>h2:first-of-type{margin-top:12px;padding-top:0;border-top:0}
+.cutover-shell .cutover-admin-panel form{background:#f7faf8;border:1px solid #e3eee8;border-radius:13px;padding:16px;margin-bottom:14px!important}
+.cutover-shell .cutover-admin-panel form label{display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:180px;flex:1}
+.cutover-shell .cutover-admin-panel form button[type=submit]{border:0;border-radius:10px;min-height:43px;padding:10px 15px;background:var(--gw-green);color:#fff;font-weight:800;align-self:flex-end}
+.cutover-shell .cutover-admin-panel form button[type=submit]:hover:not(:disabled){background:#0d5543}
+.cutover-admin-summary{display:flex;gap:9px;flex-wrap:wrap;padding:13px 0 3px}
+.cutover-admin-summary span{background:var(--gw-green-soft);color:#23604d;border:1px solid #d7eadd;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:800}
+.cutover-shell .cutover-place{display:inline-grid;place-items:center;min-width:29px;height:29px;margin-right:10px;border-radius:9px;background:#e8f0ee;color:#2d6354;font-size:13px;font-weight:900}
+.cutover-shell .cutover-points{font-weight:900;font-size:18px;color:#15654f;font-variant-numeric:tabular-nums}
+.cutover-shell .cutover-own-row td{background:#eaf6ef!important}
+.cutover-self-badge{display:inline-block;margin-left:9px;background:#d2ead8;border-radius:999px;padding:3px 8px;font-size:10px;color:#196249;font-weight:900}
+.cutover-shell .cutover-awards,.cutover-shell .cutover-grand-prix{background:linear-gradient(180deg,#fffaf1 0,#fff 135px);border-color:#f0e1bb}
+.cutover-shell .cutover-awards .cutover-section-heading span,.cutover-shell .cutover-grand-prix .cutover-section-heading span{color:#997026}
+.cutover-shell .cutover-awards .cutover-section-heading h2 span,.cutover-shell .cutover-grand-prix .cutover-section-heading h2 span{font-size:22px}
+.cutover-shell .cutover-grand-prix h3{padding:12px 16px;background:#f5f9f6;border:1px solid #e4eee8;border-radius:11px;margin-top:19px;font-size:16px}
+.cutover-shell .cutover-my-predictions .table{min-width:500px}
+.cutover-shell .cutover-match-table .table{min-width:780px}
+.cutover-shell .cutover-login{background:linear-gradient(180deg,#fff,#f8fbf9);border-color:#dbe8e2}
+.cutover-shell .cutover-login button[type=submit]:hover:not(:disabled){background:#0a5745}
+@media(max-width:760px){
+  .cutover-shell .cutover-content,.cutover-shell .cutover-admin-panel{padding:15px;border-radius:14px}
+  .cutover-shell .cutover-content h2,.cutover-shell .cutover-admin-panel .cutover-section-heading h2{font-size:23px}
+  .cutover-shell .cutover-admin-panel form{padding:12px}
+  .cutover-shell .cutover-admin-panel form label{min-width:100%}
+  .cutover-shell .cutover-admin-panel form button[type=submit]{width:100%;align-self:stretch}
+  .cutover-shell .cutover-rankings .table,.cutover-shell .cutover-awards .table,.cutover-shell .cutover-grand-prix .table,.cutover-shell .cutover-personal-table .table{min-width:470px}
+}
