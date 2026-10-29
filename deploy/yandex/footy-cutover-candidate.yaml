@@ -1,6 +1,6 @@
 # Isolated Yandex Cloud candidate revision (saved configuration)
 # This file contains no database credentials or passwords.
-# Last manually reviewed: 2026-10-23
+# Draft reviewed: 2026-10-29; NOT APPROVED FOR DEPLOYMENT
 container_id: bbaquq5i6l35i5kbiufb
 container_name: footy-cutover-candidate
 folder_id: b1gtdrn5t149v0ckl6ql
@@ -16,9 +16,14 @@ resources:
 environment:
   NODE_ENV: production
   DEPLOY_TARGET: yandex-neon-production-candidate
+  ENABLE_CUTOVER_PRODUCTION_CANDIDATE: "true"
   ENABLE_CUTOVER_PREVIEW: "true"
   ENABLE_CUTOVER_AUTH: "true"
   ENABLE_CUTOVER_LOGIN: "true"
+  CUTOVER_AUTH_ALLOWED_HOST: ep-divine-rain-b1d1r892.c-5.eu-central-1.aws.neon.tech
+  # Must be replaced with verified candidate-only HTTPS origin before deployment.
+  CUTOVER_AUTH_ORIGIN: "https://REPLACE-WITH-VERIFIED-CANDIDATE-HOST.invalid"
+  CUTOVER_SHOW_TEST_MATCHES: "false"
   ENABLE_CUTOVER_PREDICTION_WRITES: "false"
   ENABLE_CUTOVER_ADMIN_WRITES: "false"
   ENABLE_CUTOVER_RESULT_WRITES: "false"
@@ -28,8 +33,10 @@ lockbox:
   bindings:
     CUTOVER_AUTH_DATABASE_URL: CUTOVER_AUTH_DATABASE_URL
     CUTOVER_RATE_PEPPER: CUTOVER_RATE_PEPPER
+# Outbound connectivity to Neon must be verified before deployment.
 network: none
 public_access: false
+# Public access requires a separate explicit approval after successful smoke tests.
 logging: enabled
 async_invocation: false
 # The secret's Neon hostname was manually verified by the user:
