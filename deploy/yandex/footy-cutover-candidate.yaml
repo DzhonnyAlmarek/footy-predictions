@@ -22,7 +22,7 @@ environment:
   ENABLE_CUTOVER_LOGIN: "true"
   CUTOVER_AUTH_ALLOWED_HOST: ep-divine-rain-b1d1r892.c-5.eu-central-1.aws.neon.tech
   # Must be replaced with verified candidate-only HTTPS origin before deployment.
-  CUTOVER_AUTH_ORIGIN: "https://REPLACE-WITH-VERIFIED-CANDIDATE-HOST.invalid"
+  CUTOVER_AUTH_ORIGIN: "https://bbaquq5i6l35i5kbiufb.containers.yandexcloud.net"
   CUTOVER_SHOW_TEST_MATCHES: "false"
   ENABLE_CUTOVER_PREDICTION_WRITES: "false"
   ENABLE_CUTOVER_ADMIN_WRITES: "false"
