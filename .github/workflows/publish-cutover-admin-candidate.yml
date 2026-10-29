@@ -79,8 +79,22 @@ jobs:
           set -euo pipefail
           IMAGE="registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate:${GITHUB_SHA}"
           docker tag footy-cutover-admin:local "$IMAGE"
-          docker push "$IMAGE"
-          echo "Uploaded image $IMAGE"
+          # Retry transient registry failures without rebuilding the image.
+          for attempt in 1 2 3; do
+            echo "Docker push attempt ${attempt}/3"
+            if docker push "$IMAGE" > /tmp/footy-push.log 2>&1; then
+              cat /tmp/footy-push.log
+              echo "Uploaded image $IMAGE"
+              break
+            fi
+            cat /tmp/footy-push.log
+            if [[ "$attempt" == "3" ]] || ! grep -Eqi '503 Service Unavailable|502 Bad Gateway|504 Gateway Timeout|429 Too Many Requests|connection reset|timeout' /tmp/footy-push.log; then
+              echo "Docker push failed; not retrying further" >&2
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
+          rm -f /tmp/footy-push.log
           echo "No container revision deployed."
       - name: Logout
         if: always()
