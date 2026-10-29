@@ -21,11 +21,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 413, headers: CUTOVER_HEADERS });
   }
   try {
-    const input = await request.text();
-    if (Buffer.byteLength(input, "utf8") > 4096) {
-      return NextResponse.json({ ok: false }, { status: 413, headers: CUTOVER_HEADERS });
+    // Stop reading at 4 KiB, including when Content-Length is absent.
+    const reader = request.body?.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    if (reader) {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          bytes += value.byteLength;
+          if (bytes > 4096) {
+            await reader.cancel();
+            return NextResponse.json({ ok: false }, { status: 413, headers: CUTOVER_HEADERS });
+          }
+          chunks.push(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
     }
-    const body = JSON.parse(input);
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     const username = typeof body?.username === "string" ? body.username.trim() : "";
     const password = body?.password;
     if (!username || username.length > 100 || typeof password !== "string" ||
