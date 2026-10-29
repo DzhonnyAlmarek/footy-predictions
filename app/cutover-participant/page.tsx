@@ -336,7 +336,7 @@ export default function CutoverParticipantPage() {
     </div>
     <header className="cutover-hero">
       <div><div className="cutover-eyebrow">● КЛУБ ФУТБОЛЬНЫХ ПРОГНОЗОВ</div>
-        <h1>Golden <span>Whistle</span> <small aria-hidden="true">⚽</small></h1>
+        <h1>Клуб им. А.Н. Мурашева <small aria-hidden="true">⚽</small></h1>
         <p>Твой матч. Твой прогноз. Твоя история побед.</p>
       </div>
       <div className="cutover-hero-aside"><span>СЕЗОН ПРОГНОЗОВ</span><strong>Играй точно.</strong><small>Изолированная версия · Neon</small></div>
