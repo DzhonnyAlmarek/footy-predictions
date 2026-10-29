@@ -75,7 +75,7 @@ jobs:
                 | select(has("role_id") or has("roleId"))
                 | [(.role_id // .roleId), (.subject.id // .subject_id // .subjectId // "unknown")]
                 | @tsv
-              ' /tmp/footy-bindings.json | grep -E '^(serverless-containers\.editor|iam\.serviceAccounts\.user|container-registry\.images\.puller|lockbox\.payloadViewer|lockbox\.viewer|kms\.keys\.encrypterDecrypter)[[:space:]]' || true
+              ' /tmp/footy-bindings.json | grep -E '^(serverless-containers\.editor|functions\.editor|iam\.serviceAccounts\.user|container-registry\.images\.puller|lockbox\.payloadViewer|lockbox\.viewer|kms\.keys\.encrypterDecrypter)[[:space:]]' || true
             else
               echo "$label: BINDINGS_UNREADABLE (not evidence of missing roles)"
               grep -E 'PermissionDenied|Unauthenticated|request.id|ERROR' /tmp/footy-bindings.err | tail -n 3 || true
