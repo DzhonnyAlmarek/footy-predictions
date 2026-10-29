@@ -33,6 +33,7 @@ jobs:
           grep -q 'ENABLE_CUTOVER_ADMIN_WRITES: "false"' deploy/yandex/footy-cutover-candidate.yaml
           grep -q 'ENABLE_CUTOVER_PREDICTION_WRITES: "false"' deploy/yandex/footy-cutover-candidate.yaml
           grep -q 'ENABLE_CUTOVER_RESULT_WRITES: "false"' deploy/yandex/footy-cutover-candidate.yaml
+          node scripts/preflight-footy-candidate.mjs
       - name: Request GitHub OIDC token
         id: oidc
         uses: actions/github-script@v7
@@ -95,9 +96,13 @@ jobs:
             --execution-timeout 30s --concurrency 1 \
             --environment NODE_ENV=production \
             --environment DEPLOY_TARGET=yandex-neon-production-candidate \
+            --environment ENABLE_CUTOVER_PRODUCTION_CANDIDATE=true \
             --environment ENABLE_CUTOVER_PREVIEW=true \
             --environment ENABLE_CUTOVER_AUTH=true \
             --environment ENABLE_CUTOVER_LOGIN=true \
+            --environment CUTOVER_AUTH_ALLOWED_HOST=ep-divine-rain-b1d1r892.c-5.eu-central-1.aws.neon.tech \
+            --environment CUTOVER_AUTH_ORIGIN="$(sed -n 's/^  CUTOVER_AUTH_ORIGIN: "\(.*\)"$/\1/p' deploy/yandex/footy-cutover-candidate.yaml)" \
+            --environment CUTOVER_SHOW_TEST_MATCHES=false \
             --environment ENABLE_CUTOVER_PREDICTION_WRITES=false \
             --environment ENABLE_CUTOVER_ADMIN_WRITES=false \
             --environment ENABLE_CUTOVER_RESULT_WRITES=false \
