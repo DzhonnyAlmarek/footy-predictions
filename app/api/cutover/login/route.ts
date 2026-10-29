@@ -20,7 +20,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 413, headers: CUTOVER_HEADERS });
   }
   try {
-    const body = await request.json();
+    const input = await request.text();
+    if (Buffer.byteLength(input, "utf8") > 4096) {
+      return NextResponse.json({ ok: false }, { status: 413, headers: CUTOVER_HEADERS });
+    }
+    const body = JSON.parse(input);
     const username = typeof body?.username === "string" ? body.username.trim() : "";
     const password = body?.password;
     if (!username || username.length > 100 || typeof password !== "string" ||
