@@ -95,14 +95,21 @@ jobs:
           fi
           rm -f /tmp/footy-secret-metadata.json
           echo "::endgroup::"
-          echo "::group::Published candidate image (read only)"
-          if "$YC" container image list --registry-id crpocq57tud830bhe7ck --format json > /tmp/footy-image-metadata.json 2> /tmp/footy-image.err; then
-            echo "Candidate image metadata: READ_OK"
-            jq -r '.[] | select((.tags // []) | index("244adfa8eb4158f73ff14f0449585d2656af1ecf")) | [.id, (.digest // "unknown")] | @tsv' /tmp/footy-image-metadata.json
-          else
-            echo "Candidate image metadata: UNAVAILABLE"
-            tail -n 4 /tmp/footy-image.err
-          fi
+          echo "::group::Candidate image tags (read only)"
+          # Only metadata queries. No pull, push, deploy, or resource changes.
+          for image_tag in \
+            eb584d5735678f0808d1ce9e3280f2e7a33ab144 \
+            c68122ad71e929d4f92648f290eabb5dd39d1307; do
+            if "$YC" container image get \
+              --name "crpocq57tud830bhe7ck/footy-cutover-candidate:${image_tag}" \
+              --format json > /tmp/footy-image-metadata.json 2> /tmp/footy-image.err; then
+              echo "Image tag ${image_tag}: FOUND"
+              jq -r '[.id // "unknown", .digest // "unknown"] | @tsv' /tmp/footy-image-metadata.json
+            else
+              echo "Image tag ${image_tag}: NOT_VERIFIED (could be absent or access restricted)"
+              grep -E 'PermissionDenied|Unauthenticated|NotFound|request.id|ERROR' /tmp/footy-image.err | tail -n 2 || true
+            fi
+          done
           rm -f /tmp/footy-image-metadata.json /tmp/footy-image.err
           echo "::endgroup::"
           echo "::group::Referenced Lockbox version metadata (read only)"
