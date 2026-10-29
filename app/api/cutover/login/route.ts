@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHmac } from "node:crypto";
+import { isIP } from "node:net";
 import { neon } from "@neondatabase/serverless";
 import { verifyParticipantPassword } from "@/lib/participant-auth";
 import { createOpaqueToken } from "@/lib/participant-auth-tokens";
@@ -46,6 +47,31 @@ export async function POST(request: Request) {
         THEN now() ELSE cutover_auth.login_rate_limits.window_started_at END
       RETURNING attempts
     `;
+    // On the direct Yandex Serverless Containers HTTPS endpoint the gateway
+    // appends the invoking client's IP to X-Forwarded-For. Earlier entries
+    // are client-supplied and MUST NOT be used for security decisions.
+    if (process.env.DEPLOY_TARGET === "yandex-neon-production-candidate") {
+      const ip = request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim();
+      if (!ip || !isIP(ip)) {
+        return NextResponse.json({ ok: false, error: "source_unavailable" },
+          { status: 503, headers: CUTOVER_HEADERS });
+      }
+      const sourceHash = createHmac("sha256", pepper).update("ip:" + ip).digest("hex");
+      const sourceAttempts = await sql`
+        INSERT INTO cutover_auth.login_rate_limits (subject_hash, attempts, window_started_at)
+        VALUES (decode(${sourceHash}, 'hex'), 1, now())
+        ON CONFLICT (subject_hash) DO UPDATE
+        SET attempts = CASE WHEN cutover_auth.login_rate_limits.window_started_at < now() - interval '15 minutes'
+          THEN 1 ELSE cutover_auth.login_rate_limits.attempts + 1 END,
+          window_started_at = CASE WHEN cutover_auth.login_rate_limits.window_started_at < now() - interval '15 minutes'
+          THEN now() ELSE cutover_auth.login_rate_limits.window_started_at END
+        RETURNING attempts
+      `;
+      if (Number(sourceAttempts[0]?.attempts) > 30) {
+        return NextResponse.json({ ok: false, error: "too_many_attempts" },
+          { status: 429, headers: CUTOVER_HEADERS });
+      }
+    }
     if (Number(attempts[0]?.attempts) > 5) {
       return NextResponse.json({ ok: false, error: "too_many_attempts" },
         { status: 429, headers: CUTOVER_HEADERS });
