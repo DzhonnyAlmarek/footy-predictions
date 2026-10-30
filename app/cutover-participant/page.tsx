@@ -392,7 +392,7 @@ export default function CutoverParticipantPage() {
       <h2>Обязательная смена временного пароля</h2>
       <p>Установи собственный пароль. После смены нужно войти заново.</p>
       <label>Временный пароль <input type="password" autoComplete="current-password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
-      <label>Новый пароль <input type="password" autoComplete="new-password" required minLength={5} maxLength={128} value={newPassword} onChange={e => setNewPassword(e.target.value)} /></label>
+      <label>Новый пароль <input type="password" autoComplete="new-password" required minLength={5} maxLength={128} value={newPassword} onChange={e => setNewPassword(e.target.value)} aria-describedby="cutover-password-hint" /><small id="cutover-password-hint" style={{ display: "block", marginTop: 6, color: "#526475" }}>Не менее 5 символов.</small></label>
       <label>Повтори пароль <input type="password" autoComplete="new-password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></label>
       <button type="submit" disabled={busy}>Изменить пароль</button>
       <button type="button" onClick={() => void logout()} disabled={busy}>Выйти</button>
