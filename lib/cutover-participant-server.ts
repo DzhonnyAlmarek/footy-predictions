@@ -56,7 +56,9 @@ export async function authenticatedCutoverIdentity(token: unknown): Promise<Cuto
 
 export async function authenticatedCutoverParticipant(token: unknown): Promise<string | null> {
   const identity = await authenticatedCutoverIdentity(token);
-  return identity?.userId ?? null;
+  if (!identity) return null;
+  const rows = await cutoverAuthDatabase()`SELECT must_change_password FROM cutover_auth.participant_credentials WHERE user_id=${identity.userId}::uuid`;
+  return rows[0]?.must_change_password === true ? null : identity.userId;
 }
 
 export async function cutoverOwnPredictions(userId: string) {
