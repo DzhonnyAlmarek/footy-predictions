@@ -19,6 +19,12 @@ export default function CutoverParticipantPage() {
   const [username, setUsername] = useState("");
   const [participants, setParticipants] = useState<string[]>([]);
   const [password, setPassword] = useState("");
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetUsername, setResetUsername] = useState("");
+  const [resetTemporaryPassword, setResetTemporaryPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -48,10 +54,11 @@ export default function CutoverParticipantPage() {
 
   async function load() {
     const session = await fetch("/api/cutover/session", { cache: "no-store" });
-    if (!session.ok) { setSessionUsername(""); setAuthenticated(false); setIsAdmin(false); setAdminData(null); setMessage("Войди, чтобы увидеть свои прогнозы."); return; }
+    if (!session.ok) { setSessionUsername(""); setAuthenticated(false); setIsAdmin(false); setMustChangePassword(false); setAdminData(null); setMessage("Войди, чтобы увидеть свои прогнозы."); return; }
     const sessionData = await session.json();
     setSessionUsername(typeof sessionData.username === "string" ? sessionData.username : "");
     setIsAdmin(sessionData.role === "admin");
+    setMustChangePassword(sessionData.must_change_password === true);
     if (sessionData.role !== "admin") {
       setAdminData(null);
       setAdminWritesEnabled(false);
@@ -135,6 +142,36 @@ export default function CutoverParticipantPage() {
       if (!response.ok) { setMessage(response.status === 429 ? "Слишком много попыток входа. Подожди 15 минут, не повторяя попытки." : response.status === 401 ? "Неверный логин или пароль." : "Вход временно недоступен. Попробуй позже."); return; }
       await load();
     } catch { setMessage("Не удалось подключиться."); }
+    finally { setBusy(false); }
+  }
+  async function changePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (newPassword !== confirmPassword) { setMessage("Новые пароли не совпадают."); return; }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/change-password", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+      });
+      if (!response.ok) { setMessage("Пароль не изменён. Проверь текущий пароль и длину нового (5–128 символов)."); return; }
+      setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+      setMustChangePassword(false); setAuthenticated(false);
+      setMessage("Пароль изменён. Войди с новым паролем.");
+    } catch { setMessage("Не удалось изменить пароль."); }
+    finally { setBusy(false); }
+  }
+  async function resetParticipantPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin/reset-password", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: resetUsername, temporary_password: resetTemporaryPassword })
+      });
+      if (!response.ok) { setMessage("Не удалось сбросить пароль участника."); return; }
+      setResetTemporaryPassword("");
+      setMessage("Пароль участника сброшен. Передай ему временный пароль безопасным способом.");
+    } catch { setMessage("Сброс пароля временно недоступен."); }
     finally { setBusy(false); }
   }
   async function savePrediction(m: Prediction) {
@@ -295,6 +332,7 @@ export default function CutoverParticipantPage() {
       setPassword("");
       setActiveTab("schedule");
       setIsAdmin(false);
+      setMustChangePassword(false);
       setAdminData(null);
       setAdminWritesEnabled(false);
       setResultWritesEnabled(false);
@@ -350,6 +388,14 @@ export default function CutoverParticipantPage() {
       <label>Пароль <input type="password" value={password}
         onChange={e => setPassword(e.target.value)} autoComplete="current-password" required /></label>
       <button type="submit" disabled={busy}>Войти</button>
+    </form> : mustChangePassword ? <form onSubmit={changePassword} className="card cutover-login" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}>
+      <h2>Обязательная смена временного пароля</h2>
+      <p>Установи собственный пароль. После смены нужно войти заново.</p>
+      <label>Временный пароль <input type="password" autoComplete="current-password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
+      <label>Новый пароль <input type="password" autoComplete="new-password" required minLength={5} maxLength={128} value={newPassword} onChange={e => setNewPassword(e.target.value)} /></label>
+      <label>Повтори пароль <input type="password" autoComplete="new-password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></label>
+      <button type="submit" disabled={busy}>Изменить пароль</button>
+      <button type="button" onClick={() => void logout()} disabled={busy}>Выйти</button>
     </form> : <>
       <nav aria-label="Разделы кабинета" className="card cutover-navigation">
         {([["schedule", "Прогнозы"], ["archive", "Архив"], ["analytics", "Аналитика"], ["ranking", "Текущая таблица"], ["golden-boot", "Бутса"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
@@ -369,6 +415,15 @@ export default function CutoverParticipantPage() {
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
         <div className="cutover-section-heading"><div><span>УПРАВЛЕНИЕ ТУРНИРОМ</span><h2>Панель администратора</h2></div><p>Матчи, туры и результаты — в одном месте</p></div>
         <div className="cutover-admin-summary"><span>Участники: {participants.length}</span><span>Матчи: {adminData.matches.length}</span><span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span></div>
+        <h2>Сброс временного пароля участника</h2>
+        <form onSubmit={resetParticipantPassword} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
+          <label>Участник <select required value={resetUsername} onChange={e => setResetUsername(e.target.value)}>
+            <option value="">Выбери участника</option>
+            {participants.filter(name => name.toUpperCase() !== "ADMIN").map(name => <option key={name} value={name}>{name}</option>)}
+          </select></label>
+          <label>Временный пароль <input required type="password" minLength={5} maxLength={128} autoComplete="new-password" value={resetTemporaryPassword} onChange={e => setResetTemporaryPassword(e.target.value)} /></label>
+          <button type="submit" disabled={busy}>Сбросить пароль</button>
+        </form>
         <h2>Новый тур в существующем этапе</h2>
         <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Этап <select required value={tourForm.stage_id}
