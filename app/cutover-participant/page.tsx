@@ -59,6 +59,17 @@ export default function CutoverParticipantPage() {
     setSessionUsername(typeof sessionData.username === "string" ? sessionData.username : "");
     setIsAdmin(sessionData.role === "admin");
     setMustChangePassword(sessionData.must_change_password === true);
+    // Temporary credentials must be changed before loading predictions.
+    // The prediction API deliberately refuses these sessions.
+    if (sessionData.must_change_password === true) {
+      setAuthenticated(true);
+      setPredictions([]);
+      setSchedule([]);
+      setWritesEnabled(false);
+      setAdminData(null);
+      setMessage("Установи новый пароль, чтобы продолжить.");
+      return;
+    }
     if (sessionData.role !== "admin") {
       setAdminData(null);
       setAdminWritesEnabled(false);
