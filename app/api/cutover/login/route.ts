@@ -93,7 +93,7 @@ export async function POST(request: Request) {
         { status: 429, headers: CUTOVER_HEADERS });
     }
     const rows = await sql`
-      SELECT p.id, encode(c.password_salt, 'hex') AS salt, encode(c.password_hash, 'hex') AS digest
+      SELECT p.id, c.must_change_password, encode(c.password_salt, 'hex') AS salt, encode(c.password_hash, 'hex') AS digest
       FROM footy_cutover.profiles p
       JOIN cutover_auth.participant_credentials c ON c.user_id=p.id
       WHERE p.username=${username} AND c.enabled=true LIMIT 2
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
       INSERT INTO cutover_auth.participant_sessions(session_hash,user_id,expires_at)
       VALUES (decode(${tokenHash}, 'hex'), ${rows[0].id}::uuid, now() + interval '4 hours')
     `;
-    const response = NextResponse.json({ ok: true }, { headers: CUTOVER_HEADERS });
+    const response = NextResponse.json({ ok: true, must_change_password: rows[0].must_change_password === true }, { headers: CUTOVER_HEADERS });
     response.cookies.set(CUTOVER_COOKIE, token, {
       httpOnly: true, secure: true, sameSite: "strict", path: "/", maxAge: 14400
     });
