@@ -258,3 +258,8 @@
 /* Mock #2's tapered brush stroke, not a rectangle or linear underline. */
 .cutover-club-copy strong::after{left:0!important;bottom:0!important;width:100%!important;height:11px!important;background:#46ad17!important;clip-path:polygon(0 94%,4% 65%,14% 39%,32% 16%,49% 5%,66% 19%,83% 47%,100% 83%,100% 93%,76% 75%,53% 67%,31% 69%,12% 85%,0 100%)!important}
 @media(max-width:760px){.cutover-club-copy strong::after{height:7px!important}}
+
+/* Final optical adjustments from the approved visual comparison. */
+.cutover-hero-content h1{position:relative;left:-10px!important}
+.cutover-club-copy strong::after{width:64%!important;height:13px!important;bottom:-1px!important;background:#45ad13!important;clip-path:polygon(0 96%,5% 70%,16% 41%,30% 19%,46% 8%,62% 13%,78% 32%,94% 58%,100% 77%,82% 69%,62% 57%,42% 54%,22% 64%,8% 84%,0 100%)!important}
+@media(max-width:760px){.cutover-hero-content h1{left:-6px!important}.cutover-club-copy strong::after{height:8px!important;width:66%!important}}
