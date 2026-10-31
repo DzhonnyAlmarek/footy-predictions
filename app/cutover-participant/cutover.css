@@ -312,3 +312,7 @@
 .cutover-club-ball-photo::after{content:none!important}
 @media(max-width:760px){.cutover-club-ball-photo::before{font-size:39px}}
 @media(max-width:460px){.cutover-club-ball-photo::before{font-size:34px}}
+
+/* Classic monochrome SVG football overrides old emoji/photo styles. */
+svg.cutover-club-ball-photo{background:none!important;background-image:none!important;border:0!important;box-shadow:none!important;overflow:visible!important;display:block!important}
+svg.cutover-club-ball-photo::before,svg.cutover-club-ball-photo::after{content:none!important}
