@@ -20,7 +20,6 @@ export default function CutoverParticipantPage() {
   const [participants, setParticipants] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [mustChangePassword, setMustChangePassword] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetUsername, setResetUsername] = useState("");
@@ -186,10 +185,10 @@ export default function CutoverParticipantPage() {
     try {
       const response = await fetch("/api/cutover/change-password", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+        body: JSON.stringify({ new_password: newPassword })
       });
       if (!response.ok) { setMessage("Пароль не изменён. Проверь текущий пароль и длину нового (5–128 символов)."); return; }
-      setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+       setNewPassword(""); setConfirmPassword("");
       setMustChangePassword(false); setAuthenticated(false);
       setMessage("Пароль изменён. Войди с новым паролем.");
     } catch { setMessage("Не удалось изменить пароль."); }
@@ -434,7 +433,7 @@ export default function CutoverParticipantPage() {
     </form> : mustChangePassword ? <form onSubmit={changePassword} className="card cutover-login" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}>
       <h2>Обязательная смена временного пароля</h2>
       <p style={{ fontWeight: 700, marginTop: 4 }}>Участник: {sessionUsername || "Не определён"}</p>
-      <p>Можешь установить новый пароль или оставить временный. Чтобы оставить прежний, введи его во все три поля. После подтверждения нужно войти заново.</p>
+      <p>Введи новый постоянный пароль и повтори его. После подтверждения нужно войти заново.</p>
       <label>Временный пароль <input type="password" autoComplete="current-password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
       <label>Новый пароль <input type="password" autoComplete="new-password" required minLength={5} maxLength={128} value={newPassword} onChange={e => setNewPassword(e.target.value)} aria-describedby="cutover-password-hint" /><small id="cutover-password-hint" style={{ display: "block", marginTop: 6, color: "#526475" }}>Не менее 5 символов.</small></label>
       <label>Повтори пароль <input type="password" autoComplete="new-password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></label>
