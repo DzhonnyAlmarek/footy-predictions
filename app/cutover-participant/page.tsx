@@ -210,7 +210,7 @@ export default function CutoverParticipantPage() {
       setResetLink(result.reset_link);
       setResetCompletedFor(resetUsername);
       setMessage("Одноразовая ссылка создана. Передай её участнику. Она действительна 24 часа.");
-    } catch { setResetTemporaryPassword(""); setResetCompletedFor(""); setMessage("Сброс пароля временно недоступен."); }
+    } catch { setResetLink(""); setResetCompletedFor(""); setMessage("Сброс пароля временно недоступен."); }
     finally { setBusy(false); }
   }
   async function savePrediction(m: Prediction) {
@@ -464,7 +464,7 @@ export default function CutoverParticipantPage() {
         <div className="cutover-admin-summary"><span>Участники: {participants.length}</span><span>Матчи: {adminData.matches.length}</span><span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span></div>
         <h2>Сброс временного пароля участника</h2>
         <form onSubmit={resetParticipantPassword} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
-          <label>Участник <select required value={resetUsername} onChange={e => { setResetUsername(e.target.value); setResetTemporaryPassword(""); setResetCompletedFor(""); }}>
+          <label>Участник <select required value={resetUsername} onChange={e => { setResetUsername(e.target.value); setResetLink(""); setResetCompletedFor(""); }}>
             <option value="">Выбери участника</option>
             {participants.filter(name => name.toUpperCase() !== "ADMIN").map(name => <option key={name} value={name}>{name}</option>)}
           </select></label>
@@ -476,7 +476,7 @@ export default function CutoverParticipantPage() {
           <p><code style={{ fontSize: "1.1em", userSelect: "all" }}>{resetLink}</code></p>
           <button type="button" onClick={() => void navigator.clipboard.writeText(resetLink)}>Скопировать ссылку</button>
           <p>Отправь ссылку участнику. При открытии он один раз увидит временный пароль и сможет установить постоянный. Срок действия ссылки — 24 часа.</p>
-          <button type="button" onClick={() => { setResetTemporaryPassword(""); setResetCompletedFor(""); }}>Скрыть ссылку</button>
+          <button type="button" onClick={() => { setResetLink(""); setResetCompletedFor(""); }}>Скрыть ссылку</button>
         </div>}
         <h2>Новый тур в существующем этапе</h2>
         <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
