@@ -1,3 +1,32 @@
+
+/* Approved typography pairing: option 2 athletic masthead + option 4 retro football slogan. */
+@import url("https://fonts.googleapis.com/css2?family=Russo+One&family=Rubik+Mono+One&display=swap");
+.cutover-club-copy strong{
+  font-family:"Russo One",Impact,"Arial Black",sans-serif;
+  font-weight:400;
+  font-style:italic;
+  text-transform:uppercase;
+  letter-spacing:-.025em;
+  font-size:clamp(18px,2.1vw,29px);
+  line-height:1.17;
+}
+.cutover-hero h1{
+  font-family:"Rubik Mono One","Russo One",Impact,"Arial Black",sans-serif;
+  font-weight:400;
+  font-style:italic;
+  letter-spacing:-.065em;
+  font-size:clamp(34px,4.4vw,60px);
+  line-height:1.12;
+  text-shadow:2px 3px 0 rgba(0,25,19,.27);
+}
+@media(max-width:760px){
+  .cutover-club-copy strong{font-size:clamp(14px,2.8vw,21px)}
+  .cutover-hero h1{font-size:clamp(30px,5vw,44px)}
+}
+@media(max-width:460px){
+  .cutover-club-copy strong{font-size:clamp(14px,4vw,18px)}
+  .cutover-hero h1{font-size:clamp(25px,6.6vw,36px);overflow-wrap:break-word}
+}
 /* Scoped styles for the isolated Golden Whistle participant experience. */
 .cutover-shell{max-width:1180px!important;padding-top:26px;padding-bottom:80px}
 .cutover-shell button,.cutover-shell input,.cutover-shell select{font:inherit}
