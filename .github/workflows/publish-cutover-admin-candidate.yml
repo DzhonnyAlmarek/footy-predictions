@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish candidate middleware fix for isolated password APIs; no deployment.
+# Publish reviewed one-use reset link candidate; no deployment.
 
 on:
   push:
