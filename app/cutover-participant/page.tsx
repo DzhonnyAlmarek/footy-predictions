@@ -391,7 +391,7 @@ export default function CutoverParticipantPage() {
       <div className="cutover-hero-aside"><span>СЕЗОН ПРОГНОЗОВ</span><strong>Играй точно.</strong><small>Изолированная версия · Neon</small></div>
     </header>
     <div role="status" aria-live="polite" className="cutover-notice">{message}</div>
-    {!authenticated ? <form onSubmit={login} className="card cutover-login" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}><div className="cutover-form-heading"><span>ДОБРО ПОЖАЛОВАТЬ</span><h2>Вход в турнир</h2><p>Выбери участника и продолжай игру.</p></div>
+    {!authenticated ? <form onSubmit={login} className="card cutover-login" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}><div className="cutover-form-heading"><span>ДОБРО ПОЖАЛОВАТЬ</span><h2>Вход в турнир</h2><p>Выбери участника и продолжай игру.</p>{username && <p style={{ fontWeight: 700, marginTop: 6 }}>Выбран участник: {username}</p>}</div>
       <label>Участник <select value={username} onChange={e => setUsername(e.target.value)} required>
         <option value="">Выбери участника</option>
         {participants.map(name => <option key={name} value={name}>{name}</option>)}
@@ -401,6 +401,7 @@ export default function CutoverParticipantPage() {
       <button type="submit" disabled={busy}>Войти</button>
     </form> : mustChangePassword ? <form onSubmit={changePassword} className="card cutover-login" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}>
       <h2>Обязательная смена временного пароля</h2>
+      <p style={{ fontWeight: 700, marginTop: 4 }}>Участник: {sessionUsername || "Не определён"}</p>
       <p>Установи собственный пароль. После смены нужно войти заново.</p>
       <label>Временный пароль <input type="password" autoComplete="current-password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
       <label>Новый пароль <input type="password" autoComplete="new-password" required minLength={5} maxLength={128} value={newPassword} onChange={e => setNewPassword(e.target.value)} aria-describedby="cutover-password-hint" /><small id="cutover-password-hint" style={{ display: "block", marginTop: 6, color: "#526475" }}>Не менее 5 символов.</small></label>
