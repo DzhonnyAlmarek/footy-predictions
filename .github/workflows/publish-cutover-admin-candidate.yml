@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish reviewed one-use reset link candidate; no deployment.
+# Publish standard-password reset candidate after verified build; no deployment.
 
 on:
   push:
