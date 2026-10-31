@@ -399,7 +399,18 @@ export default function CutoverParticipantPage() {
   return <main className="page cutover-shell">
     <div className="cutover-club-banner" aria-label="Название клуба и дата основания">
       <div className="cutover-club-identity">
-        <img className="cutover-club-symbol cutover-club-ball" src="/murashevclub-ball.svg" alt="" width="64" height="64" aria-hidden="true" />
+        <svg className="cutover-club-symbol cutover-club-ball" viewBox="0 0 128 128" width="64" height="64" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+          <defs><radialGradient id="club-ball-white" cx="32%" cy="20%" r="80%"><stop stopColor="#ffffff"/><stop offset=".68" stopColor="#f5faf7"/><stop offset="1" stopColor="#b7c9c2"/></radialGradient><clipPath id="club-ball-mask"><circle cx="64" cy="64" r="56"/></clipPath></defs>
+          <circle cx="64" cy="64" r="59" fill="#123c31"/><circle cx="64" cy="64" r="56" fill="url(#club-ball-white)"/>
+          <g clipPath="url(#club-ball-mask)" stroke="#234e3f" strokeWidth="2.5" strokeLinejoin="round">
+            <path fill="#133b31" d="M49 47 69 38 86 53 79 76 55 81 42 63Z"/>
+            <path fill="#163f34" d="M5 30 26 21 43 34 36 54 13 59 -3 46Z"/>
+            <path fill="#163f34" d="M81 12 106 15 123 36 111 55 91 48 81 29Z"/>
+            <path fill="#163f34" d="M15 91 37 80 56 94 53 118 29 131 13 112Z"/>
+            <path fill="#163f34" d="M88 91 110 76 132 91 125 118 100 132 83 113Z"/>
+            <g fill="none" stroke="#658478" strokeWidth="2.2"><path d="M43 34 49 47M36 54 42 63M69 38 81 29M86 53 91 48M79 76 88 91M55 81 56 94M13 59 15 91M110 76 111 55"/><path d="M26 21 50 9 81 12M37 80 13 59M56 94 83 113"/></g>
+          </g><circle cx="64" cy="64" r="56" fill="none" stroke="#0c4434" strokeWidth="3"/>
+        </svg>
         <div className="cutover-club-copy">
           <strong>Клуб им. А.Н. Мурашева</strong>
         </div>
