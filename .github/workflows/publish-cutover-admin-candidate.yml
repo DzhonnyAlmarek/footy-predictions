@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish approved uploaded stadium WebP for isolated candidate; no deployment.
+# Publish updated masthead and unobstructed login UI for candidate; no deployment.
 
 on:
   push:
