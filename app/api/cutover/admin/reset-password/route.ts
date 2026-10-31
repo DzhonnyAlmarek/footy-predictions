@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { authenticatedCutoverIdentity, cutoverAuthEnabled, CUTOVER_COOKIE, CUTOVER_HEADERS } from "@/lib/cutover-participant-server";
 import { hashParticipantPassword } from "@/lib/participant-auth";
 
@@ -24,14 +24,12 @@ export async function POST(req: NextRequest) {
       JOIN cutover_auth.participant_credentials c ON c.user_id=p.id
       WHERE p.username=${body.username} AND upper(p.username)<>'ADMIN' AND c.enabled=true LIMIT 1`;
     if (user.length !== 1) return reply({ ok: false, error: "not_found" }, 404);
-    const temporaryPassword = randomBytes(12).toString("base64url");
-    const { salt, hash } = await hashParticipantPassword(temporaryPassword);
-    await sql`UPDATE cutover_auth.participant_credentials SET
-      password_salt=decode(${salt.toString("hex")},'hex'),
-      password_hash=decode(${hash.toString("hex")},'hex'),
-      must_change_password=true, password_changed_at=now()
-      WHERE user_id=${user[0].id}::uuid`;
-    await sql`DELETE FROM cutover_auth.participant_sessions WHERE user_id=${user[0].id}::uuid`;
-    return reply({ ok: true, temporary_password: temporaryPassword });
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    await sql`DELETE FROM cutover_auth.password_reset_links WHERE user_id=${user[0].id}::uuid`;
+    await sql`INSERT INTO cutover_auth.password_reset_links(token_hash,user_id,expires_at)
+      VALUES(decode(${tokenHash},'hex'),${user[0].id}::uuid,now()+interval '24 hours')`;
+    return reply({ ok: true, reset_link: process.env.CUTOVER_AUTH_ORIGIN + "/cutover-participant#reset=" + token });
+
   } catch { return reply({ ok: false, error: "unavailable" }, 503); }
 }
