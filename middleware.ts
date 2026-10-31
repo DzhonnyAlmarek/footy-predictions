@@ -7,7 +7,7 @@ import { COOKIE_NAME, verifyTestSession } from "@/lib/test-auth";
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (pathname.startsWith("/_next/") || pathname.startsWith("/favicon")) {
+  if (pathname.startsWith("/_next/") || pathname.startsWith("/favicon") || pathname === "/cutover-stadium.svg") {
     return NextResponse.next();
   }
 
