@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish verified candidate removing duplicate temporary-password entry; no deployment.
+# Publish approved football club visual system candidate; no deployment.
 
 on:
   push:
