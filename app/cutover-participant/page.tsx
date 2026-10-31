@@ -402,17 +402,15 @@ export default function CutoverParticipantPage() {
         <span className="cutover-club-symbol" aria-hidden="true">⚽</span>
         <div className="cutover-club-copy">
           <strong>Клуб им. А.Н. Мурашева</strong>
-          <span>Основан 6 июня 2008 года</span>
         </div>
       </div>
-      <span className="cutover-club-since">С 2008 ГОДА</span>
+      <span className="cutover-club-since">Основан 6 июня 2008 года</span>
     </div>
     <header className="cutover-hero">
-      <div><div className="cutover-eyebrow">● КЛУБ ФУТБОЛЬНЫХ ПРОГНОЗОВ</div>
-        <h1>Клуб им. А.Н. Мурашева <small aria-hidden="true">⚽</small></h1>
+      <div className="cutover-hero-content"><h1>Точность решает</h1>
         <p>Твой матч. Твой прогноз. Твоя история побед.</p>
       </div>
-      <div className="cutover-hero-aside"><span>СЕЗОН ПРОГНОЗОВ</span><strong>Играй точно.</strong><small>Изолированная версия · Neon</small></div>
+
     </header>
     <div role="status" aria-live="polite" className="cutover-notice">{message}</div>
     {redeemedPassword && <section className="card" style={{ padding: 20, margin: "12px auto", maxWidth: 520 }}>
@@ -422,7 +420,7 @@ export default function CutoverParticipantPage() {
       <button type="button" onClick={() => void navigator.clipboard.writeText(redeemedPassword)}>Скопировать пароль</button>
       <button type="button" onClick={() => setRedeemedPassword("")}>Скрыть пароль</button>
     </section>}
-    {!authenticated ? <form onSubmit={login} className="card cutover-login" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}><div className="cutover-form-heading"><span>ДОБРО ПОЖАЛОВАТЬ</span><h2>Вход в турнир</h2><p>Выбери участника и продолжай игру.</p>{username && <p style={{ fontWeight: 700, marginTop: 6 }}>Выбран участник: {username}</p>}</div>
+    {!authenticated ? <form onSubmit={login} className="card cutover-login" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}><div className="cutover-form-heading"><h2>Вход</h2>{username && <p style={{ fontWeight: 700, marginTop: 6 }}>Выбран участник: {username}</p>}</div>
       <label>Участник <select value={username} onChange={e => setUsername(e.target.value)} required>
         <option value="">Выбери участника</option>
         {participants.map(name => <option key={name} value={name}>{name}</option>)}
