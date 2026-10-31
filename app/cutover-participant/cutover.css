@@ -125,3 +125,21 @@
   .cutover-mobile-edit-controls .cutover-save{flex:1;min-height:43px}
   .cutover-mobile-closed{font-size:12px;font-weight:700;color:#8c685c;background:#fcf4eb;border-radius:9px;padding:9px 11px}
 }
+
+/* Approved club visual language: one identity, one founding date, stadium green. */
+.cutover-shell{--gw-ink:#062f29;--gw-green:#006953;--gw-green-soft:#eaf6f0;--gw-line:#d6e7e0;background:radial-gradient(ellipse at 50% 12%,#e8f5f5 0%,#f4f7fc 64%,#f4f7fc 100%);border-radius:22px}
+.cutover-club-banner{border-radius:23px;padding:17px 24px;background:#fff;box-shadow:0 8px 30px rgba(7,46,42,.08)}
+.cutover-club-copy strong{font-size:clamp(16px,2.4vw,23px);color:#073d35}
+.cutover-club-since{font-size:13px;letter-spacing:normal;color:#455464;font-weight:650}
+.cutover-hero{min-height:288px;align-items:center;padding:42px 50px;background:radial-gradient(ellipse at 77% 5%,rgba(171,255,219,.28),transparent 25%),linear-gradient(180deg,rgba(0,33,29,.48),rgba(0,79,49,.32)),linear-gradient(110deg,#003b2f 0%,#065344 54%,#00704c 100%);border-radius:24px;box-shadow:0 18px 35px rgba(0,59,40,.17)}
+.cutover-hero:after{width:360px;height:360px;top:60px;right:-45px;border:2px solid rgba(255,255,255,.1);box-shadow:0 0 0 70px rgba(255,255,255,.02),0 0 0 140px rgba(255,255,255,.018)}
+.cutover-hero-content{position:relative;z-index:1}
+.cutover-hero h1{font-size:clamp(39px,5.2vw,72px);font-style:italic;font-weight:900;letter-spacing:-.04em;margin:0 0 18px}
+.cutover-hero p{color:#fff;font-size:clamp(14px,1.7vw,21px)}
+.cutover-login{width:min(100%,560px);padding:33px!important;border-radius:25px!important;box-shadow:0 20px 45px rgba(12,55,48,.12)!important}
+.cutover-form-heading h2{font-size:36px;color:#063d33;margin:0 0 8px}
+.cutover-form-heading:after{display:block;content:"";width:58px;height:5px;border-radius:99px;background:#7cdc46;margin:15px 0 4px}
+.cutover-login button[type=submit]{background:linear-gradient(100deg,#00694e,#00594e);min-height:52px}
+.cutover-navigation,.cutover-content,.cutover-admin-panel,.cutover-stat,.cutover-mobile-match{box-shadow:0 9px 26px rgba(7,52,43,.07)!important}
+.cutover-shell .cutover-content,.cutover-shell .cutover-admin-panel{border-radius:22px}
+@media(max-width:620px){.cutover-shell{border-radius:0}.cutover-club-banner{padding:12px 15px}.cutover-club-since{font-size:10px;white-space:normal;text-align:right;display:block;max-width:125px}.cutover-hero{min-height:205px;padding:30px 22px}.cutover-login{padding:22px!important}.cutover-hero h1{font-size:clamp(35px,9vw,52px)}}
