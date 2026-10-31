@@ -399,7 +399,7 @@ export default function CutoverParticipantPage() {
   return <main className="page cutover-shell">
     <div className="cutover-club-banner" aria-label="Название клуба и дата основания">
       <div className="cutover-club-identity">
-        <span className="cutover-club-symbol" aria-hidden="true">⚽</span>
+        <span className="cutover-club-symbol" aria-hidden="true"><img src="/club-football.svg" alt="" width="54" height="54" /></span>
         <div className="cutover-club-copy">
           <strong>Клуб им. А.Н. Мурашева</strong>
         </div>
