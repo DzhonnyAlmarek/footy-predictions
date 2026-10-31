@@ -1,4 +1,5 @@
 name: Publish candidate admin image (no deployment)
+# Triggered for reviewed participant identity label; no deployment.
 
 on:
   push:
