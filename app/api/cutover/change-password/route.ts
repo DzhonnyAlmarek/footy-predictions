@@ -17,12 +17,13 @@ export async function POST(req: NextRequest) {
     const raw = await req.text();
     if (Buffer.byteLength(raw, "utf8") > 1024) return reply({ ok: false }, 413);
     const body = JSON.parse(raw);
-    if (typeof body?.current_password !== "string" || !validNewPassword(body?.new_password)) return reply({ ok: false, error: "invalid_password" }, 400);
+    if (!validNewPassword(body?.new_password)) return reply({ ok: false, error: "invalid_password" }, 400);
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
-    const rows = await sql`SELECT encode(password_salt,'hex') AS salt, encode(password_hash,'hex') AS digest
+    const rows = await sql`SELECT encode(password_salt,'hex') AS salt, encode(password_hash,'hex') AS digest, must_change_password
       FROM cutover_auth.participant_credentials WHERE user_id=${identity.userId}::uuid AND enabled=true`;
-    if (rows.length !== 1 || !(await verifyParticipantPassword(body.current_password,
-        Buffer.from(String(rows[0].salt), "hex"), Buffer.from(String(rows[0].digest), "hex"))))
+    if (rows.length !== 1 || (!rows[0].must_change_password &&
+        (typeof body.current_password !== "string" || !(await verifyParticipantPassword(body.current_password,
+        Buffer.from(String(rows[0].salt), "hex"), Buffer.from(String(rows[0].digest), "hex"))))))
       return reply({ ok: false, error: "invalid_password" }, 401);
     const { salt, hash } = await hashParticipantPassword(body.new_password);
     const updated = await sql`UPDATE cutover_auth.participant_credentials SET
