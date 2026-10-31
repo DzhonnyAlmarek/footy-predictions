@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish approved visual system with corrected stadium asset routing; no deployment.
+# Publish approved uploaded stadium WebP for isolated candidate; no deployment.
 
 on:
   push:
