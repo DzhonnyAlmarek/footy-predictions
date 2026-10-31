@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish approved masthead alignment from 2026-11-01; isolated registry upload only.
+# Publish inline football and precise approved header alignment; isolated registry upload only.
 
 on:
   push:
