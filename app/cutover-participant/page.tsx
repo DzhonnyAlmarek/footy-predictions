@@ -187,7 +187,7 @@ export default function CutoverParticipantPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ new_password: newPassword })
       });
-      if (!response.ok) { setMessage("Пароль не изменён. Проверь текущий пароль и длину нового (5–128 символов)."); return; }
+      if (!response.ok) { setMessage("Пароль не изменён. Проверь длину нового пароля (5–128 символов) или войди заново."); return; }
        setNewPassword(""); setConfirmPassword("");
       setMustChangePassword(false); setAuthenticated(false);
       setMessage("Пароль изменён. Войди с новым паролем.");
@@ -434,7 +434,6 @@ export default function CutoverParticipantPage() {
       <h2>Обязательная смена временного пароля</h2>
       <p style={{ fontWeight: 700, marginTop: 4 }}>Участник: {sessionUsername || "Не определён"}</p>
       <p>Введи новый постоянный пароль и повтори его. После подтверждения нужно войти заново.</p>
-      <label>Временный пароль <input type="password" autoComplete="current-password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
       <label>Новый пароль <input type="password" autoComplete="new-password" required minLength={5} maxLength={128} value={newPassword} onChange={e => setNewPassword(e.target.value)} aria-describedby="cutover-password-hint" /><small id="cutover-password-hint" style={{ display: "block", marginTop: 6, color: "#526475" }}>Не менее 5 символов.</small></label>
       <label>Повтори пароль <input type="password" autoComplete="new-password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></label>
       <button type="submit" disabled={busy}>Подтвердить пароль</button>
