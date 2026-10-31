@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Triggered for reviewed participant identity label; no deployment.
+# Triggered for reviewed option to retain a temporary password; no deployment.
 
 on:
   push:
