@@ -147,3 +147,12 @@
 /* Self-hosted stadium backdrop; shared green treatment stays on all internal pages. */
 .cutover-hero{background:linear-gradient(90deg,rgba(0,42,38,.80) 0%,rgba(0,45,40,.5) 47%,rgba(0,45,40,.05) 100%),url("/murashevclub-background.webp") center 57%/cover no-repeat,#064b3a}
 @media(max-width:620px){.cutover-hero{background-position:65% center;background-image:linear-gradient(90deg,rgba(0,42,38,.83) 0%,rgba(0,45,40,.5) 100%),url("/murashevclub-background.webp")}}
+
+/* Approved masthead: name, divider, and founding date on one line. */
+.cutover-club-banner{justify-content:flex-start;gap:0;min-height:88px;padding:16px 28px}
+.cutover-club-identity{gap:17px}
+.cutover-club-symbol{width:57px;height:57px;flex-basis:57px;border-radius:15px;font-size:31px;background:#dcf2e9}
+.cutover-club-copy strong{font-size:clamp(21px,2.55vw,34px);letter-spacing:-.035em;line-height:1.12}
+.cutover-club-since{margin-left:28px;padding-left:30px;min-height:40px;display:flex;align-items:center;border-left:1px solid #a9c3bf;font-size:clamp(13px,1.45vw,19px);font-weight:550;color:#485365;letter-spacing:0;text-transform:none;white-space:normal}
+@media(max-width:760px){.cutover-club-banner{min-height:68px;padding:12px 15px}.cutover-club-identity{gap:10px}.cutover-club-symbol{width:40px;height:40px;flex-basis:40px;font-size:22px}.cutover-club-copy strong{font-size:clamp(15px,3.4vw,23px)}.cutover-club-since{margin-left:12px;padding-left:12px;min-height:32px;font-size:clamp(10px,2vw,13px);max-width:none}}
+@media(max-width:460px){.cutover-club-banner{flex-wrap:wrap;row-gap:8px}.cutover-club-since{margin-left:50px;padding-left:0;border-left:0;min-height:0;font-size:11px}}
