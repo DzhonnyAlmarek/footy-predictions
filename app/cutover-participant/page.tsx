@@ -412,7 +412,7 @@ export default function CutoverParticipantPage() {
       </div>
 
     </header>
-    <div role="status" aria-live="polite" className="cutover-notice">{message}</div>
+    {message && message !== "Войди, чтобы увидеть свои прогнозы." && message !== "Проверяем сессию..." && <div role="status" aria-live="polite" className="cutover-notice">{message}</div>}
     {redeemedPassword && <section className="card" style={{ padding: 20, margin: "12px auto", maxWidth: 520 }}>
       <h2>Временный пароль для {redeemedUsername}</h2>
       <p>Ссылка использована и больше не действует. Сохрани пароль и введи его при входе, затем установи постоянный пароль от 5 символов.</p>
