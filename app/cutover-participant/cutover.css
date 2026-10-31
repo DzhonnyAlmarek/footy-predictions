@@ -229,3 +229,17 @@
   .cutover-club-copy strong::after{height:4px}
   .cutover-hero-content h1{margin-left:-5px}
 }
+
+/* Approved #2 header refinement: stable vector football and responsive one-line #4 slogan. */
+.cutover-club-banner{align-items:center;flex-wrap:wrap;column-gap:26px;row-gap:6px}
+.cutover-club-identity{min-width:0;flex:0 1 auto;gap:15px}
+.cutover-club-ball{width:62px;height:62px;flex:0 0 62px;display:block;object-fit:contain;border:0;background:transparent;box-shadow:none;border-radius:0}
+.cutover-club-copy{min-width:0;align-items:flex-start}
+.cutover-club-copy strong{width:fit-content;max-width:100%;margin:0;padding-bottom:12px;transform:none;font-family:var(--font-club-title),Impact,"Arial Black",sans-serif;font-style:italic;font-weight:400;letter-spacing:-.035em;line-height:1.16;font-size:clamp(19px,2.45vw,33px);text-wrap:balance}
+.cutover-club-copy strong::after{left:0;bottom:1px;width:100%;height:7px;background:#53bd25;clip-path:polygon(0 62%,69% 0,100% 40%,100% 100%,0 100%)}
+.cutover-club-since{margin-left:0;flex:0 1 auto}
+.cutover-hero-content{width:100%;min-width:0;align-items:flex-start}
+.cutover-hero-content h1{display:block;width:max-content;max-width:100%;margin:0 0 12px 0;white-space:nowrap;overflow-wrap:normal;word-break:normal;font-family:var(--font-club-slogan),var(--font-club-title),Impact,sans-serif;font-style:italic;font-size:clamp(22px,4.25vw,60px);letter-spacing:-.06em;line-height:1.18}
+.cutover-hero-content p{margin:0;text-align:left;max-width:100%;line-height:1.4}
+@media(max-width:760px){.cutover-club-ball{width:45px;height:45px;flex-basis:45px}.cutover-club-identity{gap:10px}.cutover-club-copy strong{font-size:clamp(14px,3vw,22px);padding-bottom:9px}.cutover-club-copy strong::after{height:5px}.cutover-hero-content h1{font-size:clamp(20px,4.5vw,36px);margin-left:0}}
+@media(max-width:460px){.cutover-club-banner{gap:5px 10px}.cutover-club-ball{width:39px;height:39px;flex-basis:39px}.cutover-club-copy strong{font-size:clamp(12px,3.65vw,17px);letter-spacing:-.045em}.cutover-club-since{margin-left:49px;padding-left:0}.cutover-hero{padding:23px 14px}.cutover-hero-content h1{font-size:clamp(17px,4.65vw,24px);letter-spacing:-.075em}.cutover-hero-content p{font-size:clamp(11px,3vw,14px)}}
