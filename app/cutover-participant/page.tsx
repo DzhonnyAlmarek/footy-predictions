@@ -25,6 +25,7 @@ export default function CutoverParticipantPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetUsername, setResetUsername] = useState("");
   const [resetTemporaryPassword, setResetTemporaryPassword] = useState("");
+  const [resetCompletedFor, setResetCompletedFor] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -177,12 +178,15 @@ export default function CutoverParticipantPage() {
     try {
       const response = await fetch("/api/cutover/admin/reset-password", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: resetUsername, temporary_password: resetTemporaryPassword })
+        body: JSON.stringify({ username: resetUsername })
       });
-      if (!response.ok) { setMessage("Не удалось сбросить пароль участника."); return; }
-      setResetTemporaryPassword("");
-      setMessage("Пароль участника сброшен. Передай ему временный пароль безопасным способом.");
-    } catch { setMessage("Сброс пароля временно недоступен."); }
+      if (!response.ok) { setResetTemporaryPassword(""); setResetCompletedFor(""); setMessage("Не удалось сбросить пароль участника."); return; }
+      const result = await response.json();
+      if (typeof result.temporary_password !== "string" || !result.temporary_password) { setMessage("Пароль сброшен, но временный пароль не получен. Выполни сброс повторно."); return; }
+      setResetTemporaryPassword(result.temporary_password);
+      setResetCompletedFor(resetUsername);
+      setMessage("Временный пароль создан. Передай его участнику лично или по защищённому каналу.");
+    } catch { setResetTemporaryPassword(""); setResetCompletedFor(""); setMessage("Сброс пароля временно недоступен."); }
     finally { setBusy(false); }
   }
   async function savePrediction(m: Prediction) {
@@ -429,13 +433,20 @@ export default function CutoverParticipantPage() {
         <div className="cutover-admin-summary"><span>Участники: {participants.length}</span><span>Матчи: {adminData.matches.length}</span><span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span></div>
         <h2>Сброс временного пароля участника</h2>
         <form onSubmit={resetParticipantPassword} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
-          <label>Участник <select required value={resetUsername} onChange={e => setResetUsername(e.target.value)}>
+          <label>Участник <select required value={resetUsername} onChange={e => { setResetUsername(e.target.value); setResetTemporaryPassword(""); setResetCompletedFor(""); }}>
             <option value="">Выбери участника</option>
             {participants.filter(name => name.toUpperCase() !== "ADMIN").map(name => <option key={name} value={name}>{name}</option>)}
           </select></label>
-          <label>Временный пароль <input required type="password" minLength={5} maxLength={128} autoComplete="new-password" value={resetTemporaryPassword} onChange={e => setResetTemporaryPassword(e.target.value)} /></label>
-          <button type="submit" disabled={busy}>Сбросить пароль</button>
+          <span style={{ alignSelf: "center" }}>Временный пароль будет создан автоматически.</span>
+          <button type="submit" disabled={busy}>Создать временный пароль</button>
         </form>
+        {resetCompletedFor && resetTemporaryPassword && <div className="card" style={{ padding: 14, marginBottom: 24 }} role="status">
+          <p><strong>Новый временный пароль для {resetCompletedFor}:</strong></p>
+          <p><code style={{ fontSize: "1.1em", userSelect: "all" }}>{resetTemporaryPassword}</code></p>
+          <button type="button" onClick={() => void navigator.clipboard.writeText(resetTemporaryPassword)}>Скопировать пароль</button>
+          <p>Пароль показывается здесь после сброса. Передай его участнику безопасно. При первом входе сайт предложит установить постоянный пароль.</p>
+          <button type="button" onClick={() => { setResetTemporaryPassword(""); setResetCompletedFor(""); }}>Скрыть пароль</button>
+        </div>}
         <h2>Новый тур в существующем этапе</h2>
         <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Этап <select required value={tourForm.stage_id}
