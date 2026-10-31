@@ -143,3 +143,7 @@
 .cutover-navigation,.cutover-content,.cutover-admin-panel,.cutover-stat,.cutover-mobile-match{box-shadow:0 9px 26px rgba(7,52,43,.07)!important}
 .cutover-shell .cutover-content,.cutover-shell .cutover-admin-panel{border-radius:22px}
 @media(max-width:620px){.cutover-shell{border-radius:0}.cutover-club-banner{padding:12px 15px}.cutover-club-since{font-size:10px;white-space:normal;text-align:right;display:block;max-width:125px}.cutover-hero{min-height:205px;padding:30px 22px}.cutover-login{padding:22px!important}.cutover-hero h1{font-size:clamp(35px,9vw,52px)}}
+
+/* Self-hosted stadium backdrop; shared green treatment stays on all internal pages. */
+.cutover-hero{background:linear-gradient(90deg,rgba(0,42,38,.80) 0%,rgba(0,45,40,.5) 47%,rgba(0,45,40,.05) 100%),url("/cutover-stadium.svg") center 57%/cover no-repeat,#064b3a}
+@media(max-width:620px){.cutover-hero{background-position:65% center;background-image:linear-gradient(90deg,rgba(0,42,38,.83) 0%,rgba(0,45,40,.5) 100%),url("/cutover-stadium.svg")}}
