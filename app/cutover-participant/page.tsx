@@ -24,7 +24,9 @@ export default function CutoverParticipantPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetUsername, setResetUsername] = useState("");
-  const [resetTemporaryPassword, setResetTemporaryPassword] = useState("");
+  const [resetLink, setResetLink] = useState("");
+  const [redeemedPassword, setRedeemedPassword] = useState("");
+  const [redeemedUsername, setRedeemedUsername] = useState("");
   const [resetCompletedFor, setResetCompletedFor] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
@@ -131,6 +133,28 @@ export default function CutoverParticipantPage() {
       .catch(() => setParticipants([]));
   }, []);
 
+  useEffect(() => {
+    const match = /^#reset=([0-9a-f]{64})$/.exec(window.location.hash);
+    if (!match) return;
+    // Remove bearer token from the address bar immediately after reading it.
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    void fetch("/api/cutover/redeem-reset-link", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: match[1] })
+    }).then(async response => {
+      const result = await response.json();
+      if (!response.ok || !result.temporary_password) {
+        setMessage("Ссылка восстановления недействительна или уже использована.");
+        return;
+      }
+      setRedeemedUsername(result.username);
+      setRedeemedPassword(result.temporary_password);
+      setUsername(result.username);
+      setAuthenticated(false);
+      setMessage("Временный пароль выдан. Сохрани его: после закрытия страницы он не будет показан повторно.");
+    }).catch(() => setMessage("Не удалось открыть ссылку восстановления."));
+  }, []);
+
   async function selectWhistleStage(stageId: string) {
     setWhistleLoading(true);
     try {
@@ -180,12 +204,12 @@ export default function CutoverParticipantPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: resetUsername })
       });
-      if (!response.ok) { setResetTemporaryPassword(""); setResetCompletedFor(""); setMessage("Не удалось сбросить пароль участника."); return; }
+      if (!response.ok) { setResetLink(""); setResetCompletedFor(""); setMessage("Не удалось сбросить пароль участника."); return; }
       const result = await response.json();
-      if (typeof result.temporary_password !== "string" || !result.temporary_password) { setMessage("Пароль сброшен, но временный пароль не получен. Выполни сброс повторно."); return; }
-      setResetTemporaryPassword(result.temporary_password);
+      if (typeof result.reset_link !== "string" || !result.reset_link) { setMessage("Пароль сброшен, но временный пароль не получен. Выполни сброс повторно."); return; }
+      setResetLink(result.reset_link);
       setResetCompletedFor(resetUsername);
-      setMessage("Временный пароль создан. Передай его участнику лично или по защищённому каналу.");
+      setMessage("Одноразовая ссылка создана. Передай её участнику. Она действительна 24 часа.");
     } catch { setResetTemporaryPassword(""); setResetCompletedFor(""); setMessage("Сброс пароля временно недоступен."); }
     finally { setBusy(false); }
   }
@@ -395,6 +419,13 @@ export default function CutoverParticipantPage() {
       <div className="cutover-hero-aside"><span>СЕЗОН ПРОГНОЗОВ</span><strong>Играй точно.</strong><small>Изолированная версия · Neon</small></div>
     </header>
     <div role="status" aria-live="polite" className="cutover-notice">{message}</div>
+    {redeemedPassword && <section className="card" style={{ padding: 20, margin: "12px auto", maxWidth: 520 }}>
+      <h2>Временный пароль для {redeemedUsername}</h2>
+      <p>Ссылка использована и больше не действует. Сохрани пароль и введи его при входе, затем установи постоянный пароль от 5 символов.</p>
+      <p><code style={{ userSelect: "all" }}>{redeemedPassword}</code></p>
+      <button type="button" onClick={() => void navigator.clipboard.writeText(redeemedPassword)}>Скопировать пароль</button>
+      <button type="button" onClick={() => setRedeemedPassword("")}>Скрыть пароль</button>
+    </section>}
     {!authenticated ? <form onSubmit={login} className="card cutover-login" style={{ padding: 22, display: "grid", gap: 14, maxWidth: 520, margin: "0 auto" }}><div className="cutover-form-heading"><span>ДОБРО ПОЖАЛОВАТЬ</span><h2>Вход в турнир</h2><p>Выбери участника и продолжай игру.</p>{username && <p style={{ fontWeight: 700, marginTop: 6 }}>Выбран участник: {username}</p>}</div>
       <label>Участник <select value={username} onChange={e => setUsername(e.target.value)} required>
         <option value="">Выбери участника</option>
@@ -437,15 +468,15 @@ export default function CutoverParticipantPage() {
             <option value="">Выбери участника</option>
             {participants.filter(name => name.toUpperCase() !== "ADMIN").map(name => <option key={name} value={name}>{name}</option>)}
           </select></label>
-          <span style={{ alignSelf: "center" }}>Временный пароль будет создан автоматически.</span>
-          <button type="submit" disabled={busy}>Создать временный пароль</button>
+          <span style={{ alignSelf: "center" }}>Будет создана одноразовая ссылка для участника.</span>
+          <button type="submit" disabled={busy}>Создать ссылку восстановления</button>
         </form>
-        {resetCompletedFor && resetTemporaryPassword && <div className="card" style={{ padding: 14, marginBottom: 24 }} role="status">
-          <p><strong>Новый временный пароль для {resetCompletedFor}:</strong></p>
-          <p><code style={{ fontSize: "1.1em", userSelect: "all" }}>{resetTemporaryPassword}</code></p>
-          <button type="button" onClick={() => void navigator.clipboard.writeText(resetTemporaryPassword)}>Скопировать пароль</button>
-          <p>Пароль показывается здесь после сброса. Передай его участнику безопасно. При первом входе сайт предложит установить постоянный пароль.</p>
-          <button type="button" onClick={() => { setResetTemporaryPassword(""); setResetCompletedFor(""); }}>Скрыть пароль</button>
+        {resetCompletedFor && resetLink && <div className="card" style={{ padding: 14, marginBottom: 24 }} role="status">
+          <p><strong>Одноразовая ссылка для {resetCompletedFor}:</strong></p>
+          <p><code style={{ fontSize: "1.1em", userSelect: "all" }}>{resetLink}</code></p>
+          <button type="button" onClick={() => void navigator.clipboard.writeText(resetLink)}>Скопировать ссылку</button>
+          <p>Отправь ссылку участнику. При открытии он один раз увидит временный пароль и сможет установить постоянный. Срок действия ссылки — 24 часа.</p>
+          <button type="button" onClick={() => { setResetTemporaryPassword(""); setResetCompletedFor(""); }}>Скрыть ссылку</button>
         </div>}
         <h2>Новый тур в существующем этапе</h2>
         <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
