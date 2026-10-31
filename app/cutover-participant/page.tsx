@@ -24,7 +24,6 @@ export default function CutoverParticipantPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetUsername, setResetUsername] = useState("");
-  const [resetLink, setResetLink] = useState("");
   const [redeemedPassword, setRedeemedPassword] = useState("");
   const [redeemedUsername, setRedeemedUsername] = useState("");
   const [resetCompletedFor, setResetCompletedFor] = useState("");
@@ -204,15 +203,13 @@ export default function CutoverParticipantPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: resetUsername })
       });
-      if (!response.ok) { setResetLink(""); setResetCompletedFor(""); setMessage("Не удалось сбросить пароль участника."); return; }
-      const result = await response.json();
-      if (typeof result.reset_link !== "string" || !result.reset_link) { setMessage("Пароль сброшен, но временный пароль не получен. Выполни сброс повторно."); return; }
-      setResetLink(result.reset_link);
+      if (!response.ok) { setResetCompletedFor(""); setMessage("Не удалось сбросить пароль участника."); return; }
       setResetCompletedFor(resetUsername);
-      setMessage("Одноразовая ссылка создана. Передай её участнику. Она действительна 24 часа.");
-    } catch { setResetLink(""); setResetCompletedFor(""); setMessage("Сброс пароля временно недоступен."); }
+      setMessage("Пароль участника сброшен на стандартный. При следующем входе потребуется установить постоянный.");
+    } catch { setResetCompletedFor(""); setMessage("Сброс пароля временно недоступен."); }
     finally { setBusy(false); }
   }
+
   async function savePrediction(m: Prediction) {
     const draft = drafts[m.match_id] ?? { home: String(m.home_pred ?? ""), away: String(m.away_pred ?? "") };
     if (!/^[0-9]{1,2}$/.test(draft.home) || !/^[0-9]{1,2}$/.test(draft.away)) {
@@ -462,21 +459,16 @@ export default function CutoverParticipantPage() {
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
         <div className="cutover-section-heading"><div><span>УПРАВЛЕНИЕ ТУРНИРОМ</span><h2>Панель администратора</h2></div><p>Матчи, туры и результаты — в одном месте</p></div>
         <div className="cutover-admin-summary"><span>Участники: {participants.length}</span><span>Матчи: {adminData.matches.length}</span><span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span></div>
-        <h2>Сброс временного пароля участника</h2>
+        <h2>Сброс пароля участника</h2>
         <form onSubmit={resetParticipantPassword} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
-          <label>Участник <select required value={resetUsername} onChange={e => { setResetUsername(e.target.value); setResetLink(""); setResetCompletedFor(""); }}>
+          <label>Участник <select required value={resetUsername} onChange={e => { setResetUsername(e.target.value); setResetCompletedFor(""); }}>
             <option value="">Выбери участника</option>
             {participants.filter(name => name.toUpperCase() !== "ADMIN").map(name => <option key={name} value={name}>{name}</option>)}
           </select></label>
-          <span style={{ alignSelf: "center" }}>Будет создана одноразовая ссылка для участника.</span>
-          <button type="submit" disabled={busy}>Создать ссылку восстановления</button>
+          <button type="submit" disabled={busy || !resetUsername}>Сбросить пароль на стандартный</button>
         </form>
-        {resetCompletedFor && resetLink && <div className="card" style={{ padding: 14, marginBottom: 24 }} role="status">
-          <p><strong>Одноразовая ссылка для {resetCompletedFor}:</strong></p>
-          <p><code style={{ fontSize: "1.1em", userSelect: "all" }}>{resetLink}</code></p>
-          <button type="button" onClick={() => void navigator.clipboard.writeText(resetLink)}>Скопировать ссылку</button>
-          <p>Отправь ссылку участнику. При открытии он один раз увидит временный пароль и сможет установить постоянный. Срок действия ссылки — 24 часа.</p>
-          <button type="button" onClick={() => { setResetLink(""); setResetCompletedFor(""); }}>Скрыть ссылку</button>
+        {resetCompletedFor && <div className="card" style={{ padding: 14, marginBottom: 24 }} role="status">
+          <p>Пароль участника <strong>{resetCompletedFor}</strong> сброшен на <code>12345678</code>. При следующем входе потребуется его заменить.</p>
         </div>}
         <h2>Новый тур в существующем этапе</h2>
         <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
