@@ -17,8 +17,7 @@ export async function POST(req: NextRequest) {
     const raw = await req.text();
     if (Buffer.byteLength(raw, "utf8") > 1024) return reply({ ok: false }, 413);
     const body = JSON.parse(raw);
-    if (typeof body?.current_password !== "string" || !validNewPassword(body?.new_password) ||
-        body.new_password === body.current_password) return reply({ ok: false, error: "invalid_password" }, 400);
+    if (typeof body?.current_password !== "string" || !validNewPassword(body?.new_password)) return reply({ ok: false, error: "invalid_password" }, 400);
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
     const rows = await sql`SELECT encode(password_salt,'hex') AS salt, encode(password_hash,'hex') AS digest
       FROM cutover_auth.participant_credentials WHERE user_id=${identity.userId}::uuid AND enabled=true`;
