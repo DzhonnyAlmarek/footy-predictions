@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish standard-password reset candidate after verified build; no deployment.
+# Publish verified candidate removing duplicate temporary-password entry; no deployment.
 
 on:
   push:
