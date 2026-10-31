@@ -287,3 +287,28 @@
 @media(max-width:620px){
  .cutover-hero{min-height:170px;padding-top:20px;padding-bottom:18px}
 }
+
+/* Independent classic black-and-white football, no stadium or grass. */
+.cutover-club-ball-photo{
+ background-image:none!important;
+ background-color:transparent!important;
+ border:0!important;
+ box-shadow:none!important;
+ overflow:visible!important;
+ display:grid!important;
+ place-items:center!important;
+}
+.cutover-club-ball-photo::before{
+ content:"⚽";
+ font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;
+ font-size:57px;
+ line-height:1;
+ display:block;
+ width:100%;
+ text-align:center;
+ background:none!important;
+ filter:none!important;
+}
+.cutover-club-ball-photo::after{content:none!important}
+@media(max-width:760px){.cutover-club-ball-photo::before{font-size:39px}}
+@media(max-width:460px){.cutover-club-ball-photo::before{font-size:34px}}
