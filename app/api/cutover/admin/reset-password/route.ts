@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { randomBytes } from "node:crypto";
 import { authenticatedCutoverIdentity, cutoverAuthEnabled, CUTOVER_COOKIE, CUTOVER_HEADERS } from "@/lib/cutover-participant-server";
-import { hashParticipantPassword, validNewPassword } from "@/lib/participant-auth";
+import { hashParticipantPassword } from "@/lib/participant-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,20 +18,20 @@ export async function POST(req: NextRequest) {
     const raw = await req.text();
     if (Buffer.byteLength(raw, "utf8") > 1024) return reply({ ok: false }, 413);
     const body = JSON.parse(raw);
-    if (typeof body?.username !== "string" || body.username.length > 100 ||
-      !validNewPassword(body?.temporary_password)) return reply({ ok: false, error: "invalid_input" }, 400);
+    if (typeof body?.username !== "string" || body.username.length > 100) return reply({ ok: false, error: "invalid_input" }, 400);
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
     const user = await sql`SELECT p.id FROM footy_cutover.profiles p
       JOIN cutover_auth.participant_credentials c ON c.user_id=p.id
       WHERE p.username=${body.username} AND upper(p.username)<>'ADMIN' AND c.enabled=true LIMIT 1`;
     if (user.length !== 1) return reply({ ok: false, error: "not_found" }, 404);
-    const { salt, hash } = await hashParticipantPassword(body.temporary_password);
+    const temporaryPassword = randomBytes(12).toString("base64url");
+    const { salt, hash } = await hashParticipantPassword(temporaryPassword);
     await sql`UPDATE cutover_auth.participant_credentials SET
       password_salt=decode(${salt.toString("hex")},'hex'),
       password_hash=decode(${hash.toString("hex")},'hex'),
       must_change_password=true, password_changed_at=now()
       WHERE user_id=${user[0].id}::uuid`;
     await sql`DELETE FROM cutover_auth.participant_sessions WHERE user_id=${user[0].id}::uuid`;
-    return reply({ ok: true });
+    return reply({ ok: true, temporary_password: temporaryPassword });
   } catch { return reply({ ok: false, error: "unavailable" }, 503); }
 }
