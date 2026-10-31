@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish refined masthead typography, football mark, and stadium appearance; no deployment.
+# Publish photographic football masthead correction; no deployment.
 
 on:
   push:
