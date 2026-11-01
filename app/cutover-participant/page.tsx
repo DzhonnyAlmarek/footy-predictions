@@ -121,7 +121,7 @@ export default function CutoverParticipantPage() {
       setWhistleUnavailable(false);
     } else { setWhistle(null); setWhistleUnavailable(true); }
     setAuthenticated(true);
-    setMessage("Данные загружены из изолированной Neon.");
+    setMessage("");
   }
   useEffect(() => {
     void load().catch(() => setMessage("Сервис пока недоступен."));
@@ -449,7 +449,7 @@ export default function CutoverParticipantPage() {
       <button type="button" onClick={() => void logout()} disabled={busy}>Выйти</button>
     </form> : <>
       <nav aria-label="Разделы кабинета" className="card cutover-navigation">
-        {([["schedule", "Прогнозы"], ["archive", "Архив"], ["analytics", "Аналитика"], ["ranking", "Текущая таблица"], ["golden-boot", "Бутса"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ["mine", "Мои прогнозы"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+        {([["schedule", "Прогнозы"], ["archive", "Архив"], ["analytics", "Аналитика"], ["ranking", "Текущая таблица"], ["golden-boot", "Бутса"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ...(!isAdmin ? [["mine", "Мои прогнозы"]] : []), ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             className={activeTab === id ? "cutover-nav-item is-active" : "cutover-nav-item"} aria-current={activeTab === id ? "page" : undefined}>{label}</button>)}
         <div aria-label="Текущий пользователь" className={isAdmin ? "cutover-user-chip is-admin" : "cutover-user-chip"}>
@@ -459,8 +459,8 @@ export default function CutoverParticipantPage() {
       </nav>
       <section className="cutover-overview" aria-label="Обзор участника">
         <div className="cutover-stat"><span>БЛИЖАЙШИЕ МАТЧИ</span><strong>{upcomingMatches.length}</strong><small>В расписании турнира</small></div>
-        <div className="cutover-stat"><span>МОИ ПРОГНОЗЫ</span><strong>{savedForecasts}</strong><small>Прогнозов в расписании</small></div>
-        <div className="cutover-stat"><span>МОЁ МЕСТО</span><strong>{myPlace >= 0 ? `#${myPlace + 1}` : "—"}</strong><small>{myRanking ? `${myRanking.points} очков` : "Пока без рейтинга"}</small></div>
+        {!isAdmin && <div className="cutover-stat"><span>МОИ ПРОГНОЗЫ</span><strong>{savedForecasts}</strong><small>Прогнозов в расписании</small></div>}
+        {!isAdmin && <div className="cutover-stat"><span>МОЁ МЕСТО</span><strong>{myPlace >= 0 ? `#${myPlace + 1}` : "—"}</strong><small>{myRanking ? `${myRanking.points} очков` : "Пока без рейтинга"}</small></div>}
         <div className="cutover-stat cutover-stat-accent"><span>МОЙ СТАТУС</span><strong>{isAdmin ? "ADMIN" : "ИГРОК"}</strong><small>{sessionUsername || "Участник"}</small></div>
       </section>
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
@@ -721,7 +721,7 @@ export default function CutoverParticipantPage() {
                 </article>)}
             </div>}
       </section>}
-      {activeTab === "mine" && <section className="cutover-content cutover-my-predictions"><div className="cutover-section-heading"><div><span>ЛИЧНАЯ СТАТИСТИКА</span><h2>Мои прогнозы <em>{predictions.length}</em></h2></div><p>Все твои прогнозы и результаты</p></div>
+      {activeTab === "mine" && !isAdmin && <section className="cutover-content cutover-my-predictions"><div className="cutover-section-heading"><div><span>ЛИЧНАЯ СТАТИСТИКА</span><h2>Мои прогнозы <em>{predictions.length}</em></h2></div><p>Все твои прогнозы и результаты</p></div>
       <div className="tableWrap cutover-personal-table"><table className="table" style={{ minWidth: 500 }}>
         <thead><tr><th>Матч</th><th>Прогноз</th><th>Результат</th></tr></thead>
         <tbody>{predictions.map(p => <tr key={p.match_id}>
