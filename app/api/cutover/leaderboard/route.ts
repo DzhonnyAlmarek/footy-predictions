@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
         AND NOT EXISTS (
           SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=l.match_id
         )
-      WHERE p.username IS NOT NULL
+      WHERE p.username IS NOT NULL AND UPPER(p.username) <> 'ADMIN' AND LOWER(COALESCE(p.role, '')) <> 'admin'
       GROUP BY p.id,p.username
       ORDER BY points DESC, scored_predictions DESC, p.username
     `;
