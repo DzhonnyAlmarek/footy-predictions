@@ -643,7 +643,10 @@ export default function CutoverParticipantPage() {
                     <td>{m.stage_match_no ?? index + 1}</td>
                     <td><strong>{m.home_team} — {m.away_team}</strong></td>
                     <td>{m.home_score == null || m.away_score == null ? "—" : m.home_score + ":" + m.away_score}</td>
-                    {currentTable.users.map(u => {
+                    {[...currentTable.users].sort((a,b) => {
+                      const total = (id:string) => currentTable.rows.filter(row=>row.user_id===id).reduce((s,row)=>s+Number(row.points??0),0);
+                      return total(b.id)-total(a.id) || a.username.localeCompare(b.username,"ru");
+                    }).map(u => {
                       const prediction = records.find(row => row.user_id === u.id);
                       const score = prediction?.home_pred == null || prediction.away_pred == null ? "—" : prediction.home_pred + ":" + prediction.away_pred;
                       return <td key={u.id}><span className="predText">{score}</span>
