@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish numeric descending tour order and consistent current-stage header; registry only.
+# Publish consolidated verified tour, column, and point receipt UI updates; registry only.
 
 on:
   push:
