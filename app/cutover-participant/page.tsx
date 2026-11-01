@@ -484,7 +484,6 @@ export default function CutoverParticipantPage() {
       <section className="cutover-overview" aria-label="Обзор текущего этапа">
         <div className="cutover-stat"><span>МАТЧИ ТЕКУЩЕГО ЭТАПА</span><strong>{stageMatchCount || "—"}</strong><small>{finishedStageMatches} завершено</small></div>
         {!isAdmin && <div className="cutover-stat"><span>МОЁ МЕСТО В ТЕКУЩЕМ ЭТАПЕ</span><strong>{currentRankIndex>=0 ? "#"+(currentRankIndex+1) : "—"}</strong><small>{currentRank ? currentRank.points+" очков" : "Нет данных"}</small></div>}
-        {!isAdmin && <div className="cutover-stat"><span>МОИ ОЧКИ В ТЕКУЩЕМ ЭТАПЕ</span><strong>{currentRank?.points ?? "—"}</strong><small>Из сохранённых начислений</small></div>}
         {!isAdmin && previousTitle && <div className="cutover-stat cutover-stat-accent"><span>МОЙ СТАТУС</span><strong>{previousTitle}</strong><small>{currentTable?.previous_stage?.name ?? "Предыдущий этап"}</small></div>}
       </section>
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
