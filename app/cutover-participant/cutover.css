@@ -330,3 +330,19 @@ svg.cutover-club-ball-photo::before,svg.cutover-club-ball-photo::after{content:n
 /* Independent photographic football, unaffected by legacy emoji/SVG rules. */
 img.cutover-club-ball-photo{display:block!important;object-fit:contain!important;background:none!important;background-image:none!important;border:none!important;border-radius:50%!important;box-shadow:none!important;overflow:visible!important}
 img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:none!important}
+
+/* Stored-ledger point breakdown; same interactive component as the legacy table. */
+.cutover-current-tour .ppWrap{position:relative;display:inline-block}
+.cutover-current-tour .ppBtn{cursor:pointer;color:#096849;font-weight:800;border:0;background:transparent;padding:2px 4px;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.cutover-current-tour .ppBtn:focus-visible{outline:2px solid #ffb545;border-radius:4px}
+.cutover-current-tour .ppPop{position:absolute;z-index:50;top:calc(100% + 8px);left:0;width:min(380px,85vw);padding:16px;border:1px solid #c9ded5;border-radius:12px;background:#fff;color:#102c25;box-shadow:0 12px 32px #102c2530;white-space:normal;text-align:left;font-size:13px;font-weight:400}
+.cutover-current-tour .ppTitle{display:flex;justify-content:space-between;align-items:center;gap:15px;font-weight:800;margin-bottom:12px}
+.cutover-current-tour .ppClose{border:0;background:none;cursor:pointer;font-size:18px}
+.cutover-current-tour .ppLine{display:flex;justify-content:space-between;gap:12px;padding:4px 0}
+.cutover-current-tour .ppKey{color:#52665f}
+.cutover-current-tour .ppVal{text-align:right}
+.cutover-current-tour .ppHint{display:block;font-size:11px;color:#64766e}
+.cutover-current-tour .ppHr{border-top:1px solid #e5eee9;margin:8px 0}
+.cutover-current-tour .ppTotal{display:flex;justify-content:space-between;font-weight:800;color:#07533d;margin-top:12px}
+.cutover-current-tour .ctTotal{font-size:12px;font-weight:700;margin-top:4px;opacity:.85}
+.cutover-current-tour th.ctUserHead{min-width:108px}
