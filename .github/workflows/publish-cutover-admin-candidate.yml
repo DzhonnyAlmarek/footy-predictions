@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish archive collapsible standings and Golden Whistle per-match breakdown; registry only.
+# Publish updated archive display and nonblocking participant login; registry only.
 
 on:
   push:
