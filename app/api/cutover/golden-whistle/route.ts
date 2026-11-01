@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     // Default awards view is strictly the current stage. Historical lookup is used
     // only for showing an earned title from the previous completed stage.
     const previousStageId = req.nextUrl.searchParams.get("stageId");
-    if (previousStageId !== null && !/^[1-9]\\d{0,14}$/.test(previousStageId)) {
+    if (previousStageId !== null && !/^[1-9]\d{0,14}$/.test(previousStageId)) {
       return NextResponse.json({ ok: false }, { status: 400, headers: CUTOVER_HEADERS });
     }
     const stages = previousStageId
