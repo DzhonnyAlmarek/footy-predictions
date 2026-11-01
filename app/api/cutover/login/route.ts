@@ -14,7 +14,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 404, headers: CUTOVER_HEADERS });
   }
   const origin = process.env.CUTOVER_AUTH_ORIGIN;
-  if (!origin || !origin.startsWith("https://") || request.headers.get("origin") !== origin) {
+  const requestOrigin = request.headers.get("origin");
+  // Keep strict origin checks. The separately configured HTTPS custom domain
+  // is an additional approved origin only on the isolated Yandex candidate.
+  const candidateCustomOrigin =
+    process.env.DEPLOY_TARGET === "yandex-neon-production-candidate"
+      ? "https://www.murashevclub.ru"
+      : null;
+  const allowedOrigins = [origin, candidateCustomOrigin].filter(
+    (value): value is string => typeof value === "string" && value.startsWith("https://")
+  );
+  if (!origin || !origin.startsWith("https://") ||
+      !requestOrigin || !allowedOrigins.includes(requestOrigin)) {
     return NextResponse.json({ ok: false }, { status: 403, headers: CUTOVER_HEADERS });
   }
   if (Number(request.headers.get("content-length") || 0) > 4096) {
