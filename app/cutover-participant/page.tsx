@@ -44,15 +44,24 @@ export default function CutoverParticipantPage() {
   const [whistleUnavailable, setWhistleUnavailable] = useState(false);
   const [whistleLoading, setWhistleLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; bonus_points: string; scored_predictions: number }[]>([]);
-  const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null; tours:{id:string;name:string;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null;points_h1:string|null;points_h2:string|null;points_outcome:string|null;points_diff:string|null;points_bonus:string|null;points_outcome_base:string|null;points_outcome_bonus:string|null;points_diff_base:string|null;points_diff_bonus:string|null}[] }|null>(null);
+  const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null;previous_stage?:{id:string;name:string}|null;previous_totals?:{user_id:string;username:string;points:string}[];previous_boot?:{user_id:string;exact:number}[]; tours:{id:string;name:string;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null;points_h1:string|null;points_h2:string|null;points_outcome:string|null;points_diff:string|null;points_bonus:string|null;points_outcome_base:string|null;points_outcome_bonus:string|null;points_diff_base:string|null;points_diff_bonus:string|null}[] }|null>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedTour, setSelectedTour] = useState("all");
+  const [pastWhistleWinner, setPastWhistleWinner] = useState<string|null>(null);
   useEffect(() => {
     if (!authenticated || activeTab !== "ranking" || currentTable) return;
     setTableLoading(true);
     void fetch("/api/cutover/current-table", {cache:"no-store"})
       .then(async res => { if (!res.ok) throw new Error("table"); return res.json(); })
-      .then(data => { setCurrentTable(data); setSelectedTour("all"); })
+      .then(data => {
+        setCurrentTable(data); setSelectedTour("all");
+        if (data.previous_stage?.id) {
+          void fetch("/api/cutover/golden-whistle?stageId="+encodeURIComponent(data.previous_stage.id), {cache:"no-store"})
+            .then(async response => response.ok ? response.json() : null)
+            .then(result => setPastWhistleWinner(result?.penalty_matches > 0 && Number(result?.leaderboard?.[0]?.points) > 0 ? result.leaderboard[0].username : null))
+            .catch(() => setPastWhistleWinner(null));
+        }
+      })
       .catch(() => setCurrentTable(null))
       .finally(() => setTableLoading(false));
   }, [authenticated, activeTab, currentTable]);
@@ -401,6 +410,19 @@ export default function CutoverParticipantPage() {
     finally { setBusy(false); }
   }
 
+  const stageTotals = currentTable?.users.map(u=>({ ...u, points: Number((currentTable.rows.filter(row=>row.user_id===u.id).reduce((sum,row)=>sum+Number(row.points??0),0)).toFixed(2)) })).sort((a,b)=>b.points-a.points||a.username.localeCompare(b.username,"ru")) ?? [];
+  const currentRankIndex = stageTotals.findIndex(u=>u.username===sessionUsername);
+  const currentRank = currentRankIndex>=0 ? stageTotals[currentRankIndex] : null;
+  const previousRankIndex = currentTable?.previous_totals?.findIndex(p=>p.username===sessionUsername) ?? -1;
+  const priorBootWinner = currentTable?.previous_boot?.[0];
+  const priorBootIsWinner = priorBootWinner && Number(priorBootWinner.exact)>0 && currentTable?.previous_boot?.some(p=>p.user_id===priorBootWinner.user_id && currentTable.users.some(u=>u.id===p.user_id && u.username===sessionUsername));
+  const previousTitle = isAdmin ? "" : [
+    previousRankIndex===0?"Победитель":previousRankIndex===1?"Серебряный призёр":previousRankIndex===2?"Бронзовый призёр":"",
+    priorBootIsWinner?"Обладатель Золотой бутсы":"",
+    pastWhistleWinner===sessionUsername?"Обладатель Золотого свистка":""
+  ].filter(Boolean).join(" · ");
+  const stageMatchCount = currentTable ? new Set(currentTable.rows.map(row=>row.match_id)).size : 0;
+  const finishedStageMatches = currentTable ? new Set(currentTable.rows.filter(row=>row.home_score!==null&&row.away_score!==null).map(row=>row.match_id)).size : 0;
   const upcomingMatches = schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now());
   const savedForecasts = schedule.filter(m => m.home_pred !== null && m.away_pred !== null).length;
   const myPlace = leaderboard.findIndex(p => p.username === sessionUsername);
@@ -459,11 +481,11 @@ export default function CutoverParticipantPage() {
         </div>
         <button type="button" onClick={logout} disabled={busy} className="cutover-logout">Выйти</button>
       </nav>
-      <section className="cutover-overview" aria-label="Обзор участника">
-        <div className="cutover-stat"><span>БЛИЖАЙШИЕ МАТЧИ</span><strong>{upcomingMatches.length}</strong><small>В расписании турнира</small></div>
-        {!isAdmin && <div className="cutover-stat"><span>МОИ ПРОГНОЗЫ</span><strong>{savedForecasts}</strong><small>Прогнозов в расписании</small></div>}
-        {!isAdmin && <div className="cutover-stat"><span>МОЁ МЕСТО</span><strong>{myPlace >= 0 ? `#${myPlace + 1}` : "—"}</strong><small>{myRanking ? `${myRanking.points} очков` : "Пока без рейтинга"}</small></div>}
-        <div className="cutover-stat cutover-stat-accent"><span>МОЙ СТАТУС</span><strong>{isAdmin ? "ADMIN" : "ИГРОК"}</strong><small>{sessionUsername || "Участник"}</small></div>
+      <section className="cutover-overview" aria-label="Обзор текущего этапа">
+        <div className="cutover-stat"><span>МАТЧИ ТЕКУЩЕГО ЭТАПА</span><strong>{stageMatchCount || "—"}</strong><small>{finishedStageMatches} завершено</small></div>
+        {!isAdmin && <div className="cutover-stat"><span>МОЁ МЕСТО В ТЕКУЩЕМ ЭТАПЕ</span><strong>{currentRankIndex>=0 ? "#"+(currentRankIndex+1) : "—"}</strong><small>{currentRank ? currentRank.points+" очков" : "Нет данных"}</small></div>}
+        {!isAdmin && <div className="cutover-stat"><span>МОИ ОЧКИ В ТЕКУЩЕМ ЭТАПЕ</span><strong>{currentRank?.points ?? "—"}</strong><small>Из сохранённых начислений</small></div>}
+        {!isAdmin && previousTitle && <div className="cutover-stat cutover-stat-accent"><span>МОЙ СТАТУС</span><strong>{previousTitle}</strong><small>{currentTable?.previous_stage?.name ?? "Предыдущий этап"}</small></div>}
       </section>
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
         <div className="cutover-section-heading"><div><span>УПРАВЛЕНИЕ ТУРНИРОМ</span><h2>Панель администратора</h2></div><p>Матчи, туры и результаты — в одном месте</p></div>
@@ -611,7 +633,7 @@ export default function CutoverParticipantPage() {
         </form>
       </section>}
       {activeTab === "ranking" && <section className="cutover-content cutover-rankings">
-        <div className="cutover-section-heading"><div><span>ТЕКУЩИЙ ЭТАП</span><h2>Текущая таблица</h2></div><p>{currentTable?.stage?.name ?? "Турнир"}</p></div>
+        <div className="cutover-section-heading"><div><span>ТЕКУЩИЙ ЭТАП — {currentTable?.stage?.name ?? "Загрузка…"}</span><h2>Текущая таблица</h2></div></div>
         {tableLoading && <p>Загружаем матчи и начисления…</p>}
         {!tableLoading && !currentTable && <p>Не удалось загрузить текущую таблицу.</p>}
         {currentTable && !currentTable.stage && <p>Текущий этап не выбран.</p>}
