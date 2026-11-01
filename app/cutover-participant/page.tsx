@@ -693,9 +693,7 @@ export default function CutoverParticipantPage() {
       </section>}
       {activeTab === "golden-whistle" && <section className="cutover-content cutover-awards"><div className="cutover-section-heading"><div><span>СПЕЦИАЛЬНАЯ НОМИНАЦИЯ</span><h2>Золотой свисток <span aria-hidden="true">🏆</span></h2></div><p>За решающие пенальти</p></div>
         {whistleUnavailable && <p>Номинация пока недоступна на этой площадке.</p>}
-        {whistle && <><label>Этап <select value={String(whistle.stage.id)} disabled={whistleLoading} onChange={e => void selectWhistleStage(e.target.value)}>
-          {whistle.available_stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select></label>
+        {whistle?.stage && <><p><strong>Текущий этап: {whistle.stage.name}</strong></p>
           <p>Матчей с забитыми пенальти: {whistle.penalty_matches}{whistleLoading ? " · загрузка..." : ""}</p>
           <p>Отдельная номинация: учитываются очки, которые помогли набрать результативные пенальти. В общий рейтинг эти очки повторно не добавляются.</p>
           <div className="tableWrap"><table className="table" style={{ minWidth: 450 }}>
@@ -834,7 +832,7 @@ export default function CutoverParticipantPage() {
           </>;
         })()}
       </section>}
-      {activeTab === "golden-boot" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ТОЧНЫЕ СЧЕТА</span><h2>Золотая бутса</h2></div><p>Количество точно угаданных результатов в доступных матчах</p></div>
+      {activeTab === "golden-boot" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ТОЧНЫЕ СЧЕТА</span><h2>Золотая бутса</h2></div><p>Точные счета только в текущем этапе</p></div>
         {boot.length === 0 ? <p>Точных прогнозов пока нет.</p> :
           <div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Точных счетов</th></tr></thead>
             <tbody>{boot.map((p, i) => <tr key={p.username}><td>{i + 1}</td><td>{p.username}</td><td>{p.exact}</td></tr>)}</tbody>
