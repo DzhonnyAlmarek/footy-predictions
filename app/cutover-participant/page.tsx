@@ -608,13 +608,47 @@ export default function CutoverParticipantPage() {
           {!resultWritesEnabled && <p>Запись результатов отключена на этой площадке.</p>}
         </form>
       </section>}
-      {activeTab === "ranking" && <section className="cutover-content cutover-rankings"><div className="cutover-section-heading"><div><span>ТУРНИРНАЯ ТАБЛИЦА</span><h2>Текущая таблица</h2></div><p>Каждое очко влияет на место</p></div>
-      <div className="tableWrap"><table className="table" style={{ minWidth: 500 }}>
-        <thead><tr><th>Участник</th><th>Очки</th><th>Бонусы (в составе очков)</th><th>Учтённых прогнозов</th></tr></thead>
-        <tbody>{leaderboard.map((p, index) => <tr key={p.username} className={p.username === sessionUsername ? "cutover-own-row" : undefined}>
-          <td><span className="cutover-place">{index + 1}</span><strong>{p.username}</strong>{p.username === sessionUsername && <span className="cutover-self-badge">ты</span>}</td><td className="cutover-points">{p.points}</td><td>{p.bonus_points ?? "0"}</td><td>{p.scored_predictions}</td>
-        </tr>)}</tbody>
-      </table></div></section>}
+      {activeTab === "ranking" && <section className="cutover-content cutover-rankings">
+        <div className="cutover-section-heading"><div><span>ТЕКУЩИЙ ЭТАП</span><h2>Текущая таблица</h2></div><p>{currentTable?.stage?.name ?? "Турнир"}</p></div>
+        {tableLoading && <p>Загружаем матчи и начисления…</p>}
+        {!tableLoading && !currentTable && <p>Не удалось загрузить текущую таблицу.</p>}
+        {currentTable && !currentTable.stage && <p>Текущий этап не выбран.</p>}
+        {currentTable?.stage && <>
+          <label className="cutover-table-filter">Тур <select value={selectedTour} onChange={e => setSelectedTour(e.target.value)}>
+            <option value="all">Все туры</option>
+            {currentTable.tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select></label>
+          {currentTable.tours.filter(t => selectedTour === "all" || t.id === selectedTour).map(t => {
+            const grouped = new Map<string, typeof currentTable.rows>();
+            for (const record of currentTable.rows.filter(row => row.tour_id === t.id)) {
+              grouped.set(record.match_id, [...(grouped.get(record.match_id) ?? []), record]);
+            }
+            return <div className="cutover-current-tour" key={t.id}>
+              <h3>{t.name}</h3>
+              <div className="tableWrap"><table className="table currentTable">
+                <thead><tr><th>№</th><th>Матч</th><th>Результат</th>
+                  {currentTable.users.map(u => <th key={u.id}>{u.username}</th>)}
+                </tr></thead>
+                <tbody>{[...grouped.entries()].map(([id, records], index) => {
+                  const m = records[0];
+                  return <tr key={id}>
+                    <td>{m.stage_match_no ?? index + 1}</td>
+                    <td><strong>{m.home_team} — {m.away_team}</strong></td>
+                    <td>{m.home_score == null || m.away_score == null ? "—" : m.home_score + ":" + m.away_score}</td>
+                    {currentTable.users.map(u => {
+                      const prediction = records.find(row => row.user_id === u.id);
+                      const score = prediction?.home_pred == null || prediction.away_pred == null ? "—" : prediction.home_pred + ":" + prediction.away_pred;
+                      return <td key={u.id}><span className="predText">{score}</span>
+                        {prediction?.points != null && <strong className="cutover-points"> ({prediction.points})</strong>}
+                      </td>;
+                    })}
+                  </tr>;
+                })}</tbody>
+              </table></div>
+            </div>;
+          })}
+        </>}
+      </section>}
       {activeTab === "golden-whistle" && <section className="cutover-content cutover-awards"><div className="cutover-section-heading"><div><span>СПЕЦИАЛЬНАЯ НОМИНАЦИЯ</span><h2>Золотой свисток <span aria-hidden="true">🏆</span></h2></div><p>За решающие пенальти</p></div>
         {whistleUnavailable && <p>Номинация пока недоступна на этой площадке.</p>}
         {whistle && <><label>Этап <select value={String(whistle.stage.id)} disabled={whistleLoading} onChange={e => void selectWhistleStage(e.target.value)}>
