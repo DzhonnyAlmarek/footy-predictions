@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type PointsBreakdown = {
   total: number;
@@ -75,6 +76,8 @@ export default function PointsPopover(props: { pts: number; breakdown: PointsBre
   const { pts, breakdown } = props;
   const [open, setOpen] = useState(false);
   const id = useId();
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
 
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const popRef = useRef<HTMLDivElement | null>(null);
@@ -154,8 +157,8 @@ export default function PointsPopover(props: { pts: number; breakdown: PointsBre
         ({fmt(pts)})
       </button>
 
-      {open && (
-        <div ref={popRef} id={id} role="dialog" className="ppPop">
+      {open && ready && createPortal(
+        <div ref={popRef} id={id} role="dialog" aria-modal="false" className="ppPop ppPopOverlay" style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%, -50%)",width:"min(430px, calc(100vw - 32px))",maxHeight:"calc(100dvh - 32px)",overflowY:"auto",zIndex:2000}}>
           <div className="ppTitle">
             <span>Начисление за матч</span>
             <button className="ppClose" onClick={() => setOpen(false)} aria-label="Закрыть" type="button">
@@ -343,7 +346,7 @@ export default function PointsPopover(props: { pts: number; breakdown: PointsBre
               </div>
             </>
           )}
-        </div>
+        </div>, document.body
       )}
     </span>
   );
