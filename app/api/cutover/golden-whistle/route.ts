@@ -14,17 +14,11 @@ export async function GET(req: NextRequest) {
   try {
     const identity = await authenticatedCutoverIdentity(req.cookies.get(CUTOVER_COOKIE)?.value);
     if (!identity) return NextResponse.json({ ok: false }, { status: 401, headers: CUTOVER_HEADERS });
-    const requestedStage = req.nextUrl.searchParams.get("stageId");
-    if (requestedStage !== null && !/^[1-9]\d{0,14}$/.test(requestedStage)) {
-      return NextResponse.json({ ok: false, error: "invalid stage" }, { status: 400, headers: CUTOVER_HEADERS });
-    }
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
-    const stages = requestedStage
-      ? await sql`SELECT id, name, status FROM footy_cutover.stages WHERE id = ${requestedStage}::bigint AND (is_current OR status = 'locked') LIMIT 1`
-      : await sql`SELECT id, name, status FROM footy_cutover.stages WHERE is_current = true LIMIT 1`;
-    if (!stages.length) return NextResponse.json({ ok: false, error: "stage not found" }, { status: 404, headers: CUTOVER_HEADERS });
+    const stages = await sql`SELECT id, name, status FROM footy_cutover.stages WHERE is_current = true LIMIT 2`;
+    if (stages.length !== 1) return NextResponse.json({ ok: true, stage: null, available_stages: [], penalty_matches: 0, leaderboard: [] }, { headers: CUTOVER_HEADERS });
     const stage = stages[0];
-    const availableStages = await sql`SELECT id::text AS id, name, status FROM footy_cutover.stages WHERE is_current = true OR status = 'locked' ORDER BY id DESC`;
+    const availableStages = await sql`SELECT id::text AS id, name, status FROM footy_cutover.stages WHERE is_current = true`;
     const matches = await sql`
       SELECT id, home_score, away_score, home_penalty_goals, away_penalty_goals
       FROM footy_cutover.matches m
