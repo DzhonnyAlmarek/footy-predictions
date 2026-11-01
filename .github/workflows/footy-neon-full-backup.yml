@@ -18,10 +18,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Install PostgreSQL client and AWS CLI
+      - name: Install AWS CLI v2
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client awscli
+          set -euo pipefail
+          curl --fail --silent --show-error --location https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          sudo /tmp/aws/install
+          aws --version
       - name: Full Neon dump and upload outside Neon
         env:
           FOOTY_BACKUP_NEON_DATABASE_URL: ${{ secrets.FOOTY_BACKUP_NEON_DATABASE_URL }}
