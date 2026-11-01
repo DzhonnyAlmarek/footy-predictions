@@ -725,7 +725,7 @@ export default function CutoverParticipantPage() {
               <td>{index + 1} {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : ""}</td>
               <td>{p.username}</td><td>{Number(p.points).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<details className="cutover-whistle-details"><summary>Расшифровка ({(p.breakdown??[]).length} матчей)</summary>
                     {(p.breakdown??[]).length ? <div className="tableWrap"><table className="table">
-                    <thead><tr><th>Матч</th><th>Прогноз</th><th>Счёт без пенальти</th><th>Итоговый счёт</th><th>База без пенальти</th><th>База с пенальти</th><th>Начислено</th></tr></thead>
+                    <thead><tr><th>Матч</th><th>Прогноз</th><th>Без пен.</th><th>Итог</th><th>База −</th><th>База +</th><th>Очки</th></tr></thead>
                     <tbody>{(p.breakdown??[]).map(m=><tr key={m.match_id}><td>{m.match}</td><td>{m.prediction}</td><td>{m.without_penalties}</td><td>{m.result}</td><td>{m.without_penalties_base}</td><td>{m.with_penalties_base}</td><td><strong>{Number(m.points.toFixed(2)).toLocaleString("ru-RU")}</strong></td></tr>)}</tbody></table></div> : <p>Нет положительных начислений за пенальти.</p>}
                     </details></td><td>{p.main_place}</td>
             </tr>)}</tbody>
@@ -890,10 +890,11 @@ export default function CutoverParticipantPage() {
               .sort((a,b)=>b.exact-a.exact||a.username.localeCompare(b.username,"ru"));
             const ordered=[...archive.users].sort((a,b)=>{const order=["АМН","БАА","КДЛ","КЕН","СВС"];const ai=order.indexOf(a.username.toUpperCase()),bi=order.indexOf(b.username.toUpperCase());return (ai<0?99:ai)-(bi<0?99:bi)||a.username.localeCompare(b.username,"ru");});
             return <>
-              <details className="cutover-archive-summary"><summary>Итоговая таблица — {archive.stage.name}</summary>
+              <h3>Итоговая таблица — {archive.stage.name}</h3>
               <div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Очки</th></tr></thead>
                 <tbody>{totals.map((u,i)=><tr key={u.id}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{Number(u.points.toFixed(2)).toLocaleString("ru-RU")}</td></tr>)}</tbody>
-              </table></div></details>
+              </table></div>
+              <details className="cutover-archive-summary"><summary>Матчи и прогнозы по турам ({archive.tours.length})</summary>
               {[...archive.tours].sort((a,b)=>Number(b.tour_no)-Number(a.tour_no)).map(t=>{
                 const matches=new Map<string,typeof archive.rows>();
                 for(const row of archive.rows.filter(r=>r.tour_id===t.id))matches.set(row.match_id,[...(matches.get(row.match_id)??[]),row]);
@@ -906,6 +907,7 @@ export default function CutoverParticipantPage() {
                       </tr>;
                     })}</tbody></table></div></div>;
               })}
+              </details>
               <div className="cutover-awards"><h3>Специальная номинация — Золотая бутса ⚽</h3>
                 <div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Точных счетов</th></tr></thead>
                 <tbody>{boots.map((u,i)=><tr key={u.username}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{u.exact}</td></tr>)}</tbody></table></div>
@@ -913,7 +915,7 @@ export default function CutoverParticipantPage() {
                 {archiveWhistleError?<p role="status">Не удалось получить результаты Золотого свистка для этого этапа.</p>:!archiveWhistle?<p>Загрузка результатов номинации…</p>:<div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Баллы</th></tr></thead>
                 <tbody>{archiveWhistle.leaderboard.map((u,i)=><tr key={u.username}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{Number(u.points).toLocaleString("ru-RU")}<details className="cutover-whistle-details"><summary>Расшифровка ({(u.breakdown??[]).length} матчей)</summary>
                     {(u.breakdown??[]).length ? <div className="tableWrap"><table className="table">
-                    <thead><tr><th>Матч</th><th>Прогноз</th><th>Счёт без пенальти</th><th>Итоговый счёт</th><th>База без пенальти</th><th>База с пенальти</th><th>Начислено</th></tr></thead>
+                    <thead><tr><th>Матч</th><th>Прогноз</th><th>Без пен.</th><th>Итог</th><th>База −</th><th>База +</th><th>Очки</th></tr></thead>
                     <tbody>{(u.breakdown??[]).map(m=><tr key={m.match_id}><td>{m.match}</td><td>{m.prediction}</td><td>{m.without_penalties}</td><td>{m.result}</td><td>{m.without_penalties_base}</td><td>{m.with_penalties_base}</td><td><strong>{Number(m.points.toFixed(2)).toLocaleString("ru-RU")}</strong></td></tr>)}</tbody></table></div> : <p>Нет положительных начислений за пенальти.</p>}
                     </details></td></tr>)}</tbody></table></div>}
               </div>
