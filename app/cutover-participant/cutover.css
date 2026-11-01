@@ -372,3 +372,8 @@ img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:n
 .cutover-overview .cutover-stat{min-height:106px;padding:13px 18px;gap:5px}
 .cutover-overview .cutover-stat strong{font-size:34px;line-height:1.08}
 @media(max-width:620px){.cutover-overview .cutover-stat{min-height:96px;padding:12px;gap:4px}.cutover-overview .cutover-stat strong{font-size:29px}}
+
+.cutover-archive-summary{margin:18px 0}
+.cutover-archive-summary>summary{cursor:pointer;font-size:19px;font-weight:800;color:#084c39;padding:10px 0}
+.cutover-archive-summary>summary:hover{text-decoration:underline}
+.cutover-archive-summary[open]>summary{margin-bottom:10px}
