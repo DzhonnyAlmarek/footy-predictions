@@ -6,12 +6,20 @@ import { neon } from "@neondatabase/serverless";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function approvedOrigin(requestOrigin: string | null): boolean {
+  const configured = process.env.CUTOVER_AUTH_ORIGIN;
+  if (!configured?.startsWith("https://") || !requestOrigin) return false;
+  return requestOrigin === configured ||
+    (process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
+     requestOrigin === "https://www.murashevclub.ru");
+}
+
 export async function POST(req: NextRequest) {
   if (!cutoverAuthEnabled()) {
     return NextResponse.json({ ok: false }, { status: 404, headers: CUTOVER_HEADERS });
   }
   const origin = process.env.CUTOVER_AUTH_ORIGIN;
-  if (!origin || !origin.startsWith("https://") || req.headers.get("origin") !== origin) {
+  if (!approvedOrigin(req.headers.get("origin"))) {
     return NextResponse.json({ ok: false }, { status: 403, headers: CUTOVER_HEADERS });
   }
   const token = req.cookies.get(CUTOVER_COOKIE)?.value;
