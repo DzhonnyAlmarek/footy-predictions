@@ -411,18 +411,7 @@ export default function CutoverParticipantPage() {
   return <main className="page cutover-shell">
     <div className="cutover-club-banner" aria-label="Название клуба и дата основания">
       <div className="cutover-club-identity">
-        <svg className="cutover-club-symbol cutover-club-ball cutover-club-ball-photo" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true" focusable="false">
-          <defs><radialGradient id="football-white" cx="28%" cy="22%" r="80%"><stop stopColor="#fff"/><stop offset=".72" stopColor="#f4f4f4"/><stop offset="1" stopColor="#9e9e9e"/></radialGradient><clipPath id="football-cut"><circle cx="32" cy="32" r="29"/></clipPath></defs>
-          <circle cx="32" cy="32" r="29" fill="url(#football-white)" stroke="#262626" strokeWidth="1"/>
-          <g clipPath="url(#football-cut)" stroke="#333" strokeWidth=".8" strokeLinejoin="round">
-            <polygon points="25,24 34,19 43,26 40,37 28,39 21,32" fill="#181818"/>
-            <polygon points="4,15 16,11 24,19 20,29 7,32 -1,23" fill="#181818"/>
-            <polygon points="41,3 54,8 65,21 57,30 46,24 40,13" fill="#181818"/>
-            <polygon points="5,43 18,39 26,49 22,63 9,67 -1,56" fill="#181818"/>
-            <polygon points="44,46 56,39 66,50 62,64 48,67 39,57" fill="#181818"/>
-            <path d="M24 19 25 24M20 29 21 32M34 19 40 13M43 26 46 24M40 37 44 46M28 39 26 49M7 32 5 43M56 39 57 30" stroke="#777" fill="none"/>
-          </g><path d="M13 20 Q21 8 35 7" stroke="#fff" strokeWidth="3" opacity=".65" fill="none" strokeLinecap="round"/>
-        </svg>
+        <img className="cutover-club-symbol cutover-club-ball cutover-club-ball-photo" src="/club-ball-photo.webp" width="64" height="64" alt="" aria-hidden="true" />
         <div className="cutover-club-copy">
           <strong>Клуб им. А.Н. Мурашева</strong>
         </div>
