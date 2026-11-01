@@ -6,7 +6,7 @@ umask 077
 : "${FOOTY_RESTORE_OBJECT_KEY:?Missing object key}"
 : "${AWS_ACCESS_KEY_ID:?Missing S3 key}"
 : "${AWS_SECRET_ACCESS_KEY:?Missing S3 secret}"
-[[ "$FOOTY_RESTORE_OBJECT_KEY" =~ ^footy-neon/[0-9]{4}/[0-9]{2}/[0-9]{2}/[0-9TZ-]+\\.dump$ ]] || { echo "Invalid dump object key"; exit 1; }
+[[ "$FOOTY_RESTORE_OBJECT_KEY" == footy-neon/*/*/*/*.dump ]] || { echo "Invalid dump object key"; exit 1; }
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 aws --endpoint-url https://storage.yandexcloud.net s3api get-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$FOOTY_RESTORE_OBJECT_KEY" "$tmp/source.dump" >/dev/null
