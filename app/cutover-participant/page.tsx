@@ -832,10 +832,20 @@ export default function CutoverParticipantPage() {
           </>;
         })()}
       </section>}
-      {activeTab === "golden-boot" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ТОЧНЫЕ СЧЕТА</span><h2>Золотая бутса</h2></div><p>Точные счета только в текущем этапе</p></div>
-        {boot.length === 0 ? <p>Точных прогнозов пока нет.</p> :
-          <div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Точных счетов</th></tr></thead>
-            <tbody>{boot.map((p, i) => <tr key={p.username}><td>{i + 1}</td><td>{p.username}</td><td>{p.exact}</td></tr>)}</tbody>
+      {activeTab === "golden-boot" && <section className="cutover-content cutover-awards">
+        <div className="cutover-section-heading"><div><span>СПЕЦИАЛЬНАЯ НОМИНАЦИЯ</span><h2>Золотая бутса <span aria-hidden="true">⚽</span></h2></div><p>За точно угаданные счета</p></div>
+        <p><strong>Текущий этап: {currentTable?.stage?.name ?? "Загрузка…"}</strong></p>
+        <p>Отдельная номинация: учитываются только точные счета матчей текущего этапа. Набранные за матч очки повторно не добавляются в основной рейтинг.</p>
+        {boot.length === 0 ? <p>Точных прогнозов в текущем этапе пока нет.</p> :
+          <div className="tableWrap"><table className="table" style={{minWidth:450}}>
+            <thead><tr><th>Место</th><th>Участник</th><th>Точных счетов</th><th>Место в основном конкурсе</th></tr></thead>
+            <tbody>{boot.map((p,i)=>{
+              const rank=stageTotals.findIndex(u=>u.username===p.username);
+              return <tr key={p.username}>
+                <td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td>
+                <td>{p.username}</td><td>{p.exact}</td><td>{rank>=0?rank+1:"—"}</td>
+              </tr>;
+            })}</tbody>
           </table></div>}
       </section>}
       {activeTab === "archive" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ЗАВЕРШЁННЫЕ МАТЧИ</span><h2>Архив матчей</h2></div><p>Результаты завершённых матчей в доступном расписании</p></div>
