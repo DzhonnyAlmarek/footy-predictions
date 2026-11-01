@@ -1,4 +1,4 @@
-name: Footy Neon full backup to Yandex Object Storage
+name: Footy Neon daily encrypted backup to Yandex Object Storage
 on:
   workflow_dispatch:
   schedule:
@@ -21,16 +21,20 @@ jobs:
         with:
           persist-credentials: false
           # Pin the successfully tested script commit; do not track mutable feature code.
-          ref: 9884d0f151ddd865d3952740959dba6741955668
-      - name: Install PostgreSQL client and AWS CLI
+          ref: 3172b0134c6a4280a7e6835857875e6c14173154
+      - name: Install age encryption tool
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client awscli
-      - name: Full Neon dump and upload outside Neon
+          sudo apt-get install -y age
+          age --version
+          aws --version
+          docker --version
+      - name: Full encrypted Neon dump and upload outside Neon
         env:
           FOOTY_BACKUP_NEON_DATABASE_URL: ${{ secrets.FOOTY_BACKUP_NEON_DATABASE_URL }}
           FOOTY_BACKUP_S3_BUCKET: ${{ secrets.FOOTY_BACKUP_S3_BUCKET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.FOOTY_BACKUP_S3_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.FOOTY_BACKUP_S3_SECRET_KEY }}
           AWS_DEFAULT_REGION: ru-central1
-        run: bash scripts/backup-footy-neon-full.sh
+          FOOTY_BACKUP_AGE_RECIPIENT: ${{ vars.FOOTY_BACKUP_AGE_RECIPIENT }}
+        run: bash scripts/backup-footy-neon-encrypted.sh
