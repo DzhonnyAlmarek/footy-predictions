@@ -44,7 +44,7 @@ export default function CutoverParticipantPage() {
   const [whistleUnavailable, setWhistleUnavailable] = useState(false);
   const [whistleLoading, setWhistleLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; bonus_points: string; scored_predictions: number }[]>([]);
-  const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null;previous_stage?:{id:string;name:string}|null;previous_totals?:{user_id:string;username:string;points:string}[];previous_boot?:{user_id:string;exact:number}[]; tours:{id:string;name:string;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null;points_h1:string|null;points_h2:string|null;points_outcome:string|null;points_diff:string|null;points_bonus:string|null;points_outcome_base:string|null;points_outcome_bonus:string|null;points_diff_base:string|null;points_diff_bonus:string|null}[] }|null>(null);
+  const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null;previous_stage?:{id:string;name:string}|null;previous_totals?:{user_id:string;username:string;points:string}[];previous_boot?:{user_id:string;exact:number}[]; tours:{id:string;name:string;tour_no:number;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null;points_h1:string|null;points_h2:string|null;points_outcome:string|null;points_diff:string|null;points_bonus:string|null;points_outcome_base:string|null;points_outcome_bonus:string|null;points_diff_base:string|null;points_diff_bonus:string|null}[] }|null>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedTour, setSelectedTour] = useState("all");
   const [pastWhistleWinner, setPastWhistleWinner] = useState<string|null>(null);
@@ -632,16 +632,16 @@ export default function CutoverParticipantPage() {
         </form>
       </section>}
       {activeTab === "ranking" && <section className="cutover-content cutover-rankings">
-        <div className="cutover-section-heading"><div><span>ТЕКУЩИЙ ЭТАП — {currentTable?.stage?.name ?? "Загрузка…"}</span><h2>Текущая таблица</h2></div></div>
+        <div className="cutover-section-heading"><div><span>ТЕКУЩИЙ ЭТАП — <span className="cutover-stage-title">{currentTable?.stage?.name ?? "Загрузка…"}</span></span><h2>Текущая таблица</h2></div></div>
         {tableLoading && <p>Загружаем матчи и начисления…</p>}
         {!tableLoading && !currentTable && <p>Не удалось загрузить текущую таблицу.</p>}
         {currentTable && !currentTable.stage && <p>Текущий этап не выбран.</p>}
         {currentTable?.stage && <>
           <label className="cutover-table-filter">Тур <select value={selectedTour} onChange={e => setSelectedTour(e.target.value)}>
             <option value="all">Все туры</option>
-            {currentTable.tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {[...currentTable.tours].sort((a,b)=>Number(b.tour_no)-Number(a.tour_no)||Number(b.id)-Number(a.id)).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select></label>
-          {currentTable.tours.filter(t => selectedTour === "all" || t.id === selectedTour).map(t => {
+          {[...currentTable.tours].sort((a,b)=>Number(b.tour_no)-Number(a.tour_no)||Number(b.id)-Number(a.id)).filter(t => selectedTour === "all" || t.id === selectedTour).map(t => {
             const grouped = new Map<string, typeof currentTable.rows>();
             for (const record of currentTable.rows.filter(row => row.tour_id === t.id)) {
               grouped.set(record.match_id, [...(grouped.get(record.match_id) ?? []), record]);
