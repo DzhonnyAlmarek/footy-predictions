@@ -13,7 +13,7 @@ type Prediction = {
 };
 
 export default function CutoverParticipantPage() {
-  const [activeTab, setActiveTab] = useState<"schedule" | "archive" | "analytics" | "golden-boot" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("schedule");
+  const [activeTab, setActiveTab] = useState<"schedule" | "archive" | "analytics" | "golden-boot" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("mine");
   const [showAllMatches, setShowAllMatches] = useState(false);
   const [matchFilter, setMatchFilter] = useState<"upcoming" | "all">("upcoming");
   const [savedMatchId, setSavedMatchId] = useState<string | null>(null);
@@ -81,6 +81,7 @@ export default function CutoverParticipantPage() {
     const sessionData = await session.json();
     setSessionUsername(typeof sessionData.username === "string" ? sessionData.username : "");
     setIsAdmin(sessionData.role === "admin");
+    setActiveTab(prev => sessionData.role === "admin" ? (prev === "mine" ? "admin" : prev) : (prev === "schedule" || prev === "admin" ? "mine" : prev));
     setMustChangePassword(sessionData.must_change_password === true);
     // Temporary credentials must be changed before loading predictions.
     // The prediction API deliberately refuses these sessions.
@@ -387,7 +388,7 @@ export default function CutoverParticipantPage() {
       setSessionUsername("");
       setUsername("");
       setPassword("");
-      setActiveTab("schedule");
+      setActiveTab("mine");
       setIsAdmin(false);
       setMustChangePassword(false);
       setAdminData(null);
