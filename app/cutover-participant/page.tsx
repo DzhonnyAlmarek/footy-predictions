@@ -122,6 +122,10 @@ export default function CutoverParticipantPage() {
       setAdminWritesEnabled(false);
       setResultWritesEnabled(false);
     }
+    // Session confirmation is the login boundary. Optional data must not block it.
+    setAuthenticated(true);
+    setMessage("");
+    void (async () => { try {
     if (sessionData.role === "admin") {
       const adminResponse = await fetch("/api/cutover/admin", { cache: "no-store" });
       if (adminResponse.ok) {
@@ -136,7 +140,7 @@ export default function CutoverParticipantPage() {
       }
     }
     const response = await fetch("/api/cutover/my-predictions", { cache: "no-store" });
-    if (!response.ok) { setSessionUsername(""); setAuthenticated(false); setIsAdmin(false); setAdminData(null); setMessage("Не удалось получить прогнозы."); return; }
+    if (!response.ok) { setMessage("Не удалось получить прогнозы. Попробуй обновить страницу."); return; }
     const data = await response.json();
     setPredictions(Array.isArray(data.predictions) ? data.predictions : []);
     const scheduleResponse = await fetch("/api/cutover/schedule", { cache: "no-store" });
@@ -166,8 +170,7 @@ export default function CutoverParticipantPage() {
       setWhistle(data);
       setWhistleUnavailable(false);
     } else { setWhistle(null); setWhistleUnavailable(true); }
-    setAuthenticated(true);
-    setMessage("");
+    } catch { setMessage("Часть данных временно недоступна. Повтори загрузку страницы."); } })();
   }
   useEffect(() => {
     void load().catch(() => setMessage("Сервис пока недоступен."));
