@@ -49,19 +49,22 @@ export default function CutoverParticipantPage() {
   const [archiveStageId,setArchiveStageId]=useState("");
   const [archiveWhistle,setArchiveWhistle]=useState<{penalty_matches:number;leaderboard:{username:string;points:number}[]}|null>(null);
   const [archiveLoading,setArchiveLoading]=useState(false);
+  const [archiveWhistleError,setArchiveWhistleError]=useState(false);
   useEffect(()=>{
     if(!authenticated || activeTab!=="archive") return;
     let cancelled=false;
     setArchiveLoading(true);
+    setArchiveWhistleError(false);
+    setArchiveWhistle(null);
     const suffix=archiveStageId?"?stageId="+encodeURIComponent(archiveStageId):"";
     void fetch("/api/cutover/archive"+suffix,{cache:"no-store"}).then(async res=>{if(!res.ok) throw new Error("archive");return res.json();})
       .then(data=>{
         if(cancelled)return;
         setArchive(data);
         if(data.stage?.id) void fetch("/api/cutover/golden-whistle?stageId="+encodeURIComponent(data.stage.id),{cache:"no-store"})
-          .then(async res=>res.ok?res.json():null)
-          .then(result=>{if(!cancelled)setArchiveWhistle(result);})
-          .catch(()=>{if(!cancelled)setArchiveWhistle(null);});
+          .then(async res=>{if(!res.ok)throw new Error("whistle");return res.json();})
+          .then(result=>{if(!cancelled){setArchiveWhistle(result);setArchiveWhistleError(false);}})
+          .catch(()=>{if(!cancelled){setArchiveWhistle(null);setArchiveWhistleError(true);}});
       }).catch(()=>{if(!cancelled)setArchive(null);}).finally(()=>{if(!cancelled)setArchiveLoading(false);});
     return ()=>{cancelled=true;};
   },[authenticated,activeTab,archiveStageId]);
@@ -883,10 +886,10 @@ export default function CutoverParticipantPage() {
               .sort((a,b)=>b.exact-a.exact||a.username.localeCompare(b.username,"ru"));
             const ordered=[...archive.users].sort((a,b)=>{const order=["АМН","БАА","КДЛ","КЕН","СВС"];const ai=order.indexOf(a.username.toUpperCase()),bi=order.indexOf(b.username.toUpperCase());return (ai<0?99:ai)-(bi<0?99:bi)||a.username.localeCompare(b.username,"ru");});
             return <>
-              <h3>Итоговая таблица — {archive.stage.name}</h3>
+              <details className="cutover-archive-summary"><summary>Итоговая таблица — {archive.stage.name}</summary>
               <div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Очки</th></tr></thead>
                 <tbody>{totals.map((u,i)=><tr key={u.id}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{Number(u.points.toFixed(2)).toLocaleString("ru-RU")}</td></tr>)}</tbody>
-              </table></div>
+              </table></div></details>
               {[...archive.tours].sort((a,b)=>Number(b.tour_no)-Number(a.tour_no)).map(t=>{
                 const matches=new Map<string,typeof archive.rows>();
                 for(const row of archive.rows.filter(r=>r.tour_id===t.id))matches.set(row.match_id,[...(matches.get(row.match_id)??[]),row]);
@@ -903,7 +906,7 @@ export default function CutoverParticipantPage() {
                 <div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Точных счетов</th></tr></thead>
                 <tbody>{boots.map((u,i)=><tr key={u.username}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{u.exact}</td></tr>)}</tbody></table></div>
                 <h3>Специальная номинация — Золотой свисток 🏆</h3>
-                {!archiveWhistle?<p>Загрузка результатов номинации…</p>:<div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Баллы</th></tr></thead>
+                {archiveWhistleError?<p role="status">Не удалось получить результаты Золотого свистка для этого этапа.</p>:!archiveWhistle?<p>Загрузка результатов номинации…</p>:<div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Баллы</th></tr></thead>
                 <tbody>{archiveWhistle.leaderboard.map((u,i)=><tr key={u.username}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{Number(u.points).toLocaleString("ru-RU")}</td></tr>)}</tbody></table></div>}
               </div>
             </>;
