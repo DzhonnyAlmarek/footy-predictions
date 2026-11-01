@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish candidate HTTPS origin fix; isolated registry upload only.
+# Publish refreshed ADMIN dashboard and read-only stage table candidate; registry only.
 
 on:
   push:
