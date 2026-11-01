@@ -20,7 +20,7 @@ for table in predictions matches points_ledger profiles grand_prix_manual_scores
   grep -q "TABLE DATA footy_cutover $table" "$tmp/manifest.txt" || { echo "Missing $table"; exit 1; }
 done
 # An explicit empty, isolated target is mandatory. Never restore over existing schemas.
-check="SELECT CASE WHEN to_regclass('footy_cutover.predictions') IS NULL AND to_regclass('public.predictions') IS NULL THEN 'empty' ELSE 'occupied' END"
+check="SELECT CASE WHEN current_database() = 'footy_restore_drill' AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') AND schemaname NOT LIKE 'pg_toast%') THEN 'empty' ELSE 'occupied' END"
 state="$(docker run --rm -e PGURL="$FOOTY_RESTORE_TEST_DATABASE_URL" -e CHECK_SQL="$check" postgres:18-alpine sh -c 'psql "$PGURL" -AtX -v ON_ERROR_STOP=1 -c "$CHECK_SQL"')"
 test "$state" = empty || { echo "Restore target not empty; refusing"; exit 1; }
 if [[ "${FOOTY_RESTORE_APPLY:-false}" != true ]]; then
