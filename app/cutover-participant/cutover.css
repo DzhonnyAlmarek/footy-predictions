@@ -384,3 +384,10 @@ img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:n
 .cutover-whistle-details[open]{margin-top:10px}
 .cutover-whistle-details .tableWrap{max-width:min(850px,75vw);margin:10px 0;overflow-x:auto}
 .cutover-whistle-details table{font-size:12px;white-space:nowrap}
+
+/* Whistle per-match receipts fit within the award cell without horizontal scrolling. */
+.cutover-whistle-details .tableWrap{max-width:100%;overflow-x:visible}
+.cutover-whistle-details table{width:100%;min-width:0!important;table-layout:fixed;white-space:normal;font-size:11px}
+.cutover-whistle-details table th,.cutover-whistle-details table td{padding:5px 4px;overflow-wrap:anywhere;vertical-align:top}
+.cutover-whistle-details table th:first-child{width:25%}
+.cutover-whistle-details table th:not(:first-child){width:12.5%}
