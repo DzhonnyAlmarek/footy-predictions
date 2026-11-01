@@ -40,14 +40,14 @@ export default function CutoverParticipantPage() {
   const [boot, setBoot] = useState<{ username: string; exact: number }[]>([]);
   const [grandPrix, setGrandPrix] = useState<{ seasons: { id: string; name: string }[]; ratings: { season_id: string; username: string; points: string; scored_rounds: number }[] } | null>(null);
   const [grandPrixUnavailable, setGrandPrixUnavailable] = useState(false);
-  const [whistle, setWhistle] = useState<{ stage: { id: string; name: string }; available_stages: { id: string; name: string; status: string }[]; penalty_matches: number; leaderboard: { username: string; points: number; main_place: number }[] } | null>(null);
+  const [whistle, setWhistle] = useState<{ stage: { id: string; name: string }; available_stages: { id: string; name: string; status: string }[]; penalty_matches: number; leaderboard: { username: string; points: number; main_place: number; breakdown?:{match_id:string;match:string;result:string;without_penalties:string;prediction:string;points:number;with_penalties_base:number;without_penalties_base:number;actual_points:number}[] }[] } | null>(null);
   const [whistleUnavailable, setWhistleUnavailable] = useState(false);
   const [whistleLoading, setWhistleLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; bonus_points: string; scored_predictions: number }[]>([]);
   const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null;previous_stage?:{id:string;name:string}|null;previous_totals?:{user_id:string;username:string;points:string}[];previous_boot?:{user_id:string;exact:number}[]; tours:{id:string;name:string;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null;points_h1:string|null;points_h2:string|null;points_outcome:string|null;points_diff:string|null;points_bonus:string|null;points_outcome_base:string|null;points_outcome_bonus:string|null;points_diff_base:string|null;points_diff_bonus:string|null}[] }|null>(null);
   const [archive, setArchive] = useState<{stages:{id:string;name:string}[];stage:{id:string;name:string}|null;tours:{id:string;name:string;tour_no:number}[];users:{id:string;username:string}[];rows:{match_id:string;tour_id:string;stage_match_no:number|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null}[]}|null>(null);
   const [archiveStageId,setArchiveStageId]=useState("");
-  const [archiveWhistle,setArchiveWhistle]=useState<{penalty_matches:number;leaderboard:{username:string;points:number}[]}|null>(null);
+  const [archiveWhistle,setArchiveWhistle]=useState<{penalty_matches:number;leaderboard:{username:string;points:number;breakdown?:{match_id:string;match:string;result:string;without_penalties:string;prediction:string;points:number;with_penalties_base:number;without_penalties_base:number;actual_points:number}[]}[]}|null>(null);
   const [archiveLoading,setArchiveLoading]=useState(false);
   const [archiveWhistleError,setArchiveWhistleError]=useState(false);
   useEffect(()=>{
@@ -723,7 +723,11 @@ export default function CutoverParticipantPage() {
             <thead><tr><th>Место</th><th>Участник</th><th>Баллы</th><th>Место в основном конкурсе</th></tr></thead>
             <tbody>{whistle.leaderboard.map((p, index) => <tr key={p.username}>
               <td>{index + 1} {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : ""}</td>
-              <td>{p.username}</td><td>{Number(p.points).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td>{p.main_place}</td>
+              <td>{p.username}</td><td>{Number(p.points).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<details className="cutover-whistle-details"><summary>Расшифровка ({(p.breakdown??[]).length} матчей)</summary>
+                    {(p.breakdown??[]).length ? <div className="tableWrap"><table className="table">
+                    <thead><tr><th>Матч</th><th>Прогноз</th><th>Счёт без пенальти</th><th>Итоговый счёт</th><th>База без пенальти</th><th>База с пенальти</th><th>Начислено</th></tr></thead>
+                    <tbody>{(p.breakdown??[]).map(m=><tr key={m.match_id}><td>{m.match}</td><td>{m.prediction}</td><td>{m.without_penalties}</td><td>{m.result}</td><td>{m.without_penalties_base}</td><td>{m.with_penalties_base}</td><td><strong>{Number(m.points.toFixed(2)).toLocaleString("ru-RU")}</strong></td></tr>)}</tbody></table></div> : <p>Нет положительных начислений за пенальти.</p>}
+                    </details></td><td>{p.main_place}</td>
             </tr>)}</tbody>
           </table></div></>}
       </section>}
@@ -907,7 +911,11 @@ export default function CutoverParticipantPage() {
                 <tbody>{boots.map((u,i)=><tr key={u.username}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{u.exact}</td></tr>)}</tbody></table></div>
                 <h3>Специальная номинация — Золотой свисток 🏆</h3>
                 {archiveWhistleError?<p role="status">Не удалось получить результаты Золотого свистка для этого этапа.</p>:!archiveWhistle?<p>Загрузка результатов номинации…</p>:<div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Баллы</th></tr></thead>
-                <tbody>{archiveWhistle.leaderboard.map((u,i)=><tr key={u.username}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{Number(u.points).toLocaleString("ru-RU")}</td></tr>)}</tbody></table></div>}
+                <tbody>{archiveWhistle.leaderboard.map((u,i)=><tr key={u.username}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{Number(u.points).toLocaleString("ru-RU")}<details className="cutover-whistle-details"><summary>Расшифровка ({(u.breakdown??[]).length} матчей)</summary>
+                    {(u.breakdown??[]).length ? <div className="tableWrap"><table className="table">
+                    <thead><tr><th>Матч</th><th>Прогноз</th><th>Счёт без пенальти</th><th>Итоговый счёт</th><th>База без пенальти</th><th>База с пенальти</th><th>Начислено</th></tr></thead>
+                    <tbody>{(u.breakdown??[]).map(m=><tr key={m.match_id}><td>{m.match}</td><td>{m.prediction}</td><td>{m.without_penalties}</td><td>{m.result}</td><td>{m.without_penalties_base}</td><td>{m.with_penalties_base}</td><td><strong>{Number(m.points.toFixed(2)).toLocaleString("ru-RU")}</strong></td></tr>)}</tbody></table></div> : <p>Нет положительных начислений за пенальти.</p>}
+                    </details></td></tr>)}</tbody></table></div>}
               </div>
             </>;
           })()}
