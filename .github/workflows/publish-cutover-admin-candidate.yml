@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish current table score breakdown, stage totals and top-three medals; registry only.
+# Publish consolidated current-stage overview, title, ordering and no-duplicate points; registry only.
 
 on:
   push:
