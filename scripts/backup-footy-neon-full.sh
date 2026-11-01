@@ -21,8 +21,8 @@ grep -q 'TABLE DATA footy_cutover matches' "$tmp/manifest.txt"
 sha256sum "$tmp/backup.dump" > "$tmp/SHA256SUMS.txt"
 key="footy-neon/$(date -u +%Y/%m/%d)/$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID:-manual}"
 # Yandex Object Storage S3 API. Bucket versioning/retention should be configured separately.
-aws --endpoint-url https://storage.yandexcloud.net s3api put-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$key.dump" --body "$tmp/backup.dump" --server-side-encryption AES256 >/dev/null
-aws --endpoint-url https://storage.yandexcloud.net s3api put-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$key.SHA256SUMS.txt" --body "$tmp/SHA256SUMS.txt" --server-side-encryption AES256 >/dev/null
+aws --endpoint-url https://storage.yandexcloud.net s3api put-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$key.dump" --body "$tmp/backup.dump" >/dev/null
+aws --endpoint-url https://storage.yandexcloud.net s3api put-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$key.SHA256SUMS.txt" --body "$tmp/SHA256SUMS.txt" >/dev/null
 aws --endpoint-url https://storage.yandexcloud.net s3api head-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$key.dump" >/dev/null
 # Independently read back the uploaded object and verify exact bytes, not just existence.
 aws --endpoint-url https://storage.yandexcloud.net s3api get-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$key.dump" "$tmp/readback.dump" >/dev/null
