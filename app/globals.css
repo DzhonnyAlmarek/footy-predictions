@@ -379,3 +379,6 @@ p{ color:var(--muted) }
   .adminMatchActions { width: 100%; }
   .adminMatchActions button { flex: 1 1 130px; }
 }
+
+/* Consistent table headers across the entire site. */
+table thead th { text-align:left !important; }
