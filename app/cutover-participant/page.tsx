@@ -43,6 +43,18 @@ export default function CutoverParticipantPage() {
   const [whistleUnavailable, setWhistleUnavailable] = useState(false);
   const [whistleLoading, setWhistleLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; bonus_points: string; scored_predictions: number }[]>([]);
+  const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null; tours:{id:string;name:string;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null}[] }|null>(null);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [selectedTour, setSelectedTour] = useState("all");
+  useEffect(() => {
+    if (!authenticated || activeTab !== "ranking" || currentTable) return;
+    setTableLoading(true);
+    void fetch("/api/cutover/current-table", {cache:"no-store"})
+      .then(async res => { if (!res.ok) throw new Error("table"); return res.json(); })
+      .then(data => { setCurrentTable(data); setSelectedTour("all"); })
+      .catch(() => setCurrentTable(null))
+      .finally(() => setTableLoading(false));
+  }, [authenticated, activeTab, currentTable]);
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
   const [writesEnabled, setWritesEnabled] = useState(false);
