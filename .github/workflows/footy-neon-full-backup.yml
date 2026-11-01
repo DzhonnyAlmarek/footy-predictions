@@ -20,8 +20,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          # The verified backup script is maintained in the isolated candidate branch.
-          ref: feature/cutover-admin-readiness-20261020
+          # Pin the successfully tested script commit; do not track mutable feature code.
+          ref: 9884d0f151ddd865d3952740959dba6741955668
       - name: Install PostgreSQL client and AWS CLI
         run: |
           sudo apt-get update
