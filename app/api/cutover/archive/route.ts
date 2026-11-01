@@ -16,7 +16,7 @@ export async function GET(req:NextRequest){
   if(!stage) return NextResponse.json({ok:true,stages,stage:null,tours:[],users:[],rows:[]},{headers:CUTOVER_HEADERS});
   const id=String(stage.id);
   const [tours,users,rows]=await Promise.all([
-   sql`SELECT id::text,name,tour_no FROM footy_cutover.tours WHERE stage_id=${id}::bigint ORDER BY tour_no::integer DESC`,
+   sql`SELECT id::text,name,COALESCE(substring(tour_no from '[0-9]+')::integer,0) AS tour_no FROM footy_cutover.tours WHERE stage_id=${id}::bigint ORDER BY COALESCE(substring(tour_no from '[0-9]+')::integer,0) DESC, id DESC`,
    sql`SELECT id::text,username FROM footy_cutover.profiles WHERE username IS NOT NULL AND UPPER(username)<>'ADMIN' AND LOWER(COALESCE(role,''))<>'admin' ORDER BY username`,
    sql`SELECT m.id::text match_id,m.tour_id::text,m.stage_match_no,m.home_score,m.away_score,
    h.name home_team,a.name away_team,p.user_id::text,p.home_pred,p.away_pred,l.points
