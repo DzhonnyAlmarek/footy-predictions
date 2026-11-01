@@ -49,7 +49,7 @@ export default function CutoverParticipantPage() {
   const [selectedTour, setSelectedTour] = useState("all");
   const [pastWhistleWinner, setPastWhistleWinner] = useState<string|null>(null);
   useEffect(() => {
-    if (!authenticated || activeTab !== "ranking" || currentTable) return;
+    if (!authenticated || currentTable) return;
     setTableLoading(true);
     void fetch("/api/cutover/current-table", {cache:"no-store"})
       .then(async res => { if (!res.ok) throw new Error("table"); return res.json(); })
@@ -64,7 +64,7 @@ export default function CutoverParticipantPage() {
       })
       .catch(() => setCurrentTable(null))
       .finally(() => setTableLoading(false));
-  }, [authenticated, activeTab, currentTable]);
+  }, [authenticated, currentTable]);
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
   const [writesEnabled, setWritesEnabled] = useState(false);
