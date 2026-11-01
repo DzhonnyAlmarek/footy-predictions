@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
           ORDER BY username`,
       sql`SELECT id::text, COALESCE(NULLIF(name,''),'Тур ' || tour_no::text) AS name, tour_no
           FROM footy_cutover.tours WHERE stage_id = ${stageId}::bigint
-          ORDER BY tour_no DESC, id DESC`,
+          ORDER BY tour_no::integer DESC, id DESC`,
       sql`SELECT m.id::text AS match_id, m.tour_id::text, m.stage_match_no,
           m.kickoff_at, m.home_score, m.away_score,
           h.name AS home_team, a.name AS away_team,
