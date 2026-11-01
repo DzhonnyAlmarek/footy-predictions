@@ -102,7 +102,7 @@ jobs:
             containerId:$id,
             imageSpec: (.image | {
               imageUrl:$url,
-              environment:(.environment // {})
+              environment:((.environment // {}) + {CUTOVER_AUTH_ORIGIN:"https://www.murashevclub.ru"})
             } + (if .command then {command:.command} else {} end)
               + (if .args then {args:.args} else {} end)
               + (if .workingDir then {workingDir:.workingDir} else {} end)),
