@@ -45,6 +45,26 @@ export default function CutoverParticipantPage() {
   const [whistleLoading, setWhistleLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; bonus_points: string; scored_predictions: number }[]>([]);
   const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null;previous_stage?:{id:string;name:string}|null;previous_totals?:{user_id:string;username:string;points:string}[];previous_boot?:{user_id:string;exact:number}[]; tours:{id:string;name:string;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null;points_h1:string|null;points_h2:string|null;points_outcome:string|null;points_diff:string|null;points_bonus:string|null;points_outcome_base:string|null;points_outcome_bonus:string|null;points_diff_base:string|null;points_diff_bonus:string|null}[] }|null>(null);
+  const [archive, setArchive] = useState<{stages:{id:string;name:string}[];stage:{id:string;name:string}|null;tours:{id:string;name:string;tour_no:number}[];users:{id:string;username:string}[];rows:{match_id:string;tour_id:string;stage_match_no:number|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null}[]}|null>(null);
+  const [archiveStageId,setArchiveStageId]=useState("");
+  const [archiveWhistle,setArchiveWhistle]=useState<{penalty_matches:number;leaderboard:{username:string;points:number}[]}|null>(null);
+  const [archiveLoading,setArchiveLoading]=useState(false);
+  useEffect(()=>{
+    if(!authenticated || activeTab!=="archive") return;
+    let cancelled=false;
+    setArchiveLoading(true);
+    const suffix=archiveStageId?"?stageId="+encodeURIComponent(archiveStageId):"";
+    void fetch("/api/cutover/archive"+suffix,{cache:"no-store"}).then(async res=>{if(!res.ok) throw new Error("archive");return res.json();})
+      .then(data=>{
+        if(cancelled)return;
+        setArchive(data);
+        if(data.stage?.id) void fetch("/api/cutover/golden-whistle?stageId="+encodeURIComponent(data.stage.id),{cache:"no-store"})
+          .then(async res=>res.ok?res.json():null)
+          .then(result=>{if(!cancelled)setArchiveWhistle(result);})
+          .catch(()=>{if(!cancelled)setArchiveWhistle(null);});
+      }).catch(()=>{if(!cancelled)setArchive(null);}).finally(()=>{if(!cancelled)setArchiveLoading(false);});
+    return ()=>{cancelled=true;};
+  },[authenticated,activeTab,archiveStageId]);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedTour, setSelectedTour] = useState("all");
   const [pastWhistleWinner, setPastWhistleWinner] = useState<string|null>(null);
@@ -848,16 +868,47 @@ export default function CutoverParticipantPage() {
             })}</tbody>
           </table></div>}
       </section>}
-      {activeTab === "archive" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ЗАВЕРШЁННЫЕ МАТЧИ</span><h2>Архив матчей</h2></div><p>Результаты завершённых матчей в доступном расписании</p></div>
-        {schedule.filter(m => m.home_score !== null && m.away_score !== null).length === 0
-          ? <p>Завершённых матчей пока нет. Исторические этапы подключим отдельно.</p>
-          : <div className="cutover-mobile-personal-list">
-              {schedule.filter(m => m.home_score !== null && m.away_score !== null).map(m =>
-                <article className="cutover-mobile-match" key={m.match_id}>
-                  <div className="cutover-mobile-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div>
-                  <div className="cutover-mobile-scoreline"><div><span>Результат</span><strong>{m.home_score} : {m.away_score}</strong></div></div>
-                </article>)}
-            </div>}
+      {activeTab === "archive" && <section className="cutover-content">
+        <div className="cutover-section-heading"><div><span>ЗАВЕРШЁННЫЕ ЭТАПЫ</span><h2>Архив соревнований</h2></div><p>Результаты этапа и победители специальных номинаций</p></div>
+        {archiveLoading && <p>Загружаем архив…</p>}
+        {!archiveLoading && !archive && <p>Не удалось загрузить архив.</p>}
+        {archive && <>
+          <label className="cutover-table-filter">Этап <select value={archive.stage?.id??""} onChange={e=>{setArchiveStageId(e.target.value);setArchiveWhistle(null);}}>
+            {archive.stages.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </select></label>
+          {archive.stage && (() => {
+            const totals=archive.users.map(u=>({ ...u,points:archive.rows.filter(row=>row.user_id===u.id).reduce((sum,row)=>sum+Number(row.points??0),0)}))
+              .sort((a,b)=>b.points-a.points||a.username.localeCompare(b.username,"ru"));
+            const boots=archive.users.map(u=>({username:u.username,exact:archive.rows.filter(row=>row.user_id===u.id&&row.home_pred!==null&&row.away_pred!==null&&row.home_score!==null&&row.away_score!==null&&row.home_pred===row.home_score&&row.away_pred===row.away_score).length}))
+              .sort((a,b)=>b.exact-a.exact||a.username.localeCompare(b.username,"ru"));
+            const ordered=[...archive.users].sort((a,b)=>{const order=["АМН","БАА","КДЛ","КЕН","СВС"];const ai=order.indexOf(a.username.toUpperCase()),bi=order.indexOf(b.username.toUpperCase());return (ai<0?99:ai)-(bi<0?99:bi)||a.username.localeCompare(b.username,"ru");});
+            return <>
+              <h3>Итоговая таблица — {archive.stage.name}</h3>
+              <div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Очки</th></tr></thead>
+                <tbody>{totals.map((u,i)=><tr key={u.id}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{Number(u.points.toFixed(2)).toLocaleString("ru-RU")}</td></tr>)}</tbody>
+              </table></div>
+              {[...archive.tours].sort((a,b)=>Number(b.tour_no)-Number(a.tour_no)).map(t=>{
+                const matches=new Map<string,typeof archive.rows>();
+                for(const row of archive.rows.filter(r=>r.tour_id===t.id))matches.set(row.match_id,[...(matches.get(row.match_id)??[]),row]);
+                return <div className="cutover-current-tour" key={t.id}><h3>{t.name}</h3>
+                  <div className="tableWrap"><table className="table currentTable"><thead><tr><th>№</th><th>Матч</th><th>Результат</th>{ordered.map(u=><th key={u.id}>{u.username}</th>)}</tr></thead>
+                    <tbody>{[...matches.entries()].map(([mid,rows],i)=>{
+                      const m=rows[0];return <tr key={mid}><td>{m.stage_match_no??i+1}</td><td><strong>{m.home_team} — {m.away_team}</strong></td>
+                      <td>{m.home_score==null||m.away_score==null?"—":m.home_score+":"+m.away_score}</td>
+                      {ordered.map(u=>{const p=rows.find(r=>r.user_id===u.id);return <td key={u.id}>{p?.home_pred==null||p.away_pred==null?"—":p.home_pred+":"+p.away_pred}{p?.points==null?"":` (${Number(p.points).toLocaleString("ru-RU")})`}</td>;})}
+                      </tr>;
+                    })}</tbody></table></div></div>;
+              })}
+              <div className="cutover-awards"><h3>Специальная номинация — Золотая бутса ⚽</h3>
+                <div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Точных счетов</th></tr></thead>
+                <tbody>{boots.map((u,i)=><tr key={u.username}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{u.exact}</td></tr>)}</tbody></table></div>
+                <h3>Специальная номинация — Золотой свисток 🏆</h3>
+                {!archiveWhistle?<p>Загрузка результатов номинации…</p>:<div className="tableWrap"><table className="table"><thead><tr><th>Место</th><th>Участник</th><th>Баллы</th></tr></thead>
+                <tbody>{archiveWhistle.leaderboard.map((u,i)=><tr key={u.username}><td>{i+1} {i===0?"🥇":i===1?"🥈":i===2?"🥉":""}</td><td>{u.username}</td><td>{Number(u.points).toLocaleString("ru-RU")}</td></tr>)}</tbody></table></div>}
+              </div>
+            </>;
+          })()}
+        </>}
       </section>}
       {activeTab === "mine" && !isAdmin && <section className="cutover-content cutover-my-predictions">
         <div className="cutover-section-heading"><div><span>ТЕКУЩИЙ ЭТАП — {currentTable?.stage?.name ?? "Загрузка…"}</span><h2>Мои прогнозы</h2></div><p>Матчи и твои прогнозы по турам текущего этапа</p></div>
