@@ -377,3 +377,10 @@ img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:n
 .cutover-archive-summary>summary{cursor:pointer;font-size:19px;font-weight:800;color:#084c39;padding:10px 0}
 .cutover-archive-summary>summary:hover{text-decoration:underline}
 .cutover-archive-summary[open]>summary{margin-bottom:10px}
+
+/* Inspect scoring without overwhelming the awards standings. */
+.cutover-whistle-details{margin-top:6px;min-width:190px}
+.cutover-whistle-details>summary{cursor:pointer;color:#08644d;font-weight:700;font-size:12px}
+.cutover-whistle-details[open]{margin-top:10px}
+.cutover-whistle-details .tableWrap{max-width:min(850px,75vw);margin:10px 0;overflow-x:auto}
+.cutover-whistle-details table{font-size:12px;white-space:nowrap}
