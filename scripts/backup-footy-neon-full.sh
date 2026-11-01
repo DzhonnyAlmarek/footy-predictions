@@ -24,5 +24,8 @@ key="footy-neon/$(date -u +%Y/%m/%d)/$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID:
 aws --endpoint-url https://storage.yandexcloud.net s3api put-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$key.dump" --body "$tmp/backup.dump" --server-side-encryption AES256 >/dev/null
 aws --endpoint-url https://storage.yandexcloud.net s3api put-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$key.SHA256SUMS.txt" --body "$tmp/SHA256SUMS.txt" --server-side-encryption AES256 >/dev/null
 aws --endpoint-url https://storage.yandexcloud.net s3api head-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$key.dump" >/dev/null
-echo "Backup uploaded and verified (object existence); key: $key"
+# Independently read back the uploaded object and verify exact bytes, not just existence.
+aws --endpoint-url https://storage.yandexcloud.net s3api get-object --bucket "$FOOTY_BACKUP_S3_BUCKET" --key "$key.dump" "$tmp/readback.dump" >/dev/null
+cmp "$tmp/backup.dump" "$tmp/readback.dump" || { echo "Uploaded backup differs from local dump"; exit 1; }
+echo "Backup uploaded and verified by full read-back comparison; key: $key"
 echo "Note: a restoration drill in isolated database is still required."
