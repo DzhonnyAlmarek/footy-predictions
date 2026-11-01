@@ -316,3 +316,13 @@
 /* Classic monochrome SVG football overrides old emoji/photo styles. */
 svg.cutover-club-ball-photo{background:none!important;background-image:none!important;border:0!important;box-shadow:none!important;overflow:visible!important;display:block!important}
 svg.cutover-club-ball-photo::before,svg.cutover-club-ball-photo::after{content:none!important}
+
+/* Read-only match matrix: horizontally scrollable for all participants. */
+.cutover-current-tour{margin-top:20px}
+.cutover-current-tour h3{font-size:19px;margin:0 0 10px;color:#064c39}
+.cutover-current-tour .tableWrap{overflow-x:auto}
+.cutover-current-tour table{min-width:820px;white-space:nowrap}
+.cutover-current-tour th,.cutover-current-tour td{padding:10px 12px;vertical-align:middle}
+.cutover-current-tour .predText{font-weight:600}
+.cutover-table-filter{display:flex;align-items:center;gap:12px;max-width:360px;margin-top:12px}
+.cutover-table-filter select{flex:1}
