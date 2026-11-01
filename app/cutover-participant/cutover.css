@@ -391,3 +391,8 @@ img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:n
 .cutover-whistle-details table th,.cutover-whistle-details table td{padding:5px 4px;overflow-wrap:anywhere;vertical-align:top}
 .cutover-whistle-details table th:first-child{width:25%}
 .cutover-whistle-details table th:not(:first-child){width:12.5%}
+
+/* Award breakdown is a readable viewport-wide overlay, never constrained to its points column. */
+.cutover-whistle-details[open]>.tableWrap{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(900px,calc(100vw - 30px));max-width:none;max-height:calc(100dvh - 30px);overflow-x:hidden;overflow-y:auto;z-index:2500;background:#fff;border:1px solid #bdd8cf;border-radius:14px;box-shadow:0 14px 60px #102c254d;padding:16px}
+.cutover-whistle-details[open]>.tableWrap table{width:100%;min-width:0;table-layout:fixed;white-space:normal}
+.cutover-whistle-close{display:block;margin:0 0 10px auto;cursor:pointer;background:#e5f0eb;border:0;border-radius:8px;padding:7px 12px;color:#07533d;font-weight:700}
