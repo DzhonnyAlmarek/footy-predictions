@@ -7,9 +7,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const reply = (body: object, status = 200) => NextResponse.json(body, { status, headers: CUTOVER_HEADERS });
 
+function approvedOrigin(requestOrigin: string | null): boolean {
+  const configured = process.env.CUTOVER_AUTH_ORIGIN;
+  if (!configured?.startsWith("https://") || !requestOrigin) return false;
+  return requestOrigin === configured ||
+    (process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
+     requestOrigin === "https://www.murashevclub.ru");
+}
+
 export async function POST(req: NextRequest) {
   if (!cutoverAuthEnabled()) return reply({ ok: false }, 404);
-  if (req.headers.get("origin") !== process.env.CUTOVER_AUTH_ORIGIN) return reply({ ok: false }, 403);
+  if (!approvedOrigin(req.headers.get("origin"))) return reply({ ok: false }, 403);
   if (Number(req.headers.get("content-length") || 0) > 1024) return reply({ ok: false }, 413);
   try {
     const identity = await authenticatedCutoverIdentity(req.cookies.get(CUTOVER_COOKIE)?.value);
