@@ -766,17 +766,54 @@ export default function CutoverParticipantPage() {
         </article>)}
       </div>
       </section>}
-      {activeTab === "analytics" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>СТАТИСТИКА УЧАСТНИКА</span><h2>Аналитика прогнозов</h2></div><p>Показатели рассчитаны по доступным завершённым матчам, а не по всей истории турнира</p></div>
-        {(() => {
-          const completed = predictions.filter(p => p.home_score !== null && p.away_score !== null && p.home_pred !== null && p.away_pred !== null);
-          const exact = completed.filter(p => p.home_pred === p.home_score && p.away_pred === p.away_score).length;
-          const outcome = (h: number, a: number) => Math.sign(h - a);
-          const outcomes = completed.filter(p => outcome(p.home_pred!, p.away_pred!) === outcome(p.home_score!, p.away_score!)).length;
-          return <div className="cutover-overview" aria-label="Статистика прогнозов">
-            <div className="cutover-stat"><span>ПРОВЕРЕНО ПРОГНОЗОВ</span><strong>{completed.length}</strong><small>Завершённых матчей</small></div>
-            <div className="cutover-stat"><span>ТОЧНЫЙ СЧЁТ</span><strong>{exact}</strong><small>{completed.length ? Math.round(exact / completed.length * 100) : 0}% прогнозов</small></div>
-            <div className="cutover-stat"><span>УГАДАН ИСХОД</span><strong>{outcomes}</strong><small>{completed.length ? Math.round(outcomes / completed.length * 100) : 0}% прогнозов</small></div>
-          </div>;
+      {activeTab === "analytics" && <section className="cutover-content">
+        <div className="cutover-section-heading"><div><span>СРАВНЕНИЕ УЧАСТНИКОВ · {currentTable?.stage?.name ?? "Текущий этап"}</span><h2>Аналитика прогнозов</h2></div><p>Все участники, очки и эффективность по текущему этапу</p></div>
+        {!currentTable?.stage ? <p>Загружаем статистику этапа…</p> : (() => {
+          const format = (value:number) => Number(value.toFixed(2)).toLocaleString("ru-RU");
+          const calc = (rows:typeof currentTable.rows) => {
+            const done=rows.filter(p=>p.user_id && p.home_pred!==null && p.away_pred!==null && p.home_score!==null && p.away_score!==null);
+            const exact=done.filter(p=>p.home_pred===p.home_score && p.away_pred===p.away_score).length;
+            const outcomes=done.filter(p=>Math.sign(p.home_pred!-p.away_pred!)===Math.sign(p.home_score!-p.away_score!)).length;
+            const points=done.reduce((sum,p)=>sum+Number(p.points??0),0);
+            return {done:done.length,exact,outcomes,points,avg:done.length?points/done.length:0};
+          };
+          const users=[...currentTable.users].sort((a,b)=>a.username.localeCompare(b.username,"ru"));
+          const tours=[...currentTable.tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no));
+          const all=users.map(u=>({ ...u,...calc(currentTable.rows.filter(p=>p.user_id===u.id)) }))
+            .sort((a,b)=>b.points-a.points||a.username.localeCompare(b.username,"ru"));
+          const rankFor=(userId:string,cutoff:number)=>{
+            const ranking=users.map(u=>({id:u.id,username:u.username,points:currentTable.rows
+              .filter(p=>p.user_id===u.id&&tours.some(t=>t.id===p.tour_id&&Number(t.tour_no)<=cutoff))
+              .reduce((sum,p)=>sum+Number(p.points??0),0)}))
+              .sort((a,b)=>b.points-a.points||a.username.localeCompare(b.username,"ru"));
+            return ranking.findIndex(u=>u.id===userId)+1;
+          };
+          return <>
+            <div className="tableWrap"><table className="table cutover-analytics-table">
+              <thead><tr><th>Участник</th><th>Прогнозов</th><th>Точных счетов</th><th>Угадано исходов</th><th>Очки</th><th>Среднее за матч</th><th>Место</th></tr></thead>
+              <tbody>{all.map((u,i)=><tr key={u.id}>
+                <td><strong>{u.username}{u.username===sessionUsername?" · ты":""}</strong></td><td>{u.done}</td>
+                <td>{u.exact}{u.done?` (${Math.round(100*u.exact/u.done)}%)`:""}</td>
+                <td>{u.outcomes}{u.done?` (${Math.round(100*u.outcomes/u.done)}%)`:""}</td>
+                <td>{format(u.points)}</td><td>{u.done?format(u.avg):"—"}</td><td>{i+1}</td>
+              </tr>)}</tbody></table></div>
+            <h3>Эффективность по турам</h3>
+            <div className="tableWrap"><table className="table cutover-analytics-table">
+              <thead><tr><th>Тур</th><th>Участник</th><th>Прогнозов</th><th>Точных счетов</th><th>Угадано исходов</th><th>Очки за тур</th><th>Среднее</th><th>Место после тура</th><th>Изменение места</th></tr></thead>
+              <tbody>{[...tours].reverse().flatMap((t,index)=>{
+                const prev=tours.find(s=>Number(s.tour_no)<Number(t.tour_no));
+                return users.map(u=>{
+                  const stat=calc(currentTable.rows.filter(p=>p.tour_id===t.id&&p.user_id===u.id));
+                  const place=rankFor(u.id,Number(t.tour_no));
+                  const old=prev?rankFor(u.id,Number(prev.tour_no)):null;
+                  const change=old===null?"—":old>place?"↑ "+(old-place):old<place?"↓ "+(place-old):"—";
+                  return <tr key={t.id+"-"+u.id}><td>{t.name}</td><td><strong>{u.username}</strong></td>
+                    <td>{stat.done}</td><td>{stat.exact}</td><td>{stat.outcomes}</td><td>{format(stat.points)}</td>
+                    <td>{stat.done?format(stat.avg):"—"}</td><td>{place}</td><td>{change}</td></tr>;
+                });
+              })}</tbody></table></div>
+            <p>Место и его изменение рассчитываются по накопленным очкам на конец каждого тура. При равенстве очков порядок участников определяется именем; дополнительных правил разрешения ничьих здесь не применяется.</p>
+          </>;
         })()}
       </section>}
       {activeTab === "golden-boot" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ТОЧНЫЕ СЧЕТА</span><h2>Золотая бутса</h2></div><p>Количество точно угаданных результатов в доступных матчах</p></div>
@@ -796,24 +833,31 @@ export default function CutoverParticipantPage() {
                 </article>)}
             </div>}
       </section>}
-      {activeTab === "mine" && !isAdmin && <section className="cutover-content cutover-my-predictions"><div className="cutover-section-heading"><div><span>ЛИЧНАЯ СТАТИСТИКА</span><h2>Мои прогнозы <em>{predictions.length}</em></h2></div><p>Все твои прогнозы и результаты</p></div>
-      <div className="tableWrap cutover-personal-table"><table className="table" style={{ minWidth: 500 }}>
-        <thead><tr><th>Матч</th><th>Прогноз</th><th>Результат</th></tr></thead>
-        <tbody>{predictions.map(p => <tr key={p.match_id}>
-          <td>{p.home_team || "?"} — {p.away_team || "?"}</td>
-          <td>{p.home_pred ?? "—"} : {p.away_pred ?? "—"}</td>
-          <td>{p.home_score ?? "—"} : {p.away_score ?? "—"}</td>
-        </tr>)}</tbody>
-      </table></div>
-      <div className="cutover-mobile-personal-list" aria-label="Мои прогнозы — мобильный вид">
-        {predictions.map(p => <article className="cutover-mobile-match" key={p.match_id}>
-          <div className="cutover-mobile-teams"><strong>{p.home_team || "?"}</strong><span>—</span><strong>{p.away_team || "?"}</strong></div>
-          <div className="cutover-mobile-scoreline">
-            <div><span>Мой прогноз</span><strong>{p.home_pred ?? "—"} : {p.away_pred ?? "—"}</strong></div>
-            <div><span>Результат</span><strong>{p.home_score ?? "—"} : {p.away_score ?? "—"}</strong></div>
-          </div>
-        </article>)}
-      </div></section>}
+      {activeTab === "mine" && !isAdmin && <section className="cutover-content cutover-my-predictions">
+        <div className="cutover-section-heading"><div><span>ТЕКУЩИЙ ЭТАП — {currentTable?.stage?.name ?? "Загрузка…"}</span><h2>Мои прогнозы</h2></div><p>Матчи и твои прогнозы по турам текущего этапа</p></div>
+        {!currentTable?.stage ? <p>Загружаем матчи текущего этапа…</p> :
+          [...currentTable.tours].sort((a,b)=>Number(b.tour_no)-Number(a.tour_no)).map(t=>{
+            const unique=new Map<string,(typeof currentTable.rows)[number]>();
+            for(const row of currentTable.rows.filter(row=>row.tour_id===t.id)) if(!unique.has(row.match_id)) unique.set(row.match_id,row);
+            return <div className="cutover-current-tour" key={t.id}>
+              <h3>{t.name}</h3>
+              <div className="tableWrap"><table className="table currentTable">
+                <thead><tr><th>№</th><th>Матч</th><th>Результат</th><th>Мой прогноз</th><th>Очки</th></tr></thead>
+                <tbody>{[...unique.values()].map((match,index)=>{
+                  const p=currentTable.rows.find(row=>row.match_id===match.match_id&&currentTable.users.some(u=>u.id===row.user_id&&u.username===sessionUsername));
+                  return <tr key={match.match_id}>
+                    <td>{match.stage_match_no??index+1}</td>
+                    <td><strong>{match.home_team} — {match.away_team}</strong></td>
+                    <td>{match.home_score===null||match.away_score===null?"—":match.home_score+":"+match.away_score}</td>
+                    <td>{p?.home_pred==null||p.away_pred==null?"—":p.home_pred+":"+p.away_pred}</td>
+                    <td>{p?.points==null?"—":Number(p.points).toLocaleString("ru-RU")}</td>
+                  </tr>;
+                })}</tbody>
+              </table></div>
+            </div>;
+          })
+        }
+      </section>}
     </>}
   </main>;
 }
