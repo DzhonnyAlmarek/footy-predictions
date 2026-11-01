@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import "./cutover.css";
+import PointsPopover from "@/app/_components/points-popover";
 
 type Prediction = {
   match_id: string; kickoff_at: string | null; home_team: string | null;
@@ -43,7 +44,7 @@ export default function CutoverParticipantPage() {
   const [whistleUnavailable, setWhistleUnavailable] = useState(false);
   const [whistleLoading, setWhistleLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; bonus_points: string; scored_predictions: number }[]>([]);
-  const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null; tours:{id:string;name:string;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null}[] }|null>(null);
+  const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null; tours:{id:string;name:string;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null;points_h1:string|null;points_h2:string|null;points_outcome:string|null;points_diff:string|null;points_bonus:string|null;points_outcome_base:string|null;points_outcome_bonus:string|null;points_diff_base:string|null;points_diff_bonus:string|null}[] }|null>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedTour, setSelectedTour] = useState("all");
   useEffect(() => {
@@ -628,7 +629,13 @@ export default function CutoverParticipantPage() {
               <h3>{t.name}</h3>
               <div className="tableWrap"><table className="table currentTable">
                 <thead><tr><th>№</th><th>Матч</th><th>Результат</th>
-                  {currentTable.users.map(u => <th key={u.id}>{u.username}</th>)}
+                  {[...currentTable.users].sort((a,b) => {
+                    const totals = (userId:string) => currentTable.rows.filter(row => row.user_id===userId).reduce((sum,row) => sum+Number(row.points ?? 0),0);
+                    return totals(b.id)-totals(a.id) || a.username.localeCompare(b.username,"ru");
+                  }).map((u,index) => <th key={u.id} className="ctUserHead">
+                    <div>{index===0?"🥇":index===1?"🥈":index===2?"🥉":""} {u.username}</div>
+                    <div className="ctTotal">({Number(currentTable.rows.filter(row=>row.user_id===u.id).reduce((sum,row)=>sum+Number(row.points??0),0).toFixed(2))})</div>
+                  </th>)}
                 </tr></thead>
                 <tbody>{[...grouped.entries()].map(([id, records], index) => {
                   const m = records[0];
@@ -640,7 +647,22 @@ export default function CutoverParticipantPage() {
                       const prediction = records.find(row => row.user_id === u.id);
                       const score = prediction?.home_pred == null || prediction.away_pred == null ? "—" : prediction.home_pred + ":" + prediction.away_pred;
                       return <td key={u.id}><span className="predText">{score}</span>
-                        {prediction?.points != null && <strong className="cutover-points"> ({prediction.points})</strong>}
+                        {prediction?.points != null && <PointsPopover pts={Number(prediction.points)} breakdown={{
+                          total:Number(prediction.points),
+                          predText:score,
+                          resText:m.home_score == null || m.away_score == null ? "—" : m.home_score+":"+m.away_score,
+                          homeGoalsPts:Number(prediction.points_h1 ?? 0),
+                          awayGoalsPts:Number(prediction.points_h2 ?? 0),
+                          homeGoalsPred:prediction.home_pred, awayGoalsPred:prediction.away_pred,
+                          homeGoalsRes:m.home_score,awayGoalsRes:m.away_score,
+                          outcomeTotal:Number(prediction.points_outcome ?? 0),
+                          outcomeBase:Number(prediction.points_outcome_base ?? 0),
+                          outcomeMultBonus:Number(prediction.points_outcome_bonus ?? 0),
+                          diffTotal:Number(prediction.points_diff ?? 0),
+                          diffBase:Number(prediction.points_diff_base ?? 0),
+                          diffMultBonus:Number(prediction.points_diff_bonus ?? 0),
+                          nearMissPts:Number(prediction.points_bonus ?? 0),
+                        }} />}
                       </td>;
                     })}
                   </tr>;
