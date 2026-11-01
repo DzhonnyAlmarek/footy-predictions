@@ -9,7 +9,8 @@ export PGCONNECT_TIMEOUT=15
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 # Fail closed if the configured connection does not contain the intended site schema.
-exists="$(docker run --rm -e PGURL="$FOOTY_BACKUP_NEON_DATABASE_URL" postgres:18-alpine sh -c 'psql "$PGURL" -AtX -v ON_ERROR_STOP=1 -c "SELECT CASE WHEN to_regclass('footy_cutover.predictions') IS NOT NULL AND to_regclass('footy_cutover.points_ledger') IS NOT NULL AND to_regclass('footy_cutover.matches') IS NOT NULL THEN 'yes' ELSE 'no' END"' )"
+check_sql="SELECT CASE WHEN to_regclass('footy_cutover.predictions') IS NOT NULL AND to_regclass('footy_cutover.points_ledger') IS NOT NULL AND to_regclass('footy_cutover.matches') IS NOT NULL THEN 'yes' ELSE 'no' END"
+exists="$(docker run --rm -e PGURL="$FOOTY_BACKUP_NEON_DATABASE_URL" -e PG_CHECK_SQL="$check_sql" postgres:18-alpine sh -c 'psql "$PGURL" -AtX -v ON_ERROR_STOP=1 -c "$PG_CHECK_SQL"')"
 test "$exists" = yes || { echo "Wrong database or missing critical tables"; exit 1; }
 # Include all schemas, definitions, data, sequences, and privileges.
 docker run --rm -e PGURL="$FOOTY_BACKUP_NEON_DATABASE_URL" -v "$tmp:/backup" postgres:18-alpine sh -c 'pg_dump --dbname="$PGURL" --format=custom --no-password --file=/backup/backup.dump'
