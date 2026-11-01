@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish monochrome SVG football candidate; isolated registry upload only.
+# Publish candidate HTTPS origin fix; isolated registry upload only.
 
 on:
   push:
