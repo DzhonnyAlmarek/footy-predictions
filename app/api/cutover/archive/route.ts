@@ -28,5 +28,5 @@ export async function GET(req:NextRequest){
    ORDER BY m.stage_match_no,m.id,p.user_id`
   ]);
   return NextResponse.json({ok:true,stages,stage,tours,users,rows},{headers:CUTOVER_HEADERS});
- }catch{return NextResponse.json({ok:false,error:"unavailable"},{status:503,headers:CUTOVER_HEADERS});}
+ }catch(error){console.error("cutover archive query failed",error);return NextResponse.json({ok:false,error:"unavailable"},{status:503,headers:CUTOVER_HEADERS});}
 }
