@@ -346,3 +346,17 @@ img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:n
 .cutover-current-tour .ppTotal{display:flex;justify-content:space-between;font-weight:800;color:#07533d;margin-top:12px}
 .cutover-current-tour .ctTotal{font-size:12px;font-weight:700;margin-top:4px;opacity:.85}
 .cutover-current-tour th.ctUserHead{min-width:108px}
+
+/* Keep match matrix headings aligned with their columns. */
+.cutover-current-tour table thead th { text-align: left !important; }
+
+/* The breakdown is rendered at document level, outside scrolling tables. */
+.ppPopOverlay { box-sizing:border-box; padding:16px; border:1px solid #c9ded5; border-radius:12px; background:#fff; color:#102c25; box-shadow:0 12px 32px #102c2530; font-size:13px; text-align:left; }
+.ppPopOverlay .ppTitle { display:flex; justify-content:space-between; align-items:center; gap:15px; font-weight:800; margin-bottom:12px; }
+.ppPopOverlay .ppClose { border:0; background:none; cursor:pointer; font-size:18px; }
+.ppPopOverlay .ppLine { display:flex; justify-content:space-between; gap:12px; padding:4px 0; }
+.ppPopOverlay .ppKey { color:#52665f; }
+.ppPopOverlay .ppVal { text-align:right; }
+.ppPopOverlay .ppHint { display:block; font-size:11px; color:#64766e; }
+.ppPopOverlay .ppHr { border-top:1px solid #e5eee9; margin:8px 0; }
+.ppPopOverlay .ppTotal { display:flex; justify-content:space-between; font-weight:800; color:#07533d; margin-top:12px; }
