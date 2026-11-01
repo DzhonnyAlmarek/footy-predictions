@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish participant navigation, consistent table headers and analytics charts; registry only.
+# Publish authenticated completed-stage archive with historic rankings and awards; registry only.
 
 on:
   push:
