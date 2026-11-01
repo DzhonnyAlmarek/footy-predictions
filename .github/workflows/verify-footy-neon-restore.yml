@@ -1,0 +1,45 @@
+name: Verify Neon backup restore (isolated database only)
+on:
+  workflow_dispatch:
+    inputs:
+      object_key:
+        required: true
+        type: string
+        description: "Object key ending in .dump"
+      mode:
+        required: true
+        type: choice
+        options:
+          - dry-run
+          - apply
+        default: dry-run
+      confirmation:
+        required: false
+        type: string
+        description: "RESTORE-ISOLATED-ONLY to apply"
+
+permissions:
+  contents: read
+concurrency:
+  group: footy-neon-backup-restore-drill
+  cancel-in-progress: false
+jobs:
+  restore:
+    if: ${{ inputs.mode == 'dry-run' || (inputs.mode == 'apply' && inputs.confirmation == 'RESTORE-ISOLATED-ONLY') }}
+    runs-on: ubuntu-24.04
+    environment: yandex-test
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify isolated database snapshot
+        env:
+          FOOTY_RESTORE_TEST_DATABASE_URL: ${{ secrets.FOOTY_RESTORE_TEST_DATABASE_URL }}
+          FOOTY_BACKUP_S3_BUCKET: ${{ secrets.FOOTY_BACKUP_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.FOOTY_BACKUP_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FOOTY_BACKUP_S3_SECRET_KEY }}
+          AWS_DEFAULT_REGION: ru-central1
+          FOOTY_RESTORE_OBJECT_KEY: ${{ inputs.object_key }}
+          FOOTY_RESTORE_APPLY: ${{ inputs.mode == 'apply' }}
+        run: bash scripts/verify-footy-neon-restore.sh
