@@ -650,11 +650,8 @@ export default function CutoverParticipantPage() {
               <h3>{t.name}</h3>
               <div className="tableWrap"><table className="table currentTable">
                 <thead><tr><th>№</th><th>Матч</th><th>Результат</th>
-                  {[...currentTable.users].sort((a,b) => {
-                    const totals = (userId:string) => currentTable.rows.filter(row => row.user_id===userId).reduce((sum,row) => sum+Number(row.points ?? 0),0);
-                    return totals(b.id)-totals(a.id) || a.username.localeCompare(b.username,"ru");
-                  }).map((u,index) => <th key={u.id} className="ctUserHead">
-                    <div>{index===0?"🥇":index===1?"🥈":index===2?"🥉":""} {u.username}</div>
+                  {[...currentTable.users].sort((a,b) => { const rank=(name:string)=>["АМН","БАА","КДЛ","КЕН","СВС"].indexOf(name.toUpperCase()); const ra=rank(a.username),rb=rank(b.username); return (ra<0?999:ra)-(rb<0?999:rb) || a.username.localeCompare(b.username,"ru"); }).map((u,index) => <th key={u.id} className="ctUserHead">
+                    <div>{(() => { const ranked=[...currentTable.users].sort((a,b)=>currentTable.rows.filter(r=>r.user_id===b.id).reduce((n,r)=>n+Number(r.points??0),0)-currentTable.rows.filter(r=>r.user_id===a.id).reduce((n,r)=>n+Number(r.points??0),0)||a.username.localeCompare(b.username,"ru")); const rank=ranked.findIndex(p=>p.id===u.id); return rank===0?"🥇":rank===1?"🥈":rank===2?"🥉":""; })()} {u.username}</div>
                     <div className="ctTotal">({Number(currentTable.rows.filter(row=>row.user_id===u.id).reduce((sum,row)=>sum+Number(row.points??0),0).toFixed(2))})</div>
                   </th>)}
                 </tr></thead>
@@ -664,10 +661,7 @@ export default function CutoverParticipantPage() {
                     <td>{m.stage_match_no ?? index + 1}</td>
                     <td><strong>{m.home_team} — {m.away_team}</strong></td>
                     <td>{m.home_score == null || m.away_score == null ? "—" : m.home_score + ":" + m.away_score}</td>
-                    {[...currentTable.users].sort((a,b) => {
-                      const total = (id:string) => currentTable.rows.filter(row=>row.user_id===id).reduce((s,row)=>s+Number(row.points??0),0);
-                      return total(b.id)-total(a.id) || a.username.localeCompare(b.username,"ru");
-                    }).map(u => {
+                    {[...currentTable.users].sort((a,b) => { const rank=(name:string)=>["АМН","БАА","КДЛ","КЕН","СВС"].indexOf(name.toUpperCase()); const ra=rank(a.username),rb=rank(b.username); return (ra<0?999:ra)-(rb<0?999:rb) || a.username.localeCompare(b.username,"ru"); }).map(u => {
                       const prediction = records.find(row => row.user_id === u.id);
                       const score = prediction?.home_pred == null || prediction.away_pred == null ? "—" : prediction.home_pred + ":" + prediction.away_pred;
                       return <td key={u.id}><span className="predText">{score}</span>
