@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish refreshed ADMIN dashboard and read-only stage table candidate; registry only.
+# Publish current table score breakdown, stage totals and top-three medals; registry only.
 
 on:
   push:
