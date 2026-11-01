@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish current-stage My Predictions and all-participant analytics candidate; registry only.
+# Publish participant navigation, consistent table headers and analytics charts; registry only.
 
 on:
   push:
