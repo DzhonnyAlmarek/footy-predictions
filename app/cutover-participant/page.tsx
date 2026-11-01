@@ -473,7 +473,7 @@ export default function CutoverParticipantPage() {
       <button type="button" onClick={() => void logout()} disabled={busy}>Выйти</button>
     </form> : <>
       <nav aria-label="Разделы кабинета" className="card cutover-navigation">
-        {([["schedule", "Прогнозы"], ["archive", "Архив"], ["analytics", "Аналитика"], ["ranking", "Текущая таблица"], ["golden-boot", "Бутса"], ["golden-whistle", "Золотой свисток"], ["grand-prix", "Гран-при"], ...(!isAdmin ? [["mine", "Мои прогнозы"]] : []), ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+        {([...(!isAdmin ? [["mine", "Мои прогнозы"]] : []), ["ranking", "Текущая таблица"], ["analytics", "Аналитика"], ["golden-boot", "Бутса"], ["golden-whistle", "Свисток"], ["grand-prix", "Гран-при"], ["archive", "Архив"], ...(isAdmin ? [["schedule", "Прогнозы"], ["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             className={activeTab === id ? "cutover-nav-item is-active" : "cutover-nav-item"} aria-current={activeTab === id ? "page" : undefined}>{label}</button>)}
         <div aria-label="Текущий пользователь" className={isAdmin ? "cutover-user-chip is-admin" : "cutover-user-chip"}>
@@ -797,22 +797,39 @@ export default function CutoverParticipantPage() {
                 <td>{u.outcomes}{u.done?` (${Math.round(100*u.outcomes/u.done)}%)`:""}</td>
                 <td>{format(u.points)}</td><td>{u.done?format(u.avg):"—"}</td><td>{i+1}</td>
               </tr>)}</tbody></table></div>
-            <h3>Эффективность по турам</h3>
-            <div className="tableWrap"><table className="table cutover-analytics-table">
-              <thead><tr><th>Тур</th><th>Участник</th><th>Прогнозов</th><th>Точных счетов</th><th>Угадано исходов</th><th>Очки за тур</th><th>Среднее</th><th>Место после тура</th><th>Изменение места</th></tr></thead>
-              <tbody>{[...tours].reverse().flatMap((t,index)=>{
-                const prev=tours.find(s=>Number(s.tour_no)<Number(t.tour_no));
-                return users.map(u=>{
-                  const stat=calc(currentTable.rows.filter(p=>p.tour_id===t.id&&p.user_id===u.id));
-                  const place=rankFor(u.id,Number(t.tour_no));
-                  const old=prev?rankFor(u.id,Number(prev.tour_no)):null;
-                  const change=old===null?"—":old>place?"↑ "+(old-place):old<place?"↓ "+(place-old):"—";
-                  return <tr key={t.id+"-"+u.id}><td>{t.name}</td><td><strong>{u.username}</strong></td>
-                    <td>{stat.done}</td><td>{stat.exact}</td><td>{stat.outcomes}</td><td>{format(stat.points)}</td>
-                    <td>{stat.done?format(stat.avg):"—"}</td><td>{place}</td><td>{change}</td></tr>;
-                });
-              })}</tbody></table></div>
-            <p>Место и его изменение рассчитываются по накопленным очкам на конец каждого тура. При равенстве очков порядок участников определяется именем; дополнительных правил разрешения ничьих здесь не применяется.</p>
+            <h3>Динамика по турам</h3>
+            <p>Только туры с завершёнными матчами и начисленными очками. Наведи на точку графика, чтобы увидеть значение.</p>
+            {(() => {
+              const finishedTours=tours.filter(t=>currentTable.rows.some(p=>p.tour_id===t.id&&p.points!==null));
+              const cumulative=users.map(u=>({username:u.username,id:u.id,values:finishedTours.map(t=>
+                currentTable.rows.filter(p=>p.user_id===u.id&&tours.some(k=>k.id===p.tour_id&&Number(k.tour_no)<=Number(t.tour_no)))
+                  .reduce((sum,p)=>sum+Number(p.points??0),0))}));
+              const ranking=users.map(u=>({username:u.username,id:u.id,values:finishedTours.map(t=>rankFor(u.id,Number(t.tour_no)))}));
+              const palette=["#166534","#1d4ed8","#c2410c","#7c3aed","#be185d"];
+              const graph=(series:typeof cumulative,mode:"points"|"rank")=>{
+                const max=mode==="rank"?users.length:Math.max(1,...series.flatMap(s=>s.values));
+                const min=mode==="rank"?1:0;
+                const x=(i:number)=>70+i*(660/Math.max(1,finishedTours.length-1));
+                const y=(n:number)=>42+(mode==="rank"?(n-1)/Math.max(1,max-1):1-n/max)*205;
+                return <div className="cutover-chart-scroll"><svg className="cutover-analytics-chart" viewBox="0 0 800 306" role="img" aria-label={mode==="rank"?"Изменение места участников по турам":"Накопленные очки участников по турам"}>
+                  {[0,1,2,3,4].map(i=><g key={i}><line x1="70" y1={42+i*205/4} x2="730" y2={42+i*205/4} stroke="#dbe5e0" />
+                    <text x="61" y={46+i*205/4} fontSize="12" fill="#586e65" textAnchor="end">{mode==="rank"?Math.round(1+i*(max-1)/4):Number((max*(1-i/4)).toFixed(1))}</text></g>)}
+                  {finishedTours.map((t,i)=><text key={t.id} x={x(i)} y="268" fontSize="12" textAnchor="middle" fill="#3d5e51">{t.tour_no}</text>)}
+                  {series.map((s,i)=><g key={s.id}><polyline fill="none" stroke={palette[i%palette.length]} strokeWidth="2.6"
+                    points={s.values.map((v,j)=>x(j)+","+y(v)).join(" ")}/>
+                    {s.values.map((v,j)=><circle key={j} cx={x(j)} cy={y(v)} r="4" fill={palette[i%palette.length]}>
+                      <title>{s.username} · Тур {finishedTours[j].tour_no}: {mode==="rank"?"место "+v:v+" очков"}</title>
+                    </circle>)}</g>)}
+                  <text x="400" y="299" fontSize="12" fill="#586e65" textAnchor="middle">Номер тура</text>
+                </svg></div>;
+              };
+              return finishedTours.length ? <>
+                <h4>Накопленные очки</h4>{graph(cumulative,"points")}
+                <h4>Место в рейтинге</h4>{graph(ranking,"rank")}
+                <div className="cutover-chart-legend">{users.map((u,i)=><span key={u.id}><i style={{background:palette[i%palette.length]}}/>{u.username}</span>)}</div>
+                <p>Место рассчитано по накопленным очкам, при равенстве — по имени. Верхняя линия на графике мест соответствует первому месту.</p>
+              </> : <p>Завершённых туров с начислениями пока нет.</p>;
+            })()}
           </>;
         })()}
       </section>}
