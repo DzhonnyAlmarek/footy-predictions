@@ -326,3 +326,7 @@ svg.cutover-club-ball-photo::before,svg.cutover-club-ball-photo::after{content:n
 .cutover-current-tour .predText{font-weight:600}
 .cutover-table-filter{display:flex;align-items:center;gap:12px;max-width:360px;margin-top:12px}
 .cutover-table-filter select{flex:1}
+
+/* Independent photographic football, unaffected by legacy emoji/SVG rules. */
+img.cutover-club-ball-photo{display:block!important;object-fit:contain!important;background:none!important;background-image:none!important;border:none!important;border-radius:50%!important;box-shadow:none!important;overflow:visible!important}
+img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:none!important}
