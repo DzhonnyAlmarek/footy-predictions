@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish consolidated current-stage overview, title, ordering and no-duplicate points; registry only.
+# Publish numeric descending tour order and consistent current-stage header; registry only.
 
 on:
   push:
