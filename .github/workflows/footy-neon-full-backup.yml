@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: footy-neon-full-backup
@@ -38,3 +39,19 @@ jobs:
           AWS_DEFAULT_REGION: ru-central1
           FOOTY_BACKUP_AGE_RECIPIENT: ${{ vars.FOOTY_BACKUP_AGE_RECIPIENT }}
         run: bash scripts/backup-footy-neon-encrypted.sh
+
+      - name: Register backup failure as GitHub issue
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BACKUP_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="[BACKUP FAILURE] Encrypted Neon daily backup"
+          existing="$(gh issue list --state open --limit 100 --json title,number --jq '.[] | select(.title == "[BACKUP FAILURE] Encrypted Neon daily backup") | .number' | head -n 1)"
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "Backup failed: $BACKUP_RUN_URL"
+          else
+            gh issue create --title "$title" --body "Encrypted Neon backup failed. Inspect workflow logs: $BACKUP_RUN_URL. Do not delete existing backup objects."
+          fi
