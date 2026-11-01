@@ -15,7 +15,15 @@ export async function GET(req: NextRequest) {
     const identity = await authenticatedCutoverIdentity(req.cookies.get(CUTOVER_COOKIE)?.value);
     if (!identity) return NextResponse.json({ ok: false }, { status: 401, headers: CUTOVER_HEADERS });
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
-    const stages = await sql`SELECT id, name, status FROM footy_cutover.stages WHERE is_current = true LIMIT 2`;
+    // Default awards view is strictly the current stage. Historical lookup is used
+    // only for showing an earned title from the previous completed stage.
+    const previousStageId = req.nextUrl.searchParams.get("stageId");
+    if (previousStageId !== null && !/^[1-9]\\d{0,14}$/.test(previousStageId)) {
+      return NextResponse.json({ ok: false }, { status: 400, headers: CUTOVER_HEADERS });
+    }
+    const stages = previousStageId
+      ? await sql`SELECT id, name, status FROM footy_cutover.stages WHERE id=${previousStageId}::bigint AND status='locked' LIMIT 1`
+      : await sql`SELECT id, name, status FROM footy_cutover.stages WHERE is_current = true LIMIT 2`;
     if (stages.length !== 1) return NextResponse.json({ ok: true, stage: null, available_stages: [], penalty_matches: 0, leaderboard: [] }, { headers: CUTOVER_HEADERS });
     const stage = stages[0];
     const availableStages = await sql`SELECT id::text AS id, name, status FROM footy_cutover.stages WHERE is_current = true`;
