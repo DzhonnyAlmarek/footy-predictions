@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish consolidated verified tour, column, and point receipt UI updates; registry only.
+# Publish current-stage My Predictions and all-participant analytics candidate; registry only.
 
 on:
   push:
