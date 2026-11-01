@@ -1,5 +1,5 @@
 name: Publish candidate admin image (no deployment)
-# Publish archive numeric tour ordering and smaller dashboard cards; registry only.
+# Publish archive collapsible standings and Golden Whistle per-match breakdown; registry only.
 
 on:
   push:
