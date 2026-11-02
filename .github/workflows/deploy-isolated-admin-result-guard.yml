@@ -94,7 +94,7 @@ jobs:
             --service-account-id "$RUNTIME_ACCOUNT" \
             --cores 1 --core-fraction 100 --memory 512MB --execution-timeout 30s --concurrency 1 \
             --environment NODE_ENV=production \
-            --environment DEPLOY_TARGET=yandex-neon-production-candidate \
+            --environment DEPLOY_TARGET=yandex-neon-admin-isolated \
             --environment ENABLE_CUTOVER_PRODUCTION_CANDIDATE=true \
             --environment ENABLE_CUTOVER_PREVIEW=true \
             --environment ENABLE_CUTOVER_AUTH=true \
