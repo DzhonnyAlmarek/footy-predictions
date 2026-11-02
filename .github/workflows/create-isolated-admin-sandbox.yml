@@ -55,6 +55,12 @@ jobs:
           curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh -o /tmp/install-yc.sh
           bash /tmp/install-yc.sh -i "$HOME/yandex-cloud" -n
           echo "$HOME/yandex-cloud/bin" >> "$GITHUB_PATH"
+      - name: Configure Yandex Cloud CLI profile
+        run: |
+          set -euo pipefail
+          "$HOME/yandex-cloud/bin/yc" config profile create default
+          "$HOME/yandex-cloud/bin/yc" config set cloud-id "$YC_CLOUD_ID"
+          "$HOME/yandex-cloud/bin/yc" config set folder-id "$YC_FOLDER_ID"
       - name: Create only private secret and empty isolated container
         run: |
           set -euo pipefail
