@@ -982,11 +982,19 @@ export default function CutoverParticipantPage() {
                 <thead><tr><th>№</th><th>Матч</th><th>Результат</th><th>Мой прогноз</th><th>Очки</th></tr></thead>
                 <tbody>{[...unique.values()].map((match,index)=>{
                   const p=currentTable.rows.find(row=>row.match_id===match.match_id&&currentTable.users.some(u=>u.id===row.user_id&&u.username===sessionUsername));
+                  const editableMatch=schedule.find(m=>String(m.match_id)===String(match.match_id));
+                  const canEdit=Boolean(writesEnabled && editableMatch?.predictions_open);
+                  const draft=editableMatch ? (drafts[editableMatch.match_id] ?? {home:String(editableMatch.home_pred ?? ""),away:String(editableMatch.away_pred ?? "")}) : null;
                   return <tr key={match.match_id}>
                     <td>{match.stage_match_no??index+1}</td>
                     <td><strong>{match.home_team} — {match.away_team}</strong></td>
                     <td>{match.home_score===null||match.away_score===null?"—":match.home_score+":"+match.away_score}</td>
-                    <td>{p?.home_pred==null||p.away_pred==null?"—":p.home_pred+":"+p.away_pred}</td>
+                    <td>{canEdit && editableMatch && draft ? <div className="cutover-my-prediction-editor" style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                      <input aria-label={`Голы хозяев: ${match.home_team}`} type="number" inputMode="numeric" min="0" max="99" value={draft.home} style={{width:57,minHeight:36,padding:5}} onChange={e=>setDrafts(prev=>({...prev,[editableMatch.match_id]:{home:e.target.value,away:prev[editableMatch.match_id]?.away??String(editableMatch.away_pred??"")}}))}/>
+                      <span>:</span>
+                      <input aria-label={`Голы гостей: ${match.away_team}`} type="number" inputMode="numeric" min="0" max="99" value={draft.away} style={{width:57,minHeight:36,padding:5}} onChange={e=>setDrafts(prev=>({...prev,[editableMatch.match_id]:{home:prev[editableMatch.match_id]?.home??String(editableMatch.home_pred??""),away:e.target.value}}))}/>
+                      <button type="button" disabled={busy} onClick={()=>void savePrediction(editableMatch)} className="cutover-save">{savedMatchId===editableMatch.match_id?"✓ Сохранено":"Сохранить"}</button>
+                    </div> : p?.home_pred==null||p.away_pred==null?"—":p.home_pred+":"+p.away_pred}</td>
                     <td>{p?.points==null?"—":Number(p.points).toLocaleString("ru-RU")}</td>
                   </tr>;
                 })}</tbody>
