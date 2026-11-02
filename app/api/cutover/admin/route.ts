@@ -35,7 +35,12 @@ export async function GET(req: NextRequest) {
         JOIN footy_cutover.teams h ON h.id=m.home_team_id
         JOIN footy_cutover.teams a ON a.id=m.away_team_id
         WHERE NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
-        ORDER BY m.kickoff_at DESC LIMIT 150`
+        ORDER BY
+          CASE WHEN m.status='scheduled' THEN 0 ELSE 1 END,
+          CASE WHEN m.status='scheduled' THEN abs(extract(epoch from (m.kickoff_at-now()))) END ASC NULLS LAST,
+          CASE WHEN m.status<>'scheduled' THEN m.kickoff_at END DESC NULLS LAST,
+          m.id DESC
+        LIMIT 150`
     ]);
     return reply({ ok: true, teams, tournaments, stages, tours, matches, writes_enabled: process.env.ENABLE_CUTOVER_ADMIN_WRITES === "true", result_writes_enabled: process.env.ENABLE_CUTOVER_RESULT_WRITES === "true" });
   } catch { return reply({ ok: false, error: "unavailable" }, 503); }
