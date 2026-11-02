@@ -68,7 +68,9 @@ jobs:
             secret_id="$existing"
             echo "Isolated Lockbox secret already exists: $secret_id (not overwritten)"
           fi
-          yc lockbox secret add-access-binding --id "$secret_id" --role lockbox.payloadViewer --service-account-id "$RUNTIME_SERVICE_ACCOUNT_ID" >/dev/null
+          # Access grants require lockbox.admin, which provisioning identity intentionally does not have.
+          # A human administrator must grant lockbox.payloadViewer on this secret only before deploying.
+          echo "Runtime Lockbox payload access requires a separate secret-scoped grant."
           existing_container="$(yc serverless container list --folder-id "$YC_FOLDER_ID" --format json | jq -r --arg n "$CONTAINER_NAME" '.[] | select(.name==$n) | .id')"
           if [[ -z "$existing_container" ]]; then
             container_id="$(yc serverless container create --name "$CONTAINER_NAME" --description 'Isolated admin result guard; no revision or public access' --folder-id "$YC_FOLDER_ID" --format json | jq -er .id)"
