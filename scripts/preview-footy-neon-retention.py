@@ -23,7 +23,7 @@ while True:
         break
     token = page["NextContinuationToken"]
 
-pattern = re.compile(r"^footy-neon/(\\d{4})/(\\d{2})/(\\d{2})/(\\d{8}T\\d{6}Z)-([0-9]+)\\.dump\\.age$")
+pattern = re.compile(r"^footy-neon/(\d{4})/(\d{2})/(\d{2})/(\d{8}T\d{6}Z)-([0-9]+)\.dump\.age$")
 backups = []
 for obj in objects:
     match = pattern.fullmatch(obj["Key"])
