@@ -30,7 +30,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
   const [renameTourForm, setRenameTourForm] = useState({ tour_id: "", name: "" });
   const [renameStageForm, setRenameStageForm] = useState({ stage_id: "", name: "" });
