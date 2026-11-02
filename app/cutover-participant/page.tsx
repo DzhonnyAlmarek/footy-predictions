@@ -543,11 +543,11 @@ export default function CutoverParticipantPage() {
             return <details key={tourId} open={matches.some(m => m.status === "scheduled") && ordered.findIndex(item => item[0] === tourId) < 2} style={{ marginBottom: 12 }}>
               <summary style={{ cursor: "pointer", fontWeight: 700, padding: "8px 0" }}>{tour?.name ?? "Без тура"} · {matches.length} матчей</summary>
               <div className="tableWrap"><table className="table" style={{ minWidth: 600 }}>
-                <thead><tr><th>Дата</th><th>Время</th><th>Матч</th><th>Статус</th><th>Результат</th></tr></thead>
+                <thead><tr><th>Дата</th><th>Время</th><th>Матч</th><th>Результат</th></tr></thead>
                 <tbody>{[...matches].sort((a,b) => new Date(a.kickoff_at).getTime()-new Date(b.kickoff_at).getTime() || Number(a.id)-Number(b.id)).map(m => <tr key={m.id}>
                   <td>{new Date(m.kickoff_at).toLocaleDateString("ru-RU")}</td>
                   <td>{new Date(m.kickoff_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
-                  <td>{m.home_team} — {m.away_team}</td><td>{m.status}</td>
+                  <td>{m.home_team} — {m.away_team}</td>
                   <td>{m.status === "finished"
                     ? (m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`)
                     : m.result_eligible && adminWritesEnabled && resultWritesEnabled
