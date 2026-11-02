@@ -7,16 +7,20 @@ export const CUTOVER_HEADERS = { "Cache-Control": "no-store", "X-Robots-Tag": "n
 export function cutoverAuthEnabled(): boolean {
   const raw = process.env.CUTOVER_AUTH_DATABASE_URL;
   const allowed = process.env.CUTOVER_AUTH_ALLOWED_HOST;
-  // Production candidate must be pinned to its dedicated cleaned Neon branch.
-  // Host pinning alone is insufficient because one Neon project has multiple branches.
-  if (process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
-      process.env.CUTOVER_AUTH_ALLOWED_HOST !== "ep-divine-rain-b1d1r892.c-5.eu-central-1.aws.neon.tech") return false;
+  // Keep the working candidate pinned to the exact working Neon endpoint.
+  // The isolated test target has a separate, exact endpoint and cannot use the production host.
   const target = process.env.DEPLOY_TARGET;
+  const pinnedHost: Record<string, string> = {
+    "yandex-neon-production-candidate": "ep-divine-rain-b1d1r892.c-5.eu-central-1.aws.neon.tech",
+    "yandex-neon-admin-isolated": "ep-curly-wildflower-b1bo8av4.c-5.eu-central-1.aws.neon.tech",
+  };
+  if (target in pinnedHost && allowed !== pinnedHost[target]) return false;
   const preview = target === "yandex-neon-cutover-preview";
+  const isolated = target === "yandex-neon-admin-isolated";
   const candidate = target === "yandex-neon-production-candidate";
   // Candidate auth stays disabled until explicitly gated on an isolated deployment.
   // Never authorize candidate access using the preview enable flag alone.
-  if ((!preview && !candidate) ||
+  if ((!preview && !candidate && !isolated) ||
       (candidate && process.env.ENABLE_CUTOVER_PRODUCTION_CANDIDATE !== "true") ||
       process.env.ENABLE_CUTOVER_AUTH !== "true" || !raw || !allowed ||
       !allowed.endsWith(".neon.tech")) return false;
