@@ -540,7 +540,7 @@ export default function CutoverParticipantPage() {
             onChange={e => setTourForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Тур 31" /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled}>Создать тур</button>
         </form>
-        <h2>ADMIN — переименование чернового этапа</h2>
+        <h2>Переименование этапа</h2>
         <p>Доступно только для пустого чернового этапа, без туров и матчей.</p>
         <form onSubmit={renameStage} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Этап <select required value={renameStageForm.stage_id}
@@ -555,7 +555,7 @@ export default function CutoverParticipantPage() {
             onChange={e => setRenameStageForm(prev => ({ ...prev, name: e.target.value }))} /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !renameStageForm.stage_id}>Переименовать этап</button>
         </form>
-        <h2>ADMIN — переименование тура</h2>
+        <h2>Переименование тура</h2>
         <p>Переименовать можно только тур, в котором ещё нет матчей. Исторические туры защищены.</p>
         <form onSubmit={renameTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Тур <select required value={renameTourForm.tour_id}
@@ -570,7 +570,7 @@ export default function CutoverParticipantPage() {
             onChange={e => setRenameTourForm(prev => ({ ...prev, name: e.target.value }))} /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !renameTourForm.tour_id}>Переименовать тур</button>
         </form>
-        <h2>ADMIN — создание матча</h2>
+        <h2>Создание матча</h2>
         <form onSubmit={createMatch} style={{ display: "grid", gap: 10 }}>
           {(["tournament_id", "stage_id", "tour_id", "home_team_id", "away_team_id"] as const).map(field => {
             const options = field === "tournament_id" ? adminData.tournaments :
@@ -590,19 +590,18 @@ export default function CutoverParticipantPage() {
           <label>Дедлайн прогноза <input required type="datetime-local" value={adminForm.deadline_at}
             onChange={e => setAdminForm(prev => ({ ...prev, deadline_at: e.target.value }))} /></label>
           <button disabled={busy || !adminWritesEnabled} type="submit">Создать матч</button>
-          {!adminWritesEnabled && <p>Создание матчей пока отключено на этой площадке.</p>}
+          {!adminWritesEnabled && <p>Создание матчей временно недоступно.</p>}
         </form>
-        <h2>ADMIN — календарь (последние 150 матчей)</h2>
-        <p>Импортированные матчи доступны для просмотра. Запись результатов через эту форму разрешена только для матчей, созданных в новой админке.</p>
+        <h2>Календарь матчей</h2>
+        <p>Последние 150 матчей. Завершение доступно для матчей, разрешённых к обработке.</p>
         <div className="tableWrap"><table className="table" style={{ minWidth: 600 }}>
-          <thead><tr><th>Дата</th><th>Матч</th><th>Статус</th><th>Источник</th></tr></thead>
+          <thead><tr><th>Дата</th><th>Матч</th><th>Статус</th></tr></thead>
           <tbody>{(adminData.matches ?? []).map(m => <tr key={m.id}>
             <td>{new Date(m.kickoff_at).toLocaleString("ru-RU")}</td>
             <td>{m.home_team} — {m.away_team}</td><td>{m.status}</td>
-            <td>{m.admin_created ? "Создан в админке" : "Импортирован"}</td>
           </tr>)}</tbody>
         </table></div>
-        <h2>ADMIN — изменение команд нового матча</h2>
+        <h2>Изменение команд матча</h2>
         <p>Команды можно исправить только до появления первого прогноза и до дедлайна.</p>
         <form onSubmit={editMatchTeams} style={{ display: "grid", gap: 10, marginBottom: 24 }}>
           <label>Матч <select required value={teamsEditForm.match_id}
@@ -627,7 +626,7 @@ export default function CutoverParticipantPage() {
           </select></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !teamsEditForm.match_id}>Сохранить команды</button>
         </form>
-        <h2>ADMIN — перенос нового матча</h2>
+        <h2>Перенос матча</h2>
         <p>Перенос доступен только для новых незавершённых матчей, на которые ещё нет прогнозов.</p>
         <form onSubmit={rescheduleMatch} style={{ display: "grid", gap: 10 }}>
           <label>Матч <select required value={rescheduleForm.match_id}
@@ -642,7 +641,7 @@ export default function CutoverParticipantPage() {
             onChange={e => setRescheduleForm(prev => ({ ...prev, deadline_at: e.target.value }))} /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !rescheduleForm.match_id}>Перенести матч</button>
         </form>
-        <h2>ADMIN — результат матча</h2>
+        <h2>Результат матча</h2>
         <form onSubmit={finishMatch} style={{ display: "grid", gap: 10 }}>
           <label>Матч <select required value={resultForm.match_id}
             onChange={e => setResultForm(prev => ({ ...prev, match_id: e.target.value }))}>
@@ -655,7 +654,7 @@ export default function CutoverParticipantPage() {
           <label>Голы гостей <input required type="number" min="0" max="99"
             value={resultForm.away_score} onChange={e => setResultForm(prev => ({ ...prev, away_score: e.target.value }))} /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !resultWritesEnabled || !resultForm.match_id}>Записать результат и начислить очки</button>
-          {!resultWritesEnabled && <p>Запись результатов отключена на этой площадке.</p>}
+          {!resultWritesEnabled && <p>Запись результатов временно недоступна.</p>}
         </form>
       </section>}
       {activeTab === "ranking" && <section className="cutover-content cutover-rankings">
@@ -735,7 +734,7 @@ export default function CutoverParticipantPage() {
           </table></div></>}
       </section>}
       {activeTab === "grand-prix" && <section className="cutover-content cutover-grand-prix"><div className="cutover-section-heading"><div><span>СЕЗОННЫЙ ЗАЧЁТ</span><h2>Гран-при <span aria-hidden="true">🏁</span></h2></div><p>Очки за этапы соревнования</p></div>
-        {grandPrixUnavailable && <p>Рейтинг Гран-при пока недоступен на этой тестовой площадке.</p>}
+        {grandPrixUnavailable && <p>Рейтинг Гран-при временно недоступен.</p>}
         {grandPrix?.seasons.map(season => <div key={season.id}>
           <h3>{season.name}</h3>
           <div className="tableWrap"><table className="table" style={{ minWidth: 450 }}>
