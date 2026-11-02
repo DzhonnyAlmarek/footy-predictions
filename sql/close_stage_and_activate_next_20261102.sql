@@ -20,6 +20,11 @@ BEGIN
     OR v_next.is_current OR v_next.status <> 'draft'
     OR (SELECT COUNT(*) FROM footy_cutover.stages WHERE is_current) <> 1
   THEN RAISE EXCEPTION 'invalid_stage_transition'; END IF;
+  -- Never skip ahead to an unrelated draft stage.
+  IF p_next_id IS DISTINCT FROM (
+    SELECT MIN(s.id) FROM footy_cutover.stages s
+    WHERE s.id > p_current_id AND s.status='draft'
+  ) THEN RAISE EXCEPTION 'next_stage_out_of_order'; END IF;
   IF v_current.matches_required <> 56 OR v_next.matches_required <> 56
   THEN RAISE EXCEPTION 'invalid_stage_match_requirement'; END IF;
   SELECT COUNT(*), COUNT(*) FILTER (WHERE m.status='finished'
