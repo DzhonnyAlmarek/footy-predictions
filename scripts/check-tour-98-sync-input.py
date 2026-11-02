@@ -22,7 +22,6 @@ def verify(source, target):
     assert not {int(x["id"]) for x in predictions} & {int(x) for x in target["prediction_ids"]}
     assert not {(int(x["match_id"]),x["user_id"]) for x in ledger} & {(int(x["match_id"]),x["user_id"]) for x in target["ledger_pairs"]}
     assert all(target["matches"][str(i)]["status"] == "scheduled" and target["matches"][str(i)]["home_score"] is None and target["matches"][str(i)]["away_score"] is None for i in MATCH_IDS)
-    assert all(matches[k]["status"] == "finished" for k in range(0))  # assertions below handle all four
     assert all(x["status"] == "finished" for x in matches)
     from decimal import Decimal
     for mid in MATCH_IDS:
