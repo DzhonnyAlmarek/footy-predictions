@@ -93,7 +93,7 @@ export default function CutoverParticipantPage() {
   const [writesEnabled, setWritesEnabled] = useState(false);
   const [adminWritesEnabled, setAdminWritesEnabled] = useState(false);
   const [resultWritesEnabled, setResultWritesEnabled] = useState(false);
-  const [resultDrafts, setResultDrafts] = useState<Record<string, { home_score: string; away_score: string }>>({});
+  const [resultDrafts, setResultDrafts] = useState<Record<string, { home_score: string; away_score: string; home_penalty_goals: string; away_penalty_goals: string }>>({});
   const [rescheduleForm, setRescheduleForm] = useState({ match_id: "", kickoff_at: "", deadline_at: "" });
   const [teamsEditForm, setTeamsEditForm] = useState({ match_id: "", home_team_id: "", away_team_id: "" });
   const [drafts, setDrafts] = useState<Record<string, { home: string; away: string }>>({});
@@ -392,13 +392,17 @@ export default function CutoverParticipantPage() {
     if (!draft || !/^[0-9]{1,2}$/.test(draft.home_score) || !/^[0-9]{1,2}$/.test(draft.away_score)) {
       setMessage("Укажи счёт от 0 до 99."); return;
     }
-    if (!window.confirm("Завершить матч и начислить очки? Изменить результат через эту форму нельзя.")) return;
+    const hp = Number(draft.home_penalty_goals || "0"), ap = Number(draft.away_penalty_goals || "0");
+    if (![hp, ap].every(Number.isInteger) || hp < 0 || ap < 0 || hp > Number(draft.home_score) || ap > Number(draft.away_score)) {
+      setMessage("Голы с пенальти должны быть от 0 до числа голов команды."); return;
+    }
+    if (!window.confirm("Завершить матч, сохранить пенальти и начислить очки? Изменить результат через эту форму нельзя.")) return;
     setBusy(true);
     try {
       const response = await fetch("/api/cutover/admin", { method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "result", match_id: matchId,
-          home_score: Number(draft.home_score), away_score: Number(draft.away_score) }) });
+          home_score: Number(draft.home_score), away_score: Number(draft.away_score), home_penalty_goals: hp, away_penalty_goals: ap }) });
       if (!response.ok) { setMessage("Результат не записан. Матч уже завершён, не найден или запись отключена."); return; }
       setResultDrafts(prev => { const next = { ...prev }; delete next[matchId]; return next; });
       await load(); setMessage("Результат записан, очки рассчитаны.");
@@ -550,11 +554,19 @@ export default function CutoverParticipantPage() {
                       ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <input aria-label={`Голы хозяев: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
                             value={resultDrafts[m.id]?.home_score ?? ""}
-                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: e.target.value, away_score: prev[m.id]?.away_score ?? "" } }))} />
+                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: e.target.value, away_score: prev[m.id]?.away_score ?? "", home_penalty_goals: prev[m.id]?.home_penalty_goals ?? "0", away_penalty_goals: prev[m.id]?.away_penalty_goals ?? "0" } }))} />
                           <span>:</span>
                           <input aria-label={`Голы гостей: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
                             value={resultDrafts[m.id]?.away_score ?? ""}
-                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: prev[m.id]?.home_score ?? "", away_score: e.target.value } }))} />
+                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: prev[m.id]?.home_score ?? "", away_score: e.target.value, home_penalty_goals: prev[m.id]?.home_penalty_goals ?? "0", away_penalty_goals: prev[m.id]?.away_penalty_goals ?? "0" } }))} />
+                          <span title="Забитые пенальти в итоговом счёте" style={{ whiteSpace: "nowrap", marginLeft: 8 }}>Пен.</span>
+                          <input aria-label={`Пенальти хозяев: ${m.home_team}`} title="Голы хозяев с пенальти" type="number" min="0" max="99" style={{ width: 46 }}
+                            value={resultDrafts[m.id]?.home_penalty_goals ?? "0"}
+                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: prev[m.id]?.home_score ?? "", away_score: prev[m.id]?.away_score ?? "", home_penalty_goals: e.target.value, away_penalty_goals: prev[m.id]?.away_penalty_goals ?? "0" } }))} />
+                          <span>:</span>
+                          <input aria-label={`Пенальти гостей: ${m.away_team}`} title="Голы гостей с пенальти" type="number" min="0" max="99" style={{ width: 46 }}
+                            value={resultDrafts[m.id]?.away_penalty_goals ?? "0"}
+                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: prev[m.id]?.home_score ?? "", away_score: prev[m.id]?.away_score ?? "", home_penalty_goals: prev[m.id]?.home_penalty_goals ?? "0", away_penalty_goals: e.target.value } }))} />
                           <button type="button" disabled={busy} onClick={() => void finishMatch(m.id)}>Сохранить</button>
                         </div>
                       : "—"}</td>
