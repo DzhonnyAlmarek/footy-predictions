@@ -1,0 +1,33 @@
+name: Verify admin result candidate Docker image (no publish)
+
+on:
+  push:
+    branches:
+      - feature/admin-result-guard-20261102
+    paths:
+      - 'app/api/cutover/admin/**'
+      - 'Dockerfile.cutover-production-candidate'
+      - '.github/workflows/verify-admin-result-candidate-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify intended candidate target
+        run: |
+          set -euo pipefail
+          grep -Fxq 'ENV DEPLOY_TARGET=yandex-neon-production-candidate' Dockerfile.cutover-production-candidate
+          grep -Fq 'NEXT_PUBLIC_SUPABASE_URL=https://isolated.invalid' Dockerfile.cutover-production-candidate
+          test -f package-lock.json
+      - name: Build candidate locally without credentials or publishing
+        run: docker build --platform linux/amd64 -f Dockerfile.cutover-production-candidate -t footy-admin-result-candidate:check .
+      - name: Confirm image architecture
+        run: test "$(docker image inspect footy-admin-result-candidate:check --format '{{.Os}}/{{.Architecture}}')" = 'linux/amd64'
