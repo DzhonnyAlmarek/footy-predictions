@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/feature/cutover-admin-readiness-20261020' && inputs.confirmation == 'DEPLOY-CANDIDATE' }}
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && inputs.confirmation == 'DEPLOY-CANDIDATE' && inputs.image_sha == '093969d49aa18da94d1b003098bfd0981962076a' }}
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 15
