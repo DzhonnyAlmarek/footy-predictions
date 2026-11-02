@@ -1,0 +1,22 @@
+name: Diagnose Supabase to Neon audit (read only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    environment: footy-neon-migration-preview
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: feature/cutover-admin-readiness-20261020
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Categorize connection failures safely
+        env:
+          SUPABASE_READONLY_URL: ${{ secrets.SUPABASE_READONLY_URL }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+        run: python3 scripts/diagnose-footy-audit.py
