@@ -30,7 +30,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
   const [renameTourForm, setRenameTourForm] = useState({ tour_id: "", name: "" });
   const [renameStageForm, setRenameStageForm] = useState({ stage_id: "", name: "" });
@@ -549,7 +549,7 @@ export default function CutoverParticipantPage() {
                   <td>{new Date(m.kickoff_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
                   <td>{m.home_team} — {m.away_team}</td>
                   <td>{m.status === "finished"
-                    ? (m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`)
+                    ? (m.home_score == null || m.away_score == null ? "—" : <span>{m.home_score}:{m.away_score}{(Number(m.home_penalty_goals) + Number(m.away_penalty_goals)) > 0 && <small style={{ marginLeft: 8, whiteSpace: "nowrap" }}>Пен. {m.home_penalty_goals ?? 0}:{m.away_penalty_goals ?? 0}</small>}</span>)
                     : m.result_eligible && adminWritesEnabled && resultWritesEnabled
                       ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <input aria-label={`Голы хозяев: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
