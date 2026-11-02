@@ -30,9 +30,10 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
   const [adminStageChoice, setAdminStageChoice] = useState("current");
   const [adminTourChoice, setAdminTourChoice] = useState("current");
+  const [nextStageChoice, setNextStageChoice] = useState("");
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
   const [renameTourForm, setRenameTourForm] = useState({ tour_id: "", name: "" });
   const [renameStageForm, setRenameStageForm] = useState({ stage_id: "", name: "" });
@@ -278,6 +279,30 @@ export default function CutoverParticipantPage() {
       setMessage(`Прогноз на матч ${m.home_team || "?"} — ${m.away_team || "?"} сохранён.`);
     } catch { setMessage("Ошибка соединения при сохранении."); }
     finally { setBusy(false); }
+  }
+  async function closeCurrentStage() {
+    const current = adminData?.stages.find(s => s.is_current);
+    const next = adminData?.stages.find(s => s.id === nextStageChoice && s.status === "draft");
+    if (!current || !next || busy) return;
+    if (!window.confirm(`Закрыть «${current.name}» и сделать текущим «${next.name}»? Отменить это действие через интерфейс нельзя.`)) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"close_stage",stage_id:current.id,next_stage_id:next.id})
+      });
+      if (!response.ok) {
+        setMessage("Этап не закрыт: проверь 56 завершённых матчей, начисления и готовность следующего этапа.");
+        return;
+      }
+      setNextStageChoice("");
+      setAdminStageChoice("current");
+      setAdminTourChoice("current");
+      setCurrentTable(null);
+      await load();
+      setMessage(`Этап «${current.name}» закрыт. Текущий этап: «${next.name}».`);
+    } catch { setMessage("Не удалось закрыть этап. Данные не изменены, если операция отклонена сервером."); }
+    finally {setBusy(false);}
   }
   async function createTour(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -525,6 +550,29 @@ export default function CutoverParticipantPage() {
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
         <div className="cutover-section-heading"><div><span>УПРАВЛЕНИЕ ТУРНИРОМ</span><h2>Панель администратора</h2></div><p>Матчи, туры и результаты — в одном месте</p></div>
         <div className="cutover-admin-summary"><span>Участники: {participants.length}</span><span>Матчи: {adminData.matches.length}</span><span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span></div>
+        {(() => {
+          const current = adminData.stages.find(s => s.is_current);
+          if (!current) return <p>Текущий этап не назначен.</p>;
+          const stageTours = new Set(adminData.tours.filter(t => t.stage_id === current.id).map(t => t.id));
+          const stageMatches = adminData.matches.filter(m => m.tour_id && stageTours.has(m.tour_id));
+          const finished = stageMatches.filter(m => m.status === "finished" && m.home_score !== null && m.away_score !== null).length;
+          const ready = stageMatches.length === 56 && finished === 56;
+          return <details style={{margin:"12px 0"}}><summary style={{cursor:"pointer",fontWeight:700,padding:"8px 0"}}>
+            Управление этапом · {current.name} · {finished} / 56 завершено
+          </summary>
+            <p>Закрытие доступно после завершения 56 матчей и проверки всех начислений сервером.</p>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"end"}}>
+              <label>Следующий этап <select value={nextStageChoice} onChange={e=>setNextStageChoice(e.target.value)}>
+                <option value="">Выбери следующий этап</option>
+                {adminData.stages.filter(s=>s.status==="draft" && s.id!==current.id).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+              </select></label>
+              <button type="button" disabled={!ready || !nextStageChoice || !adminWritesEnabled || busy} onClick={()=>void closeCurrentStage()}>
+                Закрыть этап и назначить следующий
+              </button>
+            </div>
+            {!ready && <p>Закрытие заблокировано: {stageMatches.length} матчей в загруженном календаре, завершено {finished} из 56.</p>}
+          </details>;
+        })()}
         <h2>Календарь матчей</h2>
         <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end",marginBottom:12}}>
           <label>Этап <select value={adminStageChoice} onChange={e=>{setAdminStageChoice(e.target.value);setAdminTourChoice("current");}}>
