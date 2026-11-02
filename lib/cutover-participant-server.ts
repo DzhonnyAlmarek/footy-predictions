@@ -14,7 +14,7 @@ export function cutoverAuthEnabled(): boolean {
     "yandex-neon-production-candidate": "ep-divine-rain-b1d1r892.c-5.eu-central-1.aws.neon.tech",
     "yandex-neon-admin-isolated": "ep-curly-wildflower-b1bo8av4.c-5.eu-central-1.aws.neon.tech",
   };
-  if (target in pinnedHost && allowed !== pinnedHost[target]) return false;
+  if (target !== undefined && target in pinnedHost && allowed !== pinnedHost[target]) return false;
   const preview = target === "yandex-neon-cutover-preview";
   const isolated = target === "yandex-neon-admin-isolated";
   const candidate = target === "yandex-neon-production-candidate";
