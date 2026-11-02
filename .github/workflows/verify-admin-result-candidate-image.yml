@@ -8,6 +8,7 @@ on:
       - 'app/api/cutover/admin/**'
       - 'Dockerfile.cutover-production-candidate'
       - '.github/workflows/verify-admin-result-candidate-image.yml'
+      - 'scripts/cutover-finish-match.sql'
   workflow_dispatch:
 
 permissions:
