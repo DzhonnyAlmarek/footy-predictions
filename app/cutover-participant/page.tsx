@@ -104,7 +104,7 @@ export default function CutoverParticipantPage() {
     const sessionData = await session.json();
     setSessionUsername(typeof sessionData.username === "string" ? sessionData.username : "");
     setIsAdmin(sessionData.role === "admin");
-    setActiveTab(prev => sessionData.role === "admin" ? (prev === "mine" ? "admin" : prev) : (prev === "schedule" || prev === "admin" ? "mine" : prev));
+    setActiveTab(prev => sessionData.role === "admin" ? ((prev === "mine" || prev === "schedule") ? "admin" : prev) : (prev === "schedule" || prev === "admin" ? "mine" : prev));
     setMustChangePassword(sessionData.must_change_password === true);
     // Temporary credentials must be changed before loading predictions.
     // The prediction API deliberately refuses these sessions.
@@ -507,7 +507,7 @@ export default function CutoverParticipantPage() {
       <button type="button" onClick={() => void logout()} disabled={busy}>Выйти</button>
     </form> : <>
       <nav aria-label="Разделы кабинета" className="card cutover-navigation">
-        {([...(!isAdmin ? [["mine", "Мои прогнозы"]] : []), ["ranking", "Текущая таблица"], ["analytics", "Аналитика"], ["golden-boot", "Бутса"], ["golden-whistle", "Свисток"], ["grand-prix", "Гран-при"], ["archive", "Архив"], ...(isAdmin ? [["schedule", "Прогнозы"], ["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
+        {([...(!isAdmin ? [["mine", "Мои прогнозы"]] : []), ["ranking", "Текущая таблица"], ["analytics", "Аналитика"], ["golden-boot", "Бутса"], ["golden-whistle", "Свисток"], ["grand-prix", "Гран-при"], ["archive", "Архив"], ...(isAdmin ? [["admin", "Администрирование"]] : [])] as string[][]).map(([id, label]) =>
           <button key={id} type="button" onClick={() => setActiveTab(id as typeof activeTab)}
             className={activeTab === id ? "cutover-nav-item is-active" : "cutover-nav-item"} aria-current={activeTab === id ? "page" : undefined}>{label}</button>)}
         <div aria-label="Текущий пользователь" className={isAdmin ? "cutover-user-chip is-admin" : "cutover-user-chip"}>
