@@ -30,7 +30,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; status: string; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
   const [renameTourForm, setRenameTourForm] = useState({ tour_id: "", name: "" });
   const [renameStageForm, setRenameStageForm] = useState({ stage_id: "", name: "" });
@@ -594,13 +594,27 @@ export default function CutoverParticipantPage() {
         </form>
         <h2>Календарь матчей</h2>
         <p>Последние 150 матчей. Завершение доступно для матчей, разрешённых к обработке.</p>
-        <div className="tableWrap"><table className="table" style={{ minWidth: 600 }}>
-          <thead><tr><th>Дата</th><th>Матч</th><th>Статус</th></tr></thead>
-          <tbody>{(adminData.matches ?? []).map(m => <tr key={m.id}>
-            <td>{new Date(m.kickoff_at).toLocaleString("ru-RU")}</td>
-            <td>{m.home_team} — {m.away_team}</td><td>{m.status}</td>
-          </tr>)}</tbody>
-        </table></div>
+        {(() => {
+          const grouped = new Map<string, typeof adminData.matches>();
+          for (const match of adminData.matches) {
+            const key = match.tour_id ?? "no-tour";
+            grouped.set(key, [...(grouped.get(key) ?? []), match]);
+          }
+          return [...grouped.entries()].map(([tourId, matches]) => {
+            const tour = adminData.tours.find(t => t.id === tourId);
+            return <div key={tourId} style={{ marginBottom: 24 }}>
+              <h3>{tour?.name ?? "Без тура"}</h3>
+              <div className="tableWrap"><table className="table" style={{ minWidth: 600 }}>
+                <thead><tr><th>Дата</th><th>Время</th><th>Матч</th><th>Статус</th></tr></thead>
+                <tbody>{matches.map(m => <tr key={m.id}>
+                  <td>{new Date(m.kickoff_at).toLocaleDateString("ru-RU")}</td>
+                  <td>{new Date(m.kickoff_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
+                  <td>{m.home_team} — {m.away_team}</td><td>{m.status}</td>
+                </tr>)}</tbody>
+              </table></div>
+            </div>;
+          });
+        })()}
         <h2>Изменение команд матча</h2>
         <p>Команды можно исправить только до появления первого прогноза и до дедлайна.</p>
         <form onSubmit={editMatchTeams} style={{ display: "grid", gap: 10, marginBottom: 24 }}>
