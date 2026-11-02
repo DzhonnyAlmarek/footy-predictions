@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       confirmation:
-        description: "DEPLOY-CANDIDATE (explicit opt-in)"
+        description: "ENABLE-ADMIN-RESULT-WRITES (explicit opt-in)"
         required: true
         type: string
       enable_tour14_predictions:
@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && ((inputs.confirmation == 'ENABLE-ADMIN-RESULT-WRITES' && !inputs.enable_tour14_predictions) || (inputs.confirmation == 'ENABLE-TOUR14-PREDICTIONS' && inputs.enable_tour14_predictions)) && inputs.image_sha == 'a199a75fde063d476e4693f6f9c2046cc45da416' }}
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && (inputs.confirmation == 'ENABLE-ADMIN-RESULT-WRITES' && !inputs.enable_tour14_predictions) && inputs.image_sha == 'a199a75fde063d476e4693f6f9c2046cc45da416' }}
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 15
