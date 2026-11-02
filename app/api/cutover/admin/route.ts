@@ -57,10 +57,17 @@ export async function POST(req: NextRequest) {
           !Number.isInteger(home) || !Number.isInteger(away) ||
           home < 0 || home > 99 || away < 0 || away > 99)
         return reply({ ok: false, error: "invalid_result" }, 400);
-      // Only matches registered by the isolated create-match workflow can receive results.
-      const owned = await sql`SELECT cm.match_id FROM cutover_auth.created_matches cm
-        WHERE cm.match_id=${id}::bigint
-          AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=cm.match_id)`;
+      // Imported fixtures require an explicit per-match authorization recorded
+      // in cutover_auth.result_write_allowlist; completed historical data stays protected.
+      const owned = await sql`
+        SELECT m.id FROM footy_cutover.matches m
+        WHERE m.id=${id}::bigint
+          AND (
+            EXISTS (SELECT 1 FROM cutover_auth.created_matches cm WHERE cm.match_id=m.id)
+            OR EXISTS (SELECT 1 FROM cutover_auth.result_write_allowlist a WHERE a.match_id=m.id)
+          )
+          AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
+      `;
       if (!owned.length) return reply({ ok: false, error: "historical_match_protected" }, 403);
       // Fail closed before invoking the scoring routine. An admin-created fixture
       // must be scheduled, have passed its prediction deadline, and have no
@@ -73,8 +80,9 @@ export async function POST(req: NextRequest) {
           AND NOT EXISTS (
             SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id
           )
-          AND EXISTS (
-            SELECT 1 FROM cutover_auth.created_matches cm WHERE cm.match_id=m.id
+          AND (
+            EXISTS (SELECT 1 FROM cutover_auth.created_matches cm WHERE cm.match_id=m.id)
+            OR EXISTS (SELECT 1 FROM cutover_auth.result_write_allowlist a WHERE a.match_id=m.id)
           )
           AND NOT EXISTS (
             SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id
