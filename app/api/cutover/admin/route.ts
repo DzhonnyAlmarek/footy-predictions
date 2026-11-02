@@ -19,7 +19,13 @@ export async function GET(req: NextRequest) {
     const [teams, tournaments, stages, tours, matches] = await Promise.all([
       sql`SELECT id::text, name FROM footy_cutover.teams ORDER BY name`,
       sql`SELECT id::text, name FROM footy_cutover.tournaments ORDER BY name`,
-      sql`SELECT id::text, name, status, is_current, matches_required FROM footy_cutover.stages ORDER BY id DESC`,
+      sql`SELECT s.id::text, s.name, s.status, s.is_current, s.matches_required,
+        (SELECT COUNT(*)::int FROM footy_cutover.matches m WHERE m.stage_id=s.id
+          AND NOT EXISTS(SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)) AS match_count,
+        (SELECT COUNT(*)::int FROM footy_cutover.matches m WHERE m.stage_id=s.id
+          AND m.status='finished' AND m.home_score IS NOT NULL AND m.away_score IS NOT NULL
+          AND NOT EXISTS(SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)) AS finished_count
+        FROM footy_cutover.stages s ORDER BY s.id DESC`,
       sql`SELECT id::text, stage_id::text, name, tour_no FROM footy_cutover.tours ORDER BY id DESC`,
       sql`SELECT m.id::text, m.tour_id::text, m.kickoff_at, m.deadline_at, m.status, m.home_score, m.away_score, m.home_penalty_goals, m.away_penalty_goals,
         m.home_team_id::text, m.away_team_id::text,
@@ -177,6 +183,8 @@ export async function POST(req: NextRequest) {
           AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
           AND ${deadline}::timestamptz > now()
           AND ${deadline}::timestamptz <= ${kickoff}::timestamptz
+          AND (SELECT COUNT(*) FROM footy_cutover.matches existing WHERE existing.stage_id=s.id)
+            < s.matches_required
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
         RETURNING m.id::text
