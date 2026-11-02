@@ -1,5 +1,8 @@
 name: Deploy isolated admin result guard (never production)
 on:
+  push:
+    branches: [feature/admin-result-guard-20261102]
+    paths: [.github/workflows/deploy-isolated-admin-result-guard.yml]
   workflow_dispatch:
     inputs:
       mode:
@@ -20,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   isolated:
-    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && (inputs.mode == 'preflight' || (inputs.mode == 'deploy' && inputs.confirmation == 'DEPLOY-ISOLATED-ADMIN')) }}
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && (github.event_name == 'push' || inputs.mode == 'preflight' || (inputs.mode == 'deploy' && inputs.confirmation == 'DEPLOY-ISOLATED-ADMIN')) }}
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 15
@@ -78,7 +81,7 @@ jobs:
           echo "LOCKBOX_VERSION_ID=$version_id" >> "$GITHUB_ENV"
           echo "Validated isolated container, secret, image tag and test database identity."
       - name: Preflight finished without deployment
-        if: ${{ inputs.mode == 'preflight' }}
+        if: ${{ github.event_name == 'push' || inputs.mode == 'preflight' }}
         run: echo 'PRE-FLIGHT OK. No revision deployed, no access opened.'
       - name: Deploy only isolated revision with test database
         if: ${{ inputs.mode == 'deploy' }}
