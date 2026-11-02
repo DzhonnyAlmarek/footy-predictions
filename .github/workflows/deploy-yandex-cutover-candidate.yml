@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && inputs.confirmation == 'DEPLOY-CANDIDATE' && inputs.image_sha == '45f8e0900e5b2838214018cc57965fb06880e95d' }}
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && inputs.confirmation == 'DEPLOY-CANDIDATE' && inputs.image_sha == 'ff33c85739f5eac4678ef875da0c2f6f67d9f14d' }}
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 15
