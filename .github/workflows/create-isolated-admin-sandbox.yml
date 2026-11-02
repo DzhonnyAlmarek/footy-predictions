@@ -1,0 +1,82 @@
+name: Create isolated admin sandbox resources (no revision)
+on:
+  push:
+    branches: [feature/admin-result-guard-20261102]
+    paths: [.github/workflows/create-isolated-admin-sandbox.yml]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: footy-isolated-admin-sandbox-provision
+  cancel-in-progress: false
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 15
+    env:
+      YC_CLOUD_ID: b1ge8jgq7kh768aapao1
+      YC_FOLDER_ID: b1gtdrn5t149v0ckl6ql
+      SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+      RUNTIME_SERVICE_ACCOUNT_ID: ajekinma5dcn8agcht7a
+      CONTAINER_NAME: footy-admin-guard-isolated-20261102
+      SECRET_NAME: footy-admin-guard-isolated-neon-20261102
+      EXPECTED_HOST: ep-curly-wildflower-b1bo8av4.c-5.eu-central-1.aws.neon.tech
+      TEST_NEON_URL: ${{ secrets.FOOTY_ISOLATED_NEON_DATABASE_URL }}
+    steps:
+      - name: Validate secret identity without disclosing credentials
+        run: |
+          set -euo pipefail
+          test -n "$TEST_NEON_URL" || { echo 'Missing FOOTY_ISOLATED_NEON_DATABASE_URL in yandex-test'; exit 1; }
+          node -e 'const u=new URL(process.env.TEST_NEON_URL); if(!["postgres:","postgresql:"].includes(u.protocol)||u.hostname!==process.env.EXPECTED_HOST||u.pathname!=="/neondb"||!u.username||!u.password){throw Error("Not isolated Neon target")}; console.log("Isolated Neon hostname validated")'
+      - name: Obtain OIDC identity
+        uses: actions/github-script@v7
+        id: oidc
+        with:
+          script: |
+            const jwt = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(jwt);
+            core.setOutput('jwt', jwt);
+      - name: Authenticate without printing credentials
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/footy-sandbox-token.json' EXIT
+          code="$(curl -sS --max-time 30 -o /tmp/footy-sandbox-token.json -w '%{http_code}' -X POST https://auth.yandex.cloud/oauth/token --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' --data-urlencode "audience=$SERVICE_ACCOUNT_ID" --data-urlencode "subject_token=$GITHUB_OIDC_JWT" --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          test "$code" = 200
+          iam="$(jq -er .access_token /tmp/footy-sandbox-token.json)"
+          echo "::add-mask::$iam"
+          echo "YC_IAM_TOKEN=$iam" >> "$GITHUB_ENV"
+      - name: Install Yandex CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh -o /tmp/install-yc.sh
+          bash /tmp/install-yc.sh -i "$HOME/yandex-cloud" -n
+          echo "$HOME/yandex-cloud/bin" >> "$GITHUB_PATH"
+      - name: Create only private secret and empty isolated container
+        run: |
+          set -euo pipefail
+          umask 077
+          # Do not log secret payload or materialize it on disk.
+          existing="$(yc lockbox secret list --folder-id "$YC_FOLDER_ID" --format json | jq -r --arg n "$SECRET_NAME" '.[] | select(.name==$n) | .id')"
+          if [[ -z "$existing" ]]; then
+            secret_id="$(node -e 'process.stdout.write(JSON.stringify([{key:"CUTOVER_AUTH_DATABASE_URL",text_value:process.env.TEST_NEON_URL}]))' | yc lockbox secret create --name "$SECRET_NAME" --description 'Isolated footy admin test; never production' --payload - --folder-id "$YC_FOLDER_ID" --format json | jq -er .id)"
+            echo "Created isolated Lockbox secret ID: $secret_id"
+          else
+            secret_id="$existing"
+            echo "Isolated Lockbox secret already exists: $secret_id (not overwritten)"
+          fi
+          yc lockbox secret add-access-binding --id "$secret_id" --role lockbox.payloadViewer --service-account-id "$RUNTIME_SERVICE_ACCOUNT_ID" >/dev/null
+          existing_container="$(yc serverless container list --folder-id "$YC_FOLDER_ID" --format json | jq -r --arg n "$CONTAINER_NAME" '.[] | select(.name==$n) | .id')"
+          if [[ -z "$existing_container" ]]; then
+            container_id="$(yc serverless container create --name "$CONTAINER_NAME" --description 'Isolated admin result guard; no revision or public access' --folder-id "$YC_FOLDER_ID" --format json | jq -er .id)"
+            echo "Created isolated container: $container_id"
+          else
+            container_id="$existing_container"
+            echo "Isolated container already exists: $container_id"
+          fi
+          echo "Secret ID: $secret_id"
+          echo "Container ID: $container_id"
+          echo 'No image deployed. No unauthenticated invocation enabled. Production unchanged.'
