@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && (inputs.confirmation == 'ENABLE-ADMIN-RESULT-WRITES' && !inputs.enable_tour14_predictions) && inputs.image_sha == '1bb3a1ab5e27c402083df27d7e744dfca85a5408' }}
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && (inputs.confirmation == 'ENABLE-ADMIN-RESULT-WRITES' && !inputs.enable_tour14_predictions) && inputs.image_sha == '8638d44637080563e92c101ac3e59a3c7c78632c' }}
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 15
@@ -88,7 +88,7 @@ jobs:
           if [[ "${{ inputs.enable_tour14_predictions }}" == "true" ]]; then
             jq -e --arg expected "$REGISTRY_PREFIX:ff33c85739f5eac4678ef875da0c2f6f67d9f14d" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Image mismatch: cannot enable predictions"; exit 1; }
           fi
-          jq -e --arg expected "$REGISTRY_PREFIX:386832546d69d35bd3e1d56d97aebab646d5a68c" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Current image differs from preceding verified release; abort"; exit 1; }
+          jq -e --arg expected "$REGISTRY_PREFIX:1bb3a1ab5e27c402083df27d7e744dfca85a5408" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Current image differs from preceding verified release; abort"; exit 1; }
           # Never print revision JSON: it can contain sensitive environment variables.
           jq -e --arg id "$CONTAINER_ID" '
             .containerId==$id and .status=="ACTIVE"
