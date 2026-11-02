@@ -15,7 +15,7 @@ concurrency:
 jobs:
   backup:
     runs-on: ubuntu-24.04
-    environment: yandex-test
+    environment: neon-backup
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
