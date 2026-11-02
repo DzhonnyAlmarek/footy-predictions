@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && ((inputs.confirmation == 'DEPLOY-CANDIDATE' && !inputs.enable_tour14_predictions) || (inputs.confirmation == 'ENABLE-TOUR14-PREDICTIONS' && inputs.enable_tour14_predictions)) && inputs.image_sha == '5c6dbbfce8d046c65799fe5586710929bf4a0e3d' }}
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && ((inputs.confirmation == 'ENABLE-ADMIN-RESULT-WRITES' && !inputs.enable_tour14_predictions) || (inputs.confirmation == 'ENABLE-TOUR14-PREDICTIONS' && inputs.enable_tour14_predictions)) && inputs.image_sha == 'a199a75fde063d476e4693f6f9c2046cc45da416' }}
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 15
@@ -88,6 +88,7 @@ jobs:
           if [[ "${{ inputs.enable_tour14_predictions }}" == "true" ]]; then
             jq -e --arg expected "$REGISTRY_PREFIX:ff33c85739f5eac4678ef875da0c2f6f67d9f14d" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Image mismatch: cannot enable predictions"; exit 1; }
           fi
+          jq -e --arg expected "$REGISTRY_PREFIX:5c6dbbfce8d046c65799fe5586710929bf4a0e3d" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Current image differs from preceding verified release; abort"; exit 1; }
           # Never print revision JSON: it can contain sensitive environment variables.
           jq -e --arg id "$CONTAINER_ID" '
             .containerId==$id and .status=="ACTIVE"
@@ -110,7 +111,7 @@ jobs:
             containerId:$id,
             imageSpec: (.image | {
               imageUrl:$url,
-              environment:((.environment // {}) + {CUTOVER_AUTH_ORIGIN:"https://www.murashevclub.ru", ENABLE_CUTOVER_PREDICTION_WRITES:"true", ENABLE_CUTOVER_ADMIN_WRITES:"false", ENABLE_CUTOVER_RESULT_WRITES:"false"})
+              environment:((.environment // {}) + {CUTOVER_AUTH_ORIGIN:"https://www.murashevclub.ru", ENABLE_CUTOVER_PREDICTION_WRITES:"true", ENABLE_CUTOVER_ADMIN_WRITES:"true", ENABLE_CUTOVER_RESULT_WRITES:"true"})
             } + (if .command then {command:.command} else {} end)
               + (if .args then {args:.args} else {} end)
               + (if .workingDir then {workingDir:.workingDir} else {} end)),
