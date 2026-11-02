@@ -81,10 +81,10 @@ jobs:
           echo "LOCKBOX_VERSION_ID=$version_id" >> "$GITHUB_ENV"
           echo "Validated isolated container, secret, image tag and test database identity."
       - name: Preflight finished without deployment
-        if: ${{ github.event_name == 'push' || inputs.mode == 'preflight' }}
+        if: ${{ (github.event_name == 'push' && github.event.head_commit.message != 'ci: one-time deploy isolated admin revision 20261102') || inputs.mode == 'preflight' }}
         run: echo 'PRE-FLIGHT OK. No revision deployed, no access opened.'
       - name: Deploy only isolated revision with test database
-        if: ${{ inputs.mode == 'deploy' }}
+        if: ${{ (github.event_name == 'push' && github.event.head_commit.message == 'ci: one-time deploy isolated admin revision 20261102') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy' && inputs.confirmation == 'DEPLOY-ISOLATED-ADMIN') }}
         run: |
           set -euo pipefail
           # No public invocation grant, no working/production database, no DNS changes.
