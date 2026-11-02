@@ -24,7 +24,12 @@ export async function GET(req: NextRequest) {
       sql`SELECT m.id::text, m.kickoff_at, m.deadline_at, m.status, m.home_score, m.away_score,
         m.home_team_id::text, m.away_team_id::text,
         h.name AS home_team, a.name AS away_team,
-        (cm.match_id IS NOT NULL) AS admin_created
+        (cm.match_id IS NOT NULL) AS admin_created,
+        (m.status='scheduled' AND m.kickoff_at<=now() AND m.deadline_at<=now()
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
+          AND (cm.match_id IS NOT NULL OR EXISTS (
+            SELECT 1 FROM cutover_auth.result_write_allowlist a WHERE a.match_id=m.id
+          ))) AS result_eligible
         FROM footy_cutover.matches m
         LEFT JOIN cutover_auth.created_matches cm ON cm.match_id=m.id
         JOIN footy_cutover.teams h ON h.id=m.home_team_id
