@@ -1,0 +1,21 @@
+name: Preview Neon encrypted backup retention (read only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    environment: neon-backup
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Report retention decisions without deleting anything
+        env:
+          FOOTY_BACKUP_S3_BUCKET: ${{ secrets.FOOTY_BACKUP_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.FOOTY_BACKUP_S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FOOTY_BACKUP_S3_SECRET_KEY }}
+          AWS_DEFAULT_REGION: ru-central1
+        run: python3 scripts/preview-footy-neon-retention.py
