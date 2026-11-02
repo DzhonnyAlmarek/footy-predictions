@@ -30,7 +30,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
   const [adminStageChoice, setAdminStageChoice] = useState("current");
   const [adminTourChoice, setAdminTourChoice] = useState("current");
   const [nextStageChoice, setNextStageChoice] = useState("");
@@ -553,10 +553,8 @@ export default function CutoverParticipantPage() {
         {(() => {
           const current = adminData.stages.find(s => s.is_current);
           if (!current) return <p>Текущий этап не назначен.</p>;
-          const stageTours = new Set(adminData.tours.filter(t => t.stage_id === current.id).map(t => t.id));
-          const stageMatches = adminData.matches.filter(m => m.tour_id && stageTours.has(m.tour_id));
-          const finished = stageMatches.filter(m => m.status === "finished" && m.home_score !== null && m.away_score !== null).length;
-          const ready = stageMatches.length === 56 && finished === 56;
+          const finished = current.finished_count;
+          const ready = current.match_count === 56 && finished === 56;
           return <details style={{margin:"12px 0"}}><summary style={{cursor:"pointer",fontWeight:700,padding:"8px 0"}}>
             Управление этапом · {current.name} · {finished} / 56 завершено
           </summary>
@@ -570,7 +568,7 @@ export default function CutoverParticipantPage() {
                 Закрыть этап и назначить следующий
               </button>
             </div>
-            {!ready && <p>Закрытие заблокировано: {stageMatches.length} матчей в загруженном календаре, завершено {finished} из 56.</p>}
+            {!ready && <p>Закрытие заблокировано: {current.match_count} матчей, завершено {finished} из 56.</p>}
           </details>;
         })()}
         <h2>Календарь матчей</h2>
