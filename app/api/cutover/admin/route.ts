@@ -62,6 +62,26 @@ export async function POST(req: NextRequest) {
         WHERE cm.match_id=${id}::bigint
           AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=cm.match_id)`;
       if (!owned.length) return reply({ ok: false, error: "historical_match_protected" }, 403);
+      // Fail closed before invoking the scoring routine. An admin-created fixture
+      // must be scheduled, have passed its prediction deadline, and have no
+      // existing ledger rows. The database routine remains the atomic authority
+      // for finishing/scoring; these checks only narrow eligibility.
+      const eligible = await sql`
+        SELECT m.id FROM footy_cutover.matches m
+        WHERE m.id=${id}::bigint AND m.status='scheduled'
+          AND m.deadline_at <= now()
+          AND NOT EXISTS (
+            SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id
+          )
+          AND EXISTS (
+            SELECT 1 FROM cutover_auth.created_matches cm WHERE cm.match_id=m.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id
+          )
+      `;
+      if (eligible.length !== 1)
+        return reply({ ok: false, error: "match_not_ready_or_already_scored" }, 409);
       // One database transaction scores predictions and finishes the match.
       // Previously finished matches and historical ledger entries are immutable.
       const rows = await sql`
