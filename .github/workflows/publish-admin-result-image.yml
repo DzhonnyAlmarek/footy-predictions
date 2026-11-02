@@ -21,14 +21,14 @@ jobs:
     environment: yandex-test
     timeout-minutes: 40
     env:
-      VERIFIED_SHA: a199a75fde063d476e4693f6f9c2046cc45da416
+      VERIFIED_SHA: 386832546d69d35bd3e1d56d97aebab646d5a68c
       IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
       SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
     steps:
       - name: Check out exactly the Docker-tested source
         uses: actions/checkout@v4
         with:
-          ref: a199a75fde063d476e4693f6f9c2046cc45da416
+          ref: 386832546d69d35bd3e1d56d97aebab646d5a68c
           persist-credentials: false
       - name: Build pinned candidate (no live credentials)
         run: |
