@@ -93,7 +93,7 @@ export default function CutoverParticipantPage() {
   const [writesEnabled, setWritesEnabled] = useState(false);
   const [adminWritesEnabled, setAdminWritesEnabled] = useState(false);
   const [resultWritesEnabled, setResultWritesEnabled] = useState(false);
-  const [resultForm, setResultForm] = useState({ match_id: "", home_score: "", away_score: "" });
+  const [resultDrafts, setResultDrafts] = useState<Record<string, { home_score: string; away_score: string }>>({});
   const [rescheduleForm, setRescheduleForm] = useState({ match_id: "", kickoff_at: "", deadline_at: "" });
   const [teamsEditForm, setTeamsEditForm] = useState({ match_id: "", home_team_id: "", away_team_id: "" });
   const [drafts, setDrafts] = useState<Record<string, { home: string; away: string }>>({});
@@ -387,9 +387,9 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Ошибка переноса матча."); }
     finally { setBusy(false); }
   }
-  async function finishMatch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!/^[0-9]{1,2}$/.test(resultForm.home_score) || !/^[0-9]{1,2}$/.test(resultForm.away_score)) {
+  async function finishMatch(matchId: string) {
+    const draft = resultDrafts[matchId];
+    if (!draft || !/^[0-9]{1,2}$/.test(draft.home_score) || !/^[0-9]{1,2}$/.test(draft.away_score)) {
       setMessage("Укажи счёт от 0 до 99."); return;
     }
     if (!window.confirm("Завершить матч и начислить очки? Изменить результат через эту форму нельзя.")) return;
@@ -397,10 +397,10 @@ export default function CutoverParticipantPage() {
     try {
       const response = await fetch("/api/cutover/admin", { method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "result", match_id: resultForm.match_id,
-          home_score: Number(resultForm.home_score), away_score: Number(resultForm.away_score) }) });
+        body: JSON.stringify({ action: "result", match_id: matchId,
+          home_score: Number(draft.home_score), away_score: Number(draft.away_score) }) });
       if (!response.ok) { setMessage("Результат не записан. Матч уже завершён, не найден или запись отключена."); return; }
-      setResultForm({ match_id: "", home_score: "", away_score: "" });
+      setResultDrafts(prev => { const next = { ...prev }; delete next[matchId]; return next; });
       await load(); setMessage("Результат записан, очки рассчитаны.");
     } catch { setMessage("Ошибка сохранения результата."); }
     finally { setBusy(false); }
@@ -605,11 +605,25 @@ export default function CutoverParticipantPage() {
             return <div key={tourId} style={{ marginBottom: 24 }}>
               <h3>{tour?.name ?? "Без тура"}</h3>
               <div className="tableWrap"><table className="table" style={{ minWidth: 600 }}>
-                <thead><tr><th>Дата</th><th>Время</th><th>Матч</th><th>Статус</th></tr></thead>
+                <thead><tr><th>Дата</th><th>Время</th><th>Матч</th><th>Статус</th><th>Результат</th></tr></thead>
                 <tbody>{matches.map(m => <tr key={m.id}>
                   <td>{new Date(m.kickoff_at).toLocaleDateString("ru-RU")}</td>
                   <td>{new Date(m.kickoff_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
                   <td>{m.home_team} — {m.away_team}</td><td>{m.status}</td>
+                  <td>{m.status === "finished"
+                    ? (m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`)
+                    : m.result_eligible && adminWritesEnabled && resultWritesEnabled
+                      ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <input aria-label={`Голы хозяев: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
+                            value={resultDrafts[m.id]?.home_score ?? ""}
+                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: e.target.value, away_score: prev[m.id]?.away_score ?? "" } }))} />
+                          <span>:</span>
+                          <input aria-label={`Голы гостей: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
+                            value={resultDrafts[m.id]?.away_score ?? ""}
+                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: prev[m.id]?.home_score ?? "", away_score: e.target.value } }))} />
+                          <button type="button" disabled={busy} onClick={() => void finishMatch(m.id)}>Сохранить</button>
+                        </div>
+                      : "—"}</td>
                 </tr>)}</tbody>
               </table></div>
             </div>;
@@ -654,21 +668,6 @@ export default function CutoverParticipantPage() {
           <label>Новый дедлайн <input required type="datetime-local" value={rescheduleForm.deadline_at}
             onChange={e => setRescheduleForm(prev => ({ ...prev, deadline_at: e.target.value }))} /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !rescheduleForm.match_id}>Перенести матч</button>
-        </form>
-        <h2>Результат матча</h2>
-        <form onSubmit={finishMatch} style={{ display: "grid", gap: 10 }}>
-          <label>Матч <select required value={resultForm.match_id}
-            onChange={e => setResultForm(prev => ({ ...prev, match_id: e.target.value }))}>
-            <option value="">Выбери незавершённый матч</option>
-            {(adminData.matches ?? []).filter(m => m.result_eligible).map(m =>
-              <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} ({new Date(m.kickoff_at).toLocaleString("ru-RU")})</option>)}
-          </select></label>
-          <label>Голы хозяев <input required type="number" min="0" max="99"
-            value={resultForm.home_score} onChange={e => setResultForm(prev => ({ ...prev, home_score: e.target.value }))} /></label>
-          <label>Голы гостей <input required type="number" min="0" max="99"
-            value={resultForm.away_score} onChange={e => setResultForm(prev => ({ ...prev, away_score: e.target.value }))} /></label>
-          <button type="submit" disabled={busy || !adminWritesEnabled || !resultWritesEnabled || !resultForm.match_id}>Записать результат и начислить очки</button>
-          {!resultWritesEnabled && <p>Запись результатов временно недоступна.</p>}
         </form>
       </section>}
       {activeTab === "ranking" && <section className="cutover-content cutover-rankings">
