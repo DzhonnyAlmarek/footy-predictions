@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const [teams, tournaments, stages, tours, matches] = await Promise.all([
       sql`SELECT id::text, name FROM footy_cutover.teams ORDER BY name`,
       sql`SELECT id::text, name FROM footy_cutover.tournaments ORDER BY name`,
-      sql`SELECT id::text, name FROM footy_cutover.stages ORDER BY id DESC`,
+      sql`SELECT id::text, name, status, is_current, matches_required FROM footy_cutover.stages ORDER BY id DESC`,
       sql`SELECT id::text, stage_id::text, name, tour_no FROM footy_cutover.tours ORDER BY id DESC`,
       sql`SELECT m.id::text, m.tour_id::text, m.kickoff_at, m.deadline_at, m.status, m.home_score, m.away_score, m.home_penalty_goals, m.away_penalty_goals,
         m.home_team_id::text, m.away_team_id::text,
@@ -59,6 +59,19 @@ export async function POST(req: NextRequest) {
     if (new TextEncoder().encode(rawBody).byteLength > 2048) return reply({ ok: false, error: "payload_too_large" }, 413);
     const body = JSON.parse(rawBody);
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
+    if (body?.action === "close_stage") {
+      const currentId = String(body.stage_id ?? "");
+      const nextId = String(body.next_stage_id ?? "");
+      if (!/^[1-9][0-9]{0,17}$/.test(currentId) || !/^[1-9][0-9]{0,17}$/.test(nextId) || currentId === nextId)
+        return reply({ok:false,error:"invalid_stage_ids"},400);
+      // The installed database function performs all checks and both updates in
+      // a single PostgreSQL transaction, with a transaction advisory lock.
+      // Without the reviewed migration, this call fails closed (503).
+      const changed = await sql`SELECT closed_stage_id::text, activated_stage_id::text
+        FROM footy_cutover.close_stage_and_activate_next(${currentId}::bigint,${nextId}::bigint)`;
+      return changed.length === 1 ? reply({ok:true, ...changed[0]})
+        : reply({ok:false,error:"stage_transition_failed"},409);
+    }
     if (body?.action === "result") {
       if (process.env.ENABLE_CUTOVER_RESULT_WRITES !== "true") return reply({ ok: false, error: "result_writes_disabled" }, 404);
       const id = String(body.match_id ?? "");
