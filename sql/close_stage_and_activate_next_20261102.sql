@@ -51,3 +51,7 @@ BEGIN
   RETURN QUERY SELECT p_current_id,p_next_id;
 END;
 $$;
+
+-- Prevent direct calls from public/low-privilege roles; only the DB owner
+-- used by the authenticated server-side admin endpoint may execute it.
+REVOKE ALL ON FUNCTION footy_cutover.close_stage_and_activate_next(bigint,bigint) FROM PUBLIC;
