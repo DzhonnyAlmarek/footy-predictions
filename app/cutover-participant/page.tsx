@@ -94,7 +94,7 @@ export default function CutoverParticipantPage() {
   const [adminWritesEnabled, setAdminWritesEnabled] = useState(false);
   const [resultWritesEnabled, setResultWritesEnabled] = useState(false);
   const [resultDrafts, setResultDrafts] = useState<Record<string, { home_score: string; away_score: string; home_penalty_goals: string; away_penalty_goals: string }>>({});
-  const [rescheduleForm, setRescheduleForm] = useState({ match_id: "", kickoff_at: "", deadline_at: "" });
+  const [rescheduleForm, setRescheduleForm] = useState({ match_id: "", kickoff_at: "" });
   const [teamsEditForm, setTeamsEditForm] = useState({ match_id: "", home_team_id: "", away_team_id: "" });
   const [drafts, setDrafts] = useState<Record<string, { home: string; away: string }>>({});
 
@@ -364,27 +364,30 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Ошибка при изменении команд."); }
     finally { setBusy(false); }
   }
+  function moscowInput(iso: string) {
+    const parts = new Intl.DateTimeFormat("sv-SE", {timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(iso));
+    const val = (key:string) => parts.find(p=>p.type===key)?.value ?? "00";
+    return `${val("year")}-${val("month")}-${val("day")}T${val("hour")}:${val("minute")}`;
+  }
   async function rescheduleMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!rescheduleForm.match_id || !rescheduleForm.kickoff_at || !rescheduleForm.deadline_at) return;
-    const kickoff = new Date(rescheduleForm.kickoff_at);
-    const deadline = new Date(rescheduleForm.deadline_at);
-    if (!Number.isFinite(kickoff.getTime()) || !Number.isFinite(deadline.getTime()) ||
-        deadline.getTime() <= Date.now() || deadline.getTime() > kickoff.getTime()) {
-      setMessage("Проверь даты: дедлайн должен быть в будущем и не позже начала матча."); return;
+    if (!rescheduleForm.match_id || !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/.test(rescheduleForm.kickoff_at)) return;
+    const kickoff = new Date(rescheduleForm.kickoff_at + ":00+03:00");
+    if (!Number.isFinite(kickoff.getTime()) || kickoff.getTime() <= Date.now()) {
+      setMessage("Начало матча должно быть в будущем (московское время)."); return;
     }
     setBusy(true);
     try {
       const response = await fetch("/api/cutover/admin", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "reschedule_match", match_id: rescheduleForm.match_id,
-          kickoff_at: kickoff.toISOString(), deadline_at: deadline.toISOString() })
+          kickoff_at: kickoff.toISOString(), deadline_at: kickoff.toISOString() })
       });
-      if (!response.ok) { setMessage("Перенос отклонён: матч закрыт, дедлайн истёк или уже есть прогнозы."); return; }
-      setRescheduleForm({ match_id: "", kickoff_at: "", deadline_at: "" });
+      if (!response.ok) { setMessage("Изменение отклонено: матч уже начался, закрыт или на него есть прогнозы."); return; }
+      setRescheduleForm({ match_id: "", kickoff_at: "" });
       await load();
-      setMessage("Дата матча и дедлайн обновлены.");
-    } catch { setMessage("Ошибка переноса матча."); }
+      setMessage("Дата и время матча обновлены (МСК). Дедлайн прогнозов изменён вместе с началом матча.");
+    } catch { setMessage("Не удалось обновить календарь."); }
     finally { setBusy(false); }
   }
   async function finishMatch(matchId: string) {
@@ -550,7 +553,7 @@ export default function CutoverParticipantPage() {
             return <details key={tourId} open={matches.some(m => m.status === "scheduled") && ordered.findIndex(item => item[0] === tourId) < 2} style={{ marginBottom: 12 }}>
               <summary style={{ cursor: "pointer", fontWeight: 700, padding: "8px 0" }}>{tour?.name ?? "Без тура"} · {matches.length} матчей</summary>
               <div className="tableWrap"><table className="table" style={{ minWidth: 600 }}>
-                <thead><tr><th>Дата</th><th>Время</th><th>Матч</th><th>Результат</th></tr></thead>
+                <thead><tr><th>Дата</th><th>Время</th><th>Матч</th><th>Результат</th><th>Календарь</th></tr></thead>
                 <tbody>{[...matches].sort((a,b) => new Date(a.kickoff_at).getTime()-new Date(b.kickoff_at).getTime() || Number(a.id)-Number(b.id)).map(m => <tr key={m.id}>
                   <td>{new Date(m.kickoff_at).toLocaleDateString("ru-RU")}</td>
                   <td>{new Date(m.kickoff_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
@@ -577,6 +580,17 @@ export default function CutoverParticipantPage() {
                           <button type="button" disabled={busy} onClick={() => void finishMatch(m.id)}>Сохранить</button>
                         </div>
                       : <span style={{ opacity: .65, whiteSpace: "nowrap" }}>— <small style={{ marginLeft: 8 }}>Пен. —</small></span>}</td>
+                  <td>{m.status==="scheduled" && adminWritesEnabled && new Date(m.deadline_at).getTime()>Date.now()
+                    ? rescheduleForm.match_id===m.id
+                      ? <form onSubmit={rescheduleMatch} style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                          <input aria-label={`Дата и время начала: ${m.home_team} — ${m.away_team}`} type="datetime-local" required value={rescheduleForm.kickoff_at}
+                            onChange={e=>setRescheduleForm(prev=>({...prev,kickoff_at:e.target.value}))}/>
+                          <span style={{fontSize:11}}>МСК</span>
+                          <button type="submit" disabled={busy}>Сохранить</button>
+                          <button type="button" onClick={()=>setRescheduleForm({match_id:"",kickoff_at:""})}>Отмена</button>
+                        </form>
+                      : <button type="button" disabled={busy} onClick={()=>setRescheduleForm({match_id:m.id,kickoff_at:moscowInput(m.kickoff_at)})}>Изменить</button>
+                    : "—"}</td>
                 </tr>)}</tbody>
               </table></div>
             </details>;
@@ -684,21 +698,6 @@ export default function CutoverParticipantPage() {
             {adminData.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !teamsEditForm.match_id}>Сохранить команды</button>
-        </form>
-        <h2>Перенос матча</h2>
-        <p>Перенос доступен только для новых незавершённых матчей, на которые ещё нет прогнозов.</p>
-        <form onSubmit={rescheduleMatch} style={{ display: "grid", gap: 10 }}>
-          <label>Матч <select required value={rescheduleForm.match_id}
-            onChange={e => setRescheduleForm(prev => ({ ...prev, match_id: e.target.value }))}>
-            <option value="">Выбери новый матч</option>
-            {(adminData.matches ?? []).filter(m => m.status === "scheduled" && new Date(m.deadline_at).getTime() > Date.now()).map(m =>
-              <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} ({new Date(m.kickoff_at).toLocaleString("ru-RU")})</option>)}
-          </select></label>
-          <label>Новое начало <input required type="datetime-local" value={rescheduleForm.kickoff_at}
-            onChange={e => setRescheduleForm(prev => ({ ...prev, kickoff_at: e.target.value }))} /></label>
-          <label>Новый дедлайн <input required type="datetime-local" value={rescheduleForm.deadline_at}
-            onChange={e => setRescheduleForm(prev => ({ ...prev, deadline_at: e.target.value }))} /></label>
-          <button type="submit" disabled={busy || !adminWritesEnabled || !rescheduleForm.match_id}>Перенести матч</button>
         </form>
         </details>
       </section>}
