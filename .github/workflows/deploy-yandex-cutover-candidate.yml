@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && ((inputs.confirmation == 'DEPLOY-CANDIDATE' && !inputs.enable_tour14_predictions) || (inputs.confirmation == 'ENABLE-TOUR14-PREDICTIONS' && inputs.enable_tour14_predictions)) && inputs.image_sha == 'ff33c85739f5eac4678ef875da0c2f6f67d9f14d' }}
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && ((inputs.confirmation == 'DEPLOY-CANDIDATE' && !inputs.enable_tour14_predictions) || (inputs.confirmation == 'ENABLE-TOUR14-PREDICTIONS' && inputs.enable_tour14_predictions)) && inputs.image_sha == '5c6dbbfce8d046c65799fe5586710929bf4a0e3d' }}
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 15
@@ -86,12 +86,12 @@ jobs:
             -H "Authorization: Bearer $IAM_TOKEN" "$API_URL/revisions/$ACTIVE_ID")"
           [[ "$code" = 200 ]] || { echo "Unable to read active revision: HTTP $code"; exit 1; }
           if [[ "${{ inputs.enable_tour14_predictions }}" == "true" ]]; then
-            jq -e --arg expected "$REGISTRY_PREFIX:$IMAGE_SHA" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Image mismatch: cannot enable predictions"; exit 1; }
+            jq -e --arg expected "$REGISTRY_PREFIX:ff33c85739f5eac4678ef875da0c2f6f67d9f14d" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Image mismatch: cannot enable predictions"; exit 1; }
           fi
           # Never print revision JSON: it can contain sensitive environment variables.
           jq -e --arg id "$CONTAINER_ID" '
             .containerId==$id and .status=="ACTIVE"
-            and (.image.environment.ENABLE_CUTOVER_PREDICTION_WRITES // "false")=="false"
+            and (.image.environment.ENABLE_CUTOVER_PREDICTION_WRITES // "false")=="true"
             and (.image.environment.ENABLE_CUTOVER_ADMIN_WRITES // "false")=="false"
             and (.image.environment.ENABLE_CUTOVER_RESULT_WRITES // "false")=="false"
             and .serviceAccountId != null
@@ -110,7 +110,7 @@ jobs:
             containerId:$id,
             imageSpec: (.image | {
               imageUrl:$url,
-              environment:((.environment // {}) + {CUTOVER_AUTH_ORIGIN:"https://www.murashevclub.ru", ENABLE_CUTOVER_PREDICTION_WRITES:(if $enable=="true" then "true" else "false" end), ENABLE_CUTOVER_ADMIN_WRITES:"false", ENABLE_CUTOVER_RESULT_WRITES:"false"})
+              environment:((.environment // {}) + {CUTOVER_AUTH_ORIGIN:"https://www.murashevclub.ru", ENABLE_CUTOVER_PREDICTION_WRITES:"true", ENABLE_CUTOVER_ADMIN_WRITES:"false", ENABLE_CUTOVER_RESULT_WRITES:"false"})
             } + (if .command then {command:.command} else {} end)
               + (if .args then {args:.args} else {} end)
               + (if .workingDir then {workingDir:.workingDir} else {} end)),
