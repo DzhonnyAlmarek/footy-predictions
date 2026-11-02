@@ -63,9 +63,12 @@ export async function POST(req: NextRequest) {
       if (process.env.ENABLE_CUTOVER_RESULT_WRITES !== "true") return reply({ ok: false, error: "result_writes_disabled" }, 404);
       const id = String(body.match_id ?? "");
       const home = body.home_score, away = body.away_score;
+      const homePenalty = body.home_penalty_goals, awayPenalty = body.away_penalty_goals;
       if (!/^[1-9][0-9]{0,17}$/.test(id) ||
           !Number.isInteger(home) || !Number.isInteger(away) ||
-          home < 0 || home > 99 || away < 0 || away > 99)
+          home < 0 || home > 99 || away < 0 || away > 99 ||
+          !Number.isInteger(homePenalty) || !Number.isInteger(awayPenalty) ||
+          homePenalty < 0 || awayPenalty < 0 || homePenalty > home || awayPenalty > away)
         return reply({ ok: false, error: "invalid_result" }, 400);
       // Imported fixtures require an explicit per-match authorization recorded
       // in cutover_auth.result_write_allowlist; completed historical data stays protected.
@@ -104,7 +107,8 @@ export async function POST(req: NextRequest) {
       // Previously finished matches and historical ledger entries are immutable.
       const rows = await sql`
         SELECT footy_cutover.finish_new_match(
-          ${id}::bigint, ${home}::integer, ${away}::integer
+          ${id}::bigint, ${home}::integer, ${away}::integer,
+          ${homePenalty}::integer, ${awayPenalty}::integer
         ) AS finished
       `;
       return rows[0]?.finished === true
