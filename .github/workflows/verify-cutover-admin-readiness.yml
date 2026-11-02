@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/cutover-admin-readiness-20261020
+      - feature/admin-result-guard-20261102
   workflow_dispatch:
 
 permissions:
