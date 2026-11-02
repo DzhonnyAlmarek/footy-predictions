@@ -536,7 +536,14 @@ export default function CutoverParticipantPage() {
               return { pending: pending.length > 0, distance: Math.min(...candidates.map(m => Math.abs(new Date(m.kickoff_at).getTime() - now))) };
             };
             const pa = priority(a[1]), pb = priority(b[1]);
-            return Number(pb.pending) - Number(pa.pending) || pa.distance - pb.distance;
+            const tourNumber = (id: string) => {
+              const name = adminData.tours.find(t => t.id === id)?.name ?? "";
+              const found = name.match(/(?:тур|tour)\s*(\d+)/i);
+              return found ? Number(found[1]) : Number.MAX_SAFE_INTEGER;
+            };
+            return Number(pb.pending) - Number(pa.pending)
+              || tourNumber(a[0]) - tourNumber(b[0])
+              || pa.distance - pb.distance;
           });
           return ordered.map(([tourId, matches]) => {
             const tour = adminData.tours.find(t => t.id === tourId);
@@ -549,7 +556,7 @@ export default function CutoverParticipantPage() {
                   <td>{new Date(m.kickoff_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
                   <td>{m.home_team} — {m.away_team}</td>
                   <td>{m.status === "finished"
-                    ? (m.home_score == null || m.away_score == null ? "—" : <span>{m.home_score}:{m.away_score}{(Number(m.home_penalty_goals) + Number(m.away_penalty_goals)) > 0 && <small style={{ marginLeft: 8, whiteSpace: "nowrap" }}>Пен. {m.home_penalty_goals ?? 0}:{m.away_penalty_goals ?? 0}</small>}</span>)
+                    ? (m.home_score == null || m.away_score == null ? "—" : <span>{m.home_score}:{m.away_score}<small style={{ marginLeft: 10, whiteSpace: "nowrap", opacity: .8 }}>Пен. {m.home_penalty_goals == null && m.away_penalty_goals == null ? "—" : `${m.home_penalty_goals ?? 0}:${m.away_penalty_goals ?? 0}`}</small></span>)
                     : m.result_eligible && adminWritesEnabled && resultWritesEnabled
                       ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <input aria-label={`Голы хозяев: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
@@ -569,7 +576,7 @@ export default function CutoverParticipantPage() {
                             onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: prev[m.id]?.home_score ?? "", away_score: prev[m.id]?.away_score ?? "", home_penalty_goals: prev[m.id]?.home_penalty_goals ?? "0", away_penalty_goals: e.target.value } }))} />
                           <button type="button" disabled={busy} onClick={() => void finishMatch(m.id)}>Сохранить</button>
                         </div>
-                      : "—"}</td>
+                      : <span style={{ opacity: .65, whiteSpace: "nowrap" }}>— <small style={{ marginLeft: 8 }}>Пен. —</small></span>}</td>
                 </tr>)}</tbody>
               </table></div>
             </details>;
