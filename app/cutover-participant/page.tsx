@@ -516,6 +516,55 @@ export default function CutoverParticipantPage() {
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
         <div className="cutover-section-heading"><div><span>УПРАВЛЕНИЕ ТУРНИРОМ</span><h2>Панель администратора</h2></div><p>Матчи, туры и результаты — в одном месте</p></div>
         <div className="cutover-admin-summary"><span>Участники: {participants.length}</span><span>Матчи: {adminData.matches.length}</span><span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span></div>
+        <h2>Календарь матчей</h2>
+        <p>Ближайшие незавершённые матчи — сначала. Время и даты показываются по данным календаря клуба.</p>
+        {(() => {
+          const grouped = new Map<string, typeof adminData.matches>();
+          for (const match of adminData.matches) {
+            const key = match.tour_id ?? "no-tour";
+            grouped.set(key, [...(grouped.get(key) ?? []), match]);
+          }
+          const now = Date.now();
+          const ordered = [...grouped.entries()].sort((a, b) => {
+            const priority = (matches: typeof adminData.matches) => {
+              const pending = matches.filter(m => m.status === "scheduled");
+              const candidates = pending.length ? pending : matches;
+              return { pending: pending.length > 0, distance: Math.min(...candidates.map(m => Math.abs(new Date(m.kickoff_at).getTime() - now))) };
+            };
+            const pa = priority(a[1]), pb = priority(b[1]);
+            return Number(pb.pending) - Number(pa.pending) || pa.distance - pb.distance;
+          });
+          return ordered.map(([tourId, matches]) => {
+            const tour = adminData.tours.find(t => t.id === tourId);
+            return <details key={tourId} open={matches.some(m => m.status === "scheduled") && ordered.findIndex(item => item[0] === tourId) < 2} style={{ marginBottom: 12 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 700, padding: "8px 0" }}>{tour?.name ?? "Без тура"} · {matches.length} матчей</summary>
+              <div className="tableWrap"><table className="table" style={{ minWidth: 600 }}>
+                <thead><tr><th>Дата</th><th>Время</th><th>Матч</th><th>Статус</th><th>Результат</th></tr></thead>
+                <tbody>{[...matches].sort((a,b) => new Date(a.kickoff_at).getTime()-new Date(b.kickoff_at).getTime() || Number(a.id)-Number(b.id)).map(m => <tr key={m.id}>
+                  <td>{new Date(m.kickoff_at).toLocaleDateString("ru-RU")}</td>
+                  <td>{new Date(m.kickoff_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
+                  <td>{m.home_team} — {m.away_team}</td><td>{m.status}</td>
+                  <td>{m.status === "finished"
+                    ? (m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`)
+                    : m.result_eligible && adminWritesEnabled && resultWritesEnabled
+                      ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <input aria-label={`Голы хозяев: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
+                            value={resultDrafts[m.id]?.home_score ?? ""}
+                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: e.target.value, away_score: prev[m.id]?.away_score ?? "" } }))} />
+                          <span>:</span>
+                          <input aria-label={`Голы гостей: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
+                            value={resultDrafts[m.id]?.away_score ?? ""}
+                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: prev[m.id]?.home_score ?? "", away_score: e.target.value } }))} />
+                          <button type="button" disabled={busy} onClick={() => void finishMatch(m.id)}>Сохранить</button>
+                        </div>
+                      : "—"}</td>
+                </tr>)}</tbody>
+              </table></div>
+            </details>;
+          });
+        })()}
+
+        <details style={{ marginTop: 16 }}><summary style={{ cursor: "pointer", fontWeight: 700, padding: "10px 0" }}>Управление турниром, матчами и участниками</summary>
         <h2>Сброс пароля участника</h2>
         <form onSubmit={resetParticipantPassword} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Участник <select required value={resetUsername} onChange={e => { setResetUsername(e.target.value); setResetCompletedFor(""); }}>
@@ -592,43 +641,6 @@ export default function CutoverParticipantPage() {
           <button disabled={busy || !adminWritesEnabled} type="submit">Создать матч</button>
           {!adminWritesEnabled && <p>Создание матчей временно недоступно.</p>}
         </form>
-        <h2>Календарь матчей</h2>
-        <p>Последние 150 матчей. Завершение доступно для матчей, разрешённых к обработке.</p>
-        {(() => {
-          const grouped = new Map<string, typeof adminData.matches>();
-          for (const match of adminData.matches) {
-            const key = match.tour_id ?? "no-tour";
-            grouped.set(key, [...(grouped.get(key) ?? []), match]);
-          }
-          return [...grouped.entries()].map(([tourId, matches]) => {
-            const tour = adminData.tours.find(t => t.id === tourId);
-            return <div key={tourId} style={{ marginBottom: 24 }}>
-              <h3>{tour?.name ?? "Без тура"}</h3>
-              <div className="tableWrap"><table className="table" style={{ minWidth: 600 }}>
-                <thead><tr><th>Дата</th><th>Время</th><th>Матч</th><th>Статус</th><th>Результат</th></tr></thead>
-                <tbody>{matches.map(m => <tr key={m.id}>
-                  <td>{new Date(m.kickoff_at).toLocaleDateString("ru-RU")}</td>
-                  <td>{new Date(m.kickoff_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
-                  <td>{m.home_team} — {m.away_team}</td><td>{m.status}</td>
-                  <td>{m.status === "finished"
-                    ? (m.home_score == null || m.away_score == null ? "—" : `${m.home_score}:${m.away_score}`)
-                    : m.result_eligible && adminWritesEnabled && resultWritesEnabled
-                      ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <input aria-label={`Голы хозяев: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
-                            value={resultDrafts[m.id]?.home_score ?? ""}
-                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: e.target.value, away_score: prev[m.id]?.away_score ?? "" } }))} />
-                          <span>:</span>
-                          <input aria-label={`Голы гостей: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
-                            value={resultDrafts[m.id]?.away_score ?? ""}
-                            onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: prev[m.id]?.home_score ?? "", away_score: e.target.value } }))} />
-                          <button type="button" disabled={busy} onClick={() => void finishMatch(m.id)}>Сохранить</button>
-                        </div>
-                      : "—"}</td>
-                </tr>)}</tbody>
-              </table></div>
-            </div>;
-          });
-        })()}
         <h2>Изменение команд матча</h2>
         <p>Команды можно исправить только до появления первого прогноза и до дедлайна.</p>
         <form onSubmit={editMatchTeams} style={{ display: "grid", gap: 10, marginBottom: 24 }}>
@@ -669,6 +681,7 @@ export default function CutoverParticipantPage() {
             onChange={e => setRescheduleForm(prev => ({ ...prev, deadline_at: e.target.value }))} /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !rescheduleForm.match_id}>Перенести матч</button>
         </form>
+        </details>
       </section>}
       {activeTab === "ranking" && <section className="cutover-content cutover-rankings">
         <div className="cutover-section-heading"><div><span>ТЕКУЩИЙ ЭТАП — <span className="cutover-stage-title">{currentTable?.stage?.name ?? "Загрузка…"}</span></span><h2>Текущая таблица</h2></div></div>
