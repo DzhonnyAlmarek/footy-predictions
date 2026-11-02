@@ -118,7 +118,8 @@ jobs:
             logOptions:(.logOptions // {}),
             scalingPolicy:(.scalingPolicy // {})
           }' /tmp/footy-current.json > /tmp/footy-deploy.json
-          echo "Active revision: $ACTIVE_ID"\n          echo "Prediction writes: enabling; admin/result writes: disabled"
+          echo "Active revision: $ACTIVE_ID"
+          echo "Prediction writes: enabling; admin/result writes: disabled"
           echo "Lockbox bindings preserved: $(jq '.secrets | length' /tmp/footy-deploy.json)"
           echo "Target image: $REGISTRY_PREFIX:$IMAGE_SHA"
           if [[ "${{ inputs.dry_run }}" == "true" ]]; then
