@@ -763,12 +763,22 @@ export default function CutoverParticipantPage() {
         </div>}
         </details>
         <details style={{margin:"10px 0"}}><summary style={{cursor:"pointer",fontWeight:650,padding:"8px 0"}}>Туры и этапы · создать и переименовать</summary>
-        <label>Действие <select value={["tour","rename-stage","rename-tour"].includes(adminAction)?adminAction:""} onChange={e=>setAdminAction(e.target.value)}>
+        <label>Действие <select value={["create-stage","tour","rename-stage","rename-tour"].includes(adminAction)?adminAction:""} onChange={e=>setAdminAction(e.target.value)}>
           <option value="">Выбери действие</option>
+          <option value="create-stage">Создать этап</option>
           <option value="tour">Создать тур</option>
           <option value="rename-stage">Переименовать этап</option>
           <option value="rename-tour">Переименовать тур</option>
         </select></label>
+        {adminAction === "create-stage" && <>
+          <h2>Новый этап</h2>
+          <p>Создаётся пустой черновой этап на 56 матчей. Текущий этап и результаты не меняются.</p>
+          <form onSubmit={createStage} style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"end",marginBottom:16}}>
+            <label>Название <input required maxLength={160} value={newStageName}
+              onChange={e=>setNewStageName(e.target.value)} placeholder="Этап 4 ЧР 26-27"/></label>
+            <button type="submit" disabled={busy || !adminWritesEnabled || !newStageName.trim()}>Создать этап</button>
+          </form>
+        </>}
         {adminAction === "tour" && <><h2>Новый тур в существующем этапе</h2>
         <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Этап <select required value={tourForm.stage_id}
