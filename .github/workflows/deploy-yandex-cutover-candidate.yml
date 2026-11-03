@@ -1,4 +1,4 @@
-name: Deploy existing Yandex candidate container revision
+name: Deploy delegated admin Yandex candidate revision
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       confirmation:
-        description: "ENABLE-ADMIN-RESULT-WRITES (explicit opt-in)"
+        description: "DEPLOY-DELEGATED-ADMIN-20261103 (explicit production opt-in)"
         required: true
         type: string
       enable_tour14_predictions:
@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && (inputs.confirmation == 'ENABLE-ADMIN-RESULT-WRITES' && !inputs.enable_tour14_predictions) && inputs.image_sha == 'fbb00656d380e3dc3765f90164f4782ff51e95e3' }}
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && (inputs.confirmation == 'DEPLOY-DELEGATED-ADMIN-20261103' && !inputs.enable_tour14_predictions) && inputs.image_sha == '6846bb333ac5ff5fa6c0d2670e8c3a8ae4257234' }}
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 15
@@ -88,7 +88,7 @@ jobs:
           if [[ "${{ inputs.enable_tour14_predictions }}" == "true" ]]; then
             jq -e --arg expected "$REGISTRY_PREFIX:ff33c85739f5eac4678ef875da0c2f6f67d9f14d" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Image mismatch: cannot enable predictions"; exit 1; }
           fi
-          jq -e --arg expected "$REGISTRY_PREFIX:8638d44637080563e92c101ac3e59a3c7c78632c" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Current image differs from preceding verified release; abort"; exit 1; }
+          jq -e --arg expected "$REGISTRY_PREFIX:fbb00656d380e3dc3765f90164f4782ff51e95e3" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Current image differs from preceding verified release; abort"; exit 1; }
           # Never print revision JSON: it can contain sensitive environment variables.
           jq -e --arg id "$CONTAINER_ID" '
             .containerId==$id and .status=="ACTIVE"
