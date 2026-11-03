@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS cutover_auth.admin_prediction_audit (
   prediction_id bigint NOT NULL,
   match_id bigint NOT NULL,
   participant_id uuid NOT NULL,
+  actor_id uuid NOT NULL,
   previous_home_pred integer,
   previous_away_pred integer,
   home_pred integer NOT NULL CHECK (home_pred BETWEEN 0 AND 99),
