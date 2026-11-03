@@ -30,7 +30,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[]; delegated_predictions: {match_id:string;username:string;home_pred:number;away_pred:number}[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[]; delegated_predictions: {match_id:string;username:string}[] } | null>(null);
   const [adminStageChoice, setAdminStageChoice] = useState("current");
   const [adminTourChoice, setAdminTourChoice] = useState("current");
   const [adminAction, setAdminAction] = useState("");
@@ -768,11 +768,7 @@ export default function CutoverParticipantPage() {
               {participants.filter(x=>x.toUpperCase()!=="ADMIN").map(x=><option key={x} value={x}>{x}</option>)}
             </select></label>
             <label>Матч текущего этапа <select required value={delegatedForm.match_id}
-              onChange={e=>{
-                const old=adminData.delegated_predictions?.find(p=>p.match_id===e.target.value && p.username===delegatedForm.username);
-                setDelegatedForm(prev=>({...prev,match_id:e.target.value,
-                  home_pred:old?String(old.home_pred):"",away_pred:old?String(old.away_pred):""}));
-              }}>
+              onChange={e=>setDelegatedForm(prev=>({...prev,match_id:e.target.value,home_pred:"",away_pred:""}))}>
               <option value="">Выбери матч</option>
               {adminData.matches.filter(m=>(adminStageChoice==="current" || adminStageChoice===adminData.stages.find(x=>x.is_current)?.id) &&
                 m.status==="scheduled" && new Date(m.deadline_at).getTime()>Date.now() &&
