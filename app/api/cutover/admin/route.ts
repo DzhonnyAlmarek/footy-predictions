@@ -64,7 +64,15 @@ export async function POST(req: NextRequest) {
   if (!cutoverAuthEnabled() || process.env.ENABLE_CUTOVER_ADMIN_WRITES !== "true")
     return reply({ ok: false }, 404);
   const origin = process.env.CUTOVER_AUTH_ORIGIN;
-  if (!origin || !origin.startsWith("https://") || req.headers.get("origin") !== origin)
+  // The Yandex HTTPS endpoint and the club's HTTPS domain share the same
+  // authenticated deployment. Mirror the login endpoint's origin allowlist.
+  const customOrigin = process.env.DEPLOY_TARGET === "yandex-neon-production-candidate"
+    ? "https://www.murashevclub.ru" : null;
+  const allowedOrigins = [origin, customOrigin].filter(
+    (value): value is string => typeof value === "string" && value.startsWith("https://")
+  );
+  if (!origin || !origin.startsWith("https://") ||
+      !req.headers.get("origin") || !allowedOrigins.includes(req.headers.get("origin")!))
     return reply({ ok: false }, 403);
   if (Number(req.headers.get("content-length") || 0) > 2048) return reply({ ok: false }, 413);
   try {
