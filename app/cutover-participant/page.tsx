@@ -30,10 +30,12 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[]; delegated_predictions: {match_id:string;username:string;home_pred:number;away_pred:number}[] } | null>(null);
   const [adminStageChoice, setAdminStageChoice] = useState("current");
   const [adminTourChoice, setAdminTourChoice] = useState("current");
   const [adminAction, setAdminAction] = useState("");
+  const [newStageName, setNewStageName] = useState("");
+  const [delegatedForm, setDelegatedForm] = useState({username:"",match_id:"",home_pred:"",away_pred:"",source_note:""});
   const [adminCalendarLoading, setAdminCalendarLoading] = useState(false);
   const [nextStageChoice, setNextStageChoice] = useState("");
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
@@ -324,6 +326,47 @@ export default function CutoverParticipantPage() {
       await load();
       setMessage(`Этап «${current.name}» закрыт. Текущий этап: «${next.name}».`);
     } catch { setMessage("Не удалось закрыть этап. Данные не изменены, если операция отклонена сервером."); }
+    finally {setBusy(false);}
+  }
+  async function createStage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = newStageName.trim();
+    if (!name || busy) return;
+    if (!window.confirm("Создать пустой черновой этап «" + name + "»? Текущий этап не изменится.")) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", {method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"create_stage",name})});
+      if (!response.ok) {setMessage(response.status===409 ? "Этап с таким названием уже существует." : "Не удалось создать этап.");return;}
+      setNewStageName("");
+      await load();
+      setMessage("Создан этап «" + name + "». Добавь туры и матчи.");
+    } catch {setMessage("Ошибка соединения при создании этапа.");}
+    finally {setBusy(false);}
+  }
+  async function saveDelegatedPrediction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const f = delegatedForm;
+    if (!f.username || !f.match_id || !/^[0-9]{1,2}$/.test(f.home_pred) ||
+        !/^[0-9]{1,2}$/.test(f.away_pred) || f.source_note.trim().length < 3) {
+      setMessage("Выбери участника, матч, счёт и укажи источник прогноза.");return;
+    }
+    const match = adminData?.matches.find(m=>m.id===f.match_id);
+    const existing = adminData?.delegated_predictions?.find(p=>p.match_id===f.match_id && p.username===f.username);
+    const summary = f.username + ": " + (match?.home_team ?? "?") + " — " + (match?.away_team ?? "?") + " " + f.home_pred + ":" + f.away_pred;
+    if (!window.confirm((existing ? "Заменить прогноз?" : "Записать прогноз?") + "\n" + summary + "\nИсточник: " + f.source_note)) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", {method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"save_for_participant",username:f.username,match_id:f.match_id,
+          home_pred:Number(f.home_pred),away_pred:Number(f.away_pred),source_note:f.source_note.trim()})});
+      if (!response.ok) {
+        setMessage(response.status===409 ? "Прогноз не записан: срок подачи истёк, матч закрыт или участник не найден."
+          : "Не удалось сохранить прогноз. Проверь доступность журнала административных действий.");return;
+      }
+      setDelegatedForm(prev=>({...prev,match_id:"",home_pred:"",away_pred:"",source_note:""}));
+      await load();setMessage("Прогноз сохранён и внесён в журнал: " + summary);
+    } catch {setMessage("Ошибка соединения при сохранении прогноза.");}
     finally {setBusy(false);}
   }
   async function createTour(event: FormEvent<HTMLFormElement>) {
