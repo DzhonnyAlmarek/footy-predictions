@@ -646,7 +646,7 @@ export default function CutoverParticipantPage() {
         </div>
         {adminCalendarLoading && <p>Загружаем календарь выбранного этапа…</p>}
         {!adminCalendarLoading && (() => {
-          const activeStageId=adminStageChoice==="current"?currentTable?.stage?.id:adminStageChoice;
+          const activeStageId=adminStageChoice==="current"?adminData.stages.find(stage=>stage.is_current)?.id:adminStageChoice;
           const allowedTours=new Set(adminData.tours.filter(t=>t.stage_id===activeStageId && (adminTourChoice==="current" || t.id===adminTourChoice)).map(t=>t.id));
           const grouped = new Map<string, typeof adminData.matches>();
           for (const match of adminData.matches) {
