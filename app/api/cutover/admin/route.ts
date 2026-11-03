@@ -68,7 +68,8 @@ export async function POST(req: NextRequest) {
     return reply({ ok: false }, 403);
   if (Number(req.headers.get("content-length") || 0) > 2048) return reply({ ok: false }, 413);
   try {
-    if (!(await admin(req))) return reply({ ok: false }, 403);
+    const actor = await authenticatedCutoverIdentity(req.cookies.get(CUTOVER_COOKIE)?.value);
+    if (actor?.role !== "admin") return reply({ ok: false }, 403);
     const rawBody = await req.text();
     if (new TextEncoder().encode(rawBody).byteLength > 2048) return reply({ ok: false, error: "payload_too_large" }, 413);
     const body = JSON.parse(rawBody);
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
         written AS (
           INSERT INTO footy_cutover.predictions (id, match_id, user_id, home_pred, away_pred)
           SELECT nextval('footy_cutover.predictions_id_seq'), e.match_id, e.participant_id,
-                 ${home}::integer, ${away}::integer FROM eligible e
+                 ${home}::integer, ${away}::integer FROM eligible e WHERE true
           ON CONFLICT (match_id, user_id) DO UPDATE SET
             home_pred=EXCLUDED.home_pred, away_pred=EXCLUDED.away_pred, updated_at=now()
           WHERE EXISTS (
@@ -134,9 +135,9 @@ export async function POST(req: NextRequest) {
         ),
         audit AS (
           INSERT INTO cutover_auth.admin_prediction_audit
-            (prediction_id, match_id, participant_id, previous_home_pred,
+            (prediction_id, match_id, participant_id, actor_id, previous_home_pred,
              previous_away_pred, home_pred, away_pred, source_note)
-          SELECT w.id, w.match_id, w.user_id, e.previous_home_pred,
+          SELECT w.id, w.match_id, w.user_id, ${actor.userId}::uuid, e.previous_home_pred,
                  e.previous_away_pred, w.home_pred, w.away_pred, ${note}
           FROM written w JOIN eligible e
             ON e.match_id=w.match_id AND e.participant_id=w.user_id
