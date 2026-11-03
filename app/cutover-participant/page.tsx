@@ -382,13 +382,21 @@ export default function CutoverParticipantPage() {
     finally { setBusy(false); }
   }
   async function createMatch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true);
+    event.preventDefault();
+    const kickoff = new Date(adminForm.kickoff_at + ":00+03:00");
+    const deadline = new Date(adminForm.deadline_at + ":00+03:00");
+    if (!Number.isFinite(kickoff.getTime()) || !Number.isFinite(deadline.getTime()) ||
+        deadline > kickoff || deadline.getTime() <= Date.now()) {
+      setMessage("Проверь московское время матча и окончания приёма прогнозов.");
+      return;
+    }
+    setBusy(true);
     try {
       const response = await fetch("/api/cutover/admin", { method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create_match", ...adminForm,
-          kickoff_at: new Date(adminForm.kickoff_at).toISOString(),
-          deadline_at: new Date(adminForm.deadline_at).toISOString() }) });
+          kickoff_at: kickoff.toISOString(),
+          deadline_at: deadline.toISOString() }) });
       if (!response.ok) { setMessage("Матч не создан. Проверь данные и разрешение на запись."); return; }
       await load(); setMessage("Матч создан.");
     } catch { setMessage("Не удалось создать матч."); }
@@ -435,7 +443,7 @@ export default function CutoverParticipantPage() {
       if (!response.ok) { setMessage("Изменение отклонено: матч уже начался, закрыт или на него есть прогнозы."); return; }
       setRescheduleForm({ match_id: "", kickoff_at: "" });
       await load();
-      setMessage("Дата и время матча обновлены (МСК). Дедлайн прогнозов изменён вместе с началом матча.");
+      setMessage("Дата и время матча обновлены (МСК). Срок подачи прогнозов изменён вместе с началом матча.");
     } catch { setMessage("Не удалось обновить календарь."); }
     finally { setBusy(false); }
   }
@@ -771,7 +779,7 @@ export default function CutoverParticipantPage() {
           <option value="create-match">Создать матч</option>
           <option value="edit-teams">Изменить команды</option>
         </select></label>
-        {adminAction === "create-match" && <><h2>Создание матча</h2>}
+        {adminAction === "create-match" && <><h2>Создание матча</h2>
         <form onSubmit={createMatch} style={{ display: "grid", gap: 10 }}>
           {(["tournament_id", "stage_id", "tour_id", "home_team_id", "away_team_id"] as const).map(field => {
             const options = field === "tournament_id" ? adminData.tournaments :
@@ -786,16 +794,16 @@ export default function CutoverParticipantPage() {
               {options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select></label>;
           })}
-          <label>Начало матча <input required type="datetime-local" value={adminForm.kickoff_at}
+          <label>Начало матча (МСК) <input required type="datetime-local" value={adminForm.kickoff_at}
             onChange={e => setAdminForm(prev => ({ ...prev, kickoff_at: e.target.value }))} /></label>
-          <label>Дедлайн прогноза <input required type="datetime-local" value={adminForm.deadline_at}
+          <label>Окончание приёма прогнозов (МСК) <input required type="datetime-local" value={adminForm.deadline_at}
             onChange={e => setAdminForm(prev => ({ ...prev, deadline_at: e.target.value }))} /></label>
           <button disabled={busy || !adminWritesEnabled} type="submit">Создать матч</button>
           {!adminWritesEnabled && <p>Создание матчей временно недоступно.</p>}
         </form>
         </>}
         {adminAction === "edit-teams" && <><h2>Изменение команд матча</h2>
-        <p>Команды можно исправить только до появления первого прогноза и до дедлайна.</p>
+        <p>Команды можно исправить только до появления первого прогноза и окончания срока его подачи.</p>
         <form onSubmit={editMatchTeams} style={{ display: "grid", gap: 10, marginBottom: 24 }}>
           <label>Матч <select required value={teamsEditForm.match_id}
             onChange={e => {
