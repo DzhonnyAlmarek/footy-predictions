@@ -661,7 +661,7 @@ export default function CutoverParticipantPage() {
         <h2>Календарь матчей</h2>
         <p style={{margin:"0 0 10px",opacity:.75}}>Показываются матчи выбранного этапа. Все даты и время — московские.</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end",marginBottom:12}}>
-          <label>Этап <select value={adminStageChoice} onChange={e=>{setAdminStageChoice(e.target.value);setAdminTourChoice("current");}}>
+          <label>Этап <select value={adminStageChoice} onChange={e=>{setAdminStageChoice(e.target.value);setAdminTourChoice("current");setDelegatedForm(prev=>({...prev,match_id:"",home_pred:"",away_pred:""}));}}>
             <option value="current">Текущий — {adminData.stages.find(s=>s.is_current)?.name ?? "не определён"}</option>
             {adminData.stages.filter(stage=>!stage.is_current).map(stage=><option key={stage.id} value={stage.id}>{stage.name}</option>)}
           </select></label>
@@ -778,8 +778,8 @@ export default function CutoverParticipantPage() {
                   home_pred:old?String(old.home_pred):"",away_pred:old?String(old.away_pred):""}));
               }}>
               <option value="">Выбери матч</option>
-              {adminData.matches.filter(m=>m.status==="scheduled" &&
-                new Date(m.deadline_at).getTime()>Date.now() &&
+              {adminData.matches.filter(m=>(adminStageChoice==="current" || adminStageChoice===adminData.stages.find(x=>x.is_current)?.id) &&
+                m.status==="scheduled" && new Date(m.deadline_at).getTime()>Date.now() &&
                 new Date(m.kickoff_at).getTime()>Date.now()).map(m=>
                 <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} · {new Date(m.kickoff_at).toLocaleString("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} МСК</option>)}
             </select></label>
