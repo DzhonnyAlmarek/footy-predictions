@@ -33,6 +33,7 @@ export default function CutoverParticipantPage() {
   const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
   const [adminStageChoice, setAdminStageChoice] = useState("current");
   const [adminTourChoice, setAdminTourChoice] = useState("current");
+  const [adminAction, setAdminAction] = useState<"tour" | "rename-stage" | "rename-tour" | "create-match" | "edit-teams" | null>(null);
   const [nextStageChoice, setNextStageChoice] = useState("");
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
   const [renameTourForm, setRenameTourForm] = useState({ tour_id: "", name: "" });
@@ -280,6 +281,23 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Ошибка соединения при сохранении."); }
     finally { setBusy(false); }
   }
+  // Reload the complete calendar for the selected stage. The admin API filters
+  // by stage in SQL, so old stages never disappear behind a global LIMIT.
+  useEffect(() => {
+    if (!authenticated || !isAdmin || activeTab !== "admin") return;
+    let cancelled = false;
+    const query = adminStageChoice === "current" ? "" : "?stage_id=" + encodeURIComponent(adminStageChoice);
+    void fetch("/api/cutover/admin" + query, { cache: "no-store" })
+      .then(async response => { if (!response.ok) throw new Error("admin_calendar"); return response.json(); })
+      .then(payload => { if (!cancelled) {
+        setAdminData(payload);
+        setAdminWritesEnabled(payload.writes_enabled === true);
+        setResultWritesEnabled(payload.result_writes_enabled === true);
+      } })
+      .catch(() => { if (!cancelled) setMessage("Не удалось загрузить календарь выбранного этапа."); });
+    return () => { cancelled = true; };
+  }, [authenticated, isAdmin, activeTab, adminStageChoice]);
+
   async function closeCurrentStage() {
     const current = adminData?.stages.find(s => s.is_current);
     const next = adminData?.stages.find(s => s.id === nextStageChoice && s.status === "draft");
@@ -549,14 +567,27 @@ export default function CutoverParticipantPage() {
       </section>
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
         <div className="cutover-section-heading"><div><span>УПРАВЛЕНИЕ ТУРНИРОМ</span><h2>Панель администратора</h2></div><p>Матчи, туры и результаты — в одном месте</p></div>
-        <div className="cutover-admin-summary"><span>Участники: {participants.length}</span><span>Матчи: {adminData.matches.length}</span><span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span></div>
+        <div className="cutover-admin-summary">
+          <span>Участники: {participants.length}</span>
+          <span>Матчей в выбранном этапе: {adminData.stages.find(x=>x.id===(adminStageChoice==="current"?adminData.stages.find(s=>s.is_current)?.id:adminStageChoice))?.match_count ?? "—"}</span>
+          <span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span>
+        </div>
+        {(() => {
+          const stage = adminData.stages.find(s=>s.is_current);
+          return stage ? <div style={{display:"flex",gap:10,flexWrap:"wrap",margin:"10px 0 16px"}}>
+            <strong>{stage.name}</strong>
+            <span>Матчей: {stage.match_count} / {stage.matches_required}</span>
+            <span>Завершено: {stage.finished_count}</span>
+            <span>Осталось: {Math.max(0,stage.match_count-stage.finished_count)}</span>
+          </div> : null;
+        })()}
         {(() => {
           const current = adminData.stages.find(s => s.is_current);
           if (!current) return <p>Текущий этап не назначен.</p>;
           const finished = current.finished_count;
           const ready = current.match_count === 56 && finished === 56;
           return <details style={{margin:"12px 0"}}><summary style={{cursor:"pointer",fontWeight:700,padding:"8px 0"}}>
-            Управление этапом · {current.name} · {finished} / 56 завершено
+            Закрытие этапа · {current.name} · {finished} / 56 завершено
           </summary>
             <p>Закрытие доступно после завершения 56 матчей и проверки всех начислений сервером.</p>
             <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"end"}}>
@@ -572,14 +603,15 @@ export default function CutoverParticipantPage() {
           </details>;
         })()}
         <h2>Календарь матчей</h2>
+        <p style={{margin:"0 0 10px",opacity:.75}}>Показываются матчи выбранного этапа. Все даты и время — московские.</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end",marginBottom:12}}>
           <label>Этап <select value={adminStageChoice} onChange={e=>{setAdminStageChoice(e.target.value);setAdminTourChoice("current");}}>
-            <option value="current">Текущий — {currentTable?.stage?.name ?? "определяется"}</option>
-            {adminData.stages.filter(stage=>stage.id!==currentTable?.stage?.id).map(stage=><option key={stage.id} value={stage.id}>{stage.name}</option>)}
+            <option value="current">Текущий — {adminData.stages.find(s=>s.is_current)?.name ?? "не определён"}</option>
+            {adminData.stages.filter(stage=>!stage.is_current).map(stage=><option key={stage.id} value={stage.id}>{stage.name}</option>)}
           </select></label>
           <label>Тур <select value={adminTourChoice} onChange={e=>setAdminTourChoice(e.target.value)}>
             <option value="current">Все туры этапа</option>
-            {adminData.tours.filter(t=>t.stage_id===(adminStageChoice==="current"?currentTable?.stage?.id:adminStageChoice)).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+            {adminData.tours.filter(t=>t.stage_id===(adminStageChoice==="current"?adminData.stages.find(s=>s.is_current)?.id:adminStageChoice)).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
           </select></label>
         </div>
         {(() => {
