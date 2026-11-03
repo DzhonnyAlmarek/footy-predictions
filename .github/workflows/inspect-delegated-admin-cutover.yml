@@ -1,0 +1,67 @@
+name: Inspect delegated admin cutover (read-only)
+
+on:
+  push:
+    branches:
+      - feature/admin-result-guard-20261102
+    paths:
+      - .github/workflows/inspect-delegated-admin-cutover.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 10
+    env:
+      CONTAINER_ID: bbaquq5i6l35i5kbiufb
+      SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+      IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
+      PREVIOUS_SHA: fbb00656d380e3dc3765f90164f4782ff51e95e3
+      NEXT_SHA: 6846bb333ac5ff5fa6c0d2670e8c3a8ae4257234
+    steps:
+      - name: Read active revision and verify exact cutover prerequisites (no writes)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const jwt = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(jwt);
+            const form = new URLSearchParams({
+              grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+              requested_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+              audience: process.env.SERVICE_ACCOUNT_ID,
+              subject_token: jwt,
+              subject_token_type: 'urn:ietf:params:oauth:token-type:id_token'
+            });
+            const tokenRes = await fetch('https://auth.yandex.cloud/oauth/token',{method:'POST',body:form,signal:AbortSignal.timeout(30000)});
+            if(!tokenRes.ok) throw new Error('OIDC exchange HTTP '+tokenRes.status);
+            const token = (await tokenRes.json()).access_token;
+            core.setSecret(token);
+            const api = 'https://serverless-containers.api.cloud.yandex.net/containers/v1';
+            async function read(path) {
+              const res = await fetch(api+path,{headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(30000)});
+              if(!res.ok) throw new Error('Yandex read HTTP '+res.status);
+              return res.json();
+            }
+            const list = await read('/revisions?containerId='+process.env.CONTAINER_ID+'&pageSize=100');
+            const active = (list.revisions||[]).filter(r=>r.status==='ACTIVE'&&r.containerId===process.env.CONTAINER_ID);
+            if(active.length!==1) throw new Error('Expected exactly one ACTIVE revision');
+            const current = await read('/revisions/'+active[0].id);
+            const image = current.image?.imageUrl || '';
+            if(image!==process.env.IMAGE_REPO+':'+process.env.PREVIOUS_SHA) throw new Error('Active image differs from expected previous version');
+            const flags=['ENABLE_CUTOVER_PREDICTION_WRITES','ENABLE_CUTOVER_ADMIN_WRITES','ENABLE_CUTOVER_RESULT_WRITES'];
+            for(const k of flags) if(current.image?.environment?.[k]!=='true') throw new Error(k+' not enabled in current revision');
+            if(!current.serviceAccountId || !current.resources?.cores || !current.resources?.memory) throw new Error('Missing critical runtime configuration');
+            const advanced=['connectivity','metadataOptions','asyncInvocationConfig'];
+            for(const k of advanced) if(current[k]&&Object.keys(current[k]).length) throw new Error('Advanced '+k+' requires manual review');
+            if((current.storageMounts||[]).length || (current.mounts||[]).length) throw new Error('Mounts require manual review');
+            const next = process.env.IMAGE_REPO+':'+process.env.NEXT_SHA;
+            core.info('Active revision ID: '+current.id);
+            core.info('Current image matches expected prior release; new image: '+next);
+            core.info('Prediction/admin/result write flags are enabled and must be preserved');
+            core.info('Secrets bound: '+(current.secrets||[]).length);
+            core.info('READ ONLY: no revision deployed; no values or secret data printed');
