@@ -33,7 +33,8 @@ export default function CutoverParticipantPage() {
   const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
   const [adminStageChoice, setAdminStageChoice] = useState("current");
   const [adminTourChoice, setAdminTourChoice] = useState("current");
-  const [adminAction, setAdminAction] = useState<"tour" | "rename-stage" | "rename-tour" | "create-match" | "edit-teams" | null>(null);
+  const [adminAction, setAdminAction] = useState("");
+  const [adminCalendarLoading, setAdminCalendarLoading] = useState(false);
   const [nextStageChoice, setNextStageChoice] = useState("");
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
   const [renameTourForm, setRenameTourForm] = useState({ tour_id: "", name: "" });
@@ -131,7 +132,8 @@ export default function CutoverParticipantPage() {
     setMessage("");
     void (async () => { try {
     if (sessionData.role === "admin") {
-      const adminResponse = await fetch("/api/cutover/admin", { cache: "no-store" });
+      const adminQuery = adminStageChoice === "current" ? "" : "?stage_id=" + encodeURIComponent(adminStageChoice);
+      const adminResponse = await fetch("/api/cutover/admin" + adminQuery, { cache: "no-store" });
       if (adminResponse.ok) {
         const adminPayload = await adminResponse.json();
         setAdminData(adminPayload);
@@ -286,6 +288,7 @@ export default function CutoverParticipantPage() {
   useEffect(() => {
     if (!authenticated || !isAdmin || activeTab !== "admin") return;
     let cancelled = false;
+    setAdminCalendarLoading(true);
     const query = adminStageChoice === "current" ? "" : "?stage_id=" + encodeURIComponent(adminStageChoice);
     void fetch("/api/cutover/admin" + query, { cache: "no-store" })
       .then(async response => { if (!response.ok) throw new Error("admin_calendar"); return response.json(); })
@@ -294,7 +297,8 @@ export default function CutoverParticipantPage() {
         setAdminWritesEnabled(payload.writes_enabled === true);
         setResultWritesEnabled(payload.result_writes_enabled === true);
       } })
-      .catch(() => { if (!cancelled) setMessage("Не удалось загрузить календарь выбранного этапа."); });
+      .catch(() => { if (!cancelled) setMessage("Не удалось загрузить календарь выбранного этапа."); })
+      .finally(() => { if (!cancelled) setAdminCalendarLoading(false); });
     return () => { cancelled = true; };
   }, [authenticated, isAdmin, activeTab, adminStageChoice]);
 
@@ -453,6 +457,7 @@ export default function CutoverParticipantPage() {
           home_score: Number(draft.home_score), away_score: Number(draft.away_score), home_penalty_goals: hp, away_penalty_goals: ap }) });
       if (!response.ok) { setMessage("Результат не записан. Матч уже завершён, не найден или запись отключена."); return; }
       setResultDrafts(prev => { const next = { ...prev }; delete next[matchId]; return next; });
+      setCurrentTable(null);
       await load(); setMessage("Результат записан, очки рассчитаны.");
     } catch { setMessage("Ошибка сохранения результата."); }
     finally { setBusy(false); }
@@ -614,7 +619,8 @@ export default function CutoverParticipantPage() {
             {adminData.tours.filter(t=>t.stage_id===(adminStageChoice==="current"?adminData.stages.find(s=>s.is_current)?.id:adminStageChoice)).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
           </select></label>
         </div>
-        {(() => {
+        {adminCalendarLoading && <p>Загружаем календарь выбранного этапа…</p>}
+        {!adminCalendarLoading && (() => {
           const activeStageId=adminStageChoice==="current"?currentTable?.stage?.id:adminStageChoice;
           const allowedTours=new Set(adminData.tours.filter(t=>t.stage_id===activeStageId && (adminTourChoice==="current" || t.id===adminTourChoice)).map(t=>t.id));
           const grouped = new Map<string, typeof adminData.matches>();
@@ -706,12 +712,18 @@ export default function CutoverParticipantPage() {
         </div>}
         </details>
         <details style={{margin:"10px 0"}}><summary style={{cursor:"pointer",fontWeight:650,padding:"8px 0"}}>Туры и этапы · создать и переименовать</summary>
-        <h2>Новый тур в существующем этапе</h2>
+        <label>Действие <select value={["tour","rename-stage","rename-tour"].includes(adminAction)?adminAction:""} onChange={e=>setAdminAction(e.target.value)}>
+          <option value="">Выбери действие</option>
+          <option value="tour">Создать тур</option>
+          <option value="rename-stage">Переименовать этап</option>
+          <option value="rename-tour">Переименовать тур</option>
+        </select></label>
+        {adminAction === "tour" && <><h2>Новый тур в существующем этапе</h2>
         <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Этап <select required value={tourForm.stage_id}
             onChange={e => setTourForm(prev => ({ ...prev, stage_id: e.target.value }))}>
             <option value="">Выбери этап</option>
-            {adminData.stages.map(s => <option key={s.id} value={s.id}>{s.name} (ID {s.id})</option>)}
+            {adminData.stages.filter(s => s.status==="draft").map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select></label>
           <label>Номер тура <input required type="number" min="1" max="999"
             value={tourForm.tour_no} onChange={e => setTourForm(prev => ({ ...prev, tour_no: e.target.value }))} /></label>
@@ -719,7 +731,8 @@ export default function CutoverParticipantPage() {
             onChange={e => setTourForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Тур 31" /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled}>Создать тур</button>
         </form>
-        <h2>Переименование этапа</h2>
+        </>}
+        {adminAction === "rename-stage" && <><h2>Переименование этапа</h2>
         <p>Доступно только для пустого чернового этапа, без туров и матчей.</p>
         <form onSubmit={renameStage} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Этап <select required value={renameStageForm.stage_id}
@@ -728,13 +741,14 @@ export default function CutoverParticipantPage() {
               setRenameStageForm({ stage_id: e.target.value, name: stage?.name ?? "" });
             }}>
             <option value="">Выбери этап</option>
-            {adminData.stages.map(s => <option key={s.id} value={s.id}>{s.name} (ID {s.id})</option>)}
+            {adminData.stages.filter(s => s.status==="draft").map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select></label>
           <label>Новое название <input required maxLength={160} value={renameStageForm.name}
             onChange={e => setRenameStageForm(prev => ({ ...prev, name: e.target.value }))} /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !renameStageForm.stage_id}>Переименовать этап</button>
         </form>
-        <h2>Переименование тура</h2>
+        </>}
+        {adminAction === "rename-tour" && <><h2>Переименование тура</h2>
         <p>Переименовать можно только тур, в котором ещё нет матчей. Исторические туры защищены.</p>
         <form onSubmit={renameTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Тур <select required value={renameTourForm.tour_id}
@@ -743,19 +757,25 @@ export default function CutoverParticipantPage() {
               setRenameTourForm({ tour_id: e.target.value, name: tour?.name ?? "" });
             }}>
             <option value="">Выбери тур</option>
-            {adminData.tours.map(t => <option key={t.id} value={t.id}>{t.name} (ID {t.id})</option>)}
+            {adminData.tours.filter(t => adminData.stages.some(stage=>stage.id===t.stage_id && stage.status==="draft")).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select></label>
           <label>Новое название <input required maxLength={160} value={renameTourForm.name}
             onChange={e => setRenameTourForm(prev => ({ ...prev, name: e.target.value }))} /></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !renameTourForm.tour_id}>Переименовать тур</button>
         </form>
+        </>}
         </details>
         <details style={{margin:"10px 0"}}><summary style={{cursor:"pointer",fontWeight:650,padding:"8px 0"}}>Матчи · создать или изменить команды</summary>
-        <h2>Создание матча</h2>
+        <label>Действие <select value={["create-match","edit-teams"].includes(adminAction)?adminAction:""} onChange={e=>setAdminAction(e.target.value)}>
+          <option value="">Выбери действие</option>
+          <option value="create-match">Создать матч</option>
+          <option value="edit-teams">Изменить команды</option>
+        </select></label>
+        {adminAction === "create-match" && <><h2>Создание матча</h2>}
         <form onSubmit={createMatch} style={{ display: "grid", gap: 10 }}>
           {(["tournament_id", "stage_id", "tour_id", "home_team_id", "away_team_id"] as const).map(field => {
             const options = field === "tournament_id" ? adminData.tournaments :
-              field === "stage_id" ? adminData.stages : field === "tour_id" ?
+              field === "stage_id" ? adminData.stages.filter(s=>s.status==="draft") : field === "tour_id" ?
               adminData.tours.filter(t => t.stage_id === adminForm.stage_id) : adminData.teams;
             const label = { tournament_id: "Турнир", stage_id: "Этап", tour_id: "Тур",
               home_team_id: "Хозяева", away_team_id: "Гости" }[field];
@@ -773,7 +793,8 @@ export default function CutoverParticipantPage() {
           <button disabled={busy || !adminWritesEnabled} type="submit">Создать матч</button>
           {!adminWritesEnabled && <p>Создание матчей временно недоступно.</p>}
         </form>
-        <h2>Изменение команд матча</h2>
+        </>}
+        {adminAction === "edit-teams" && <><h2>Изменение команд матча</h2>
         <p>Команды можно исправить только до появления первого прогноза и до дедлайна.</p>
         <form onSubmit={editMatchTeams} style={{ display: "grid", gap: 10, marginBottom: 24 }}>
           <label>Матч <select required value={teamsEditForm.match_id}
@@ -798,6 +819,7 @@ export default function CutoverParticipantPage() {
           </select></label>
           <button type="submit" disabled={busy || !adminWritesEnabled || !teamsEditForm.match_id}>Сохранить команды</button>
         </form>
+        </>}
         </details>
         </details>
       </section>}
