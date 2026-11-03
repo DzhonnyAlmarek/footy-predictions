@@ -556,8 +556,13 @@ export default function CutoverParticipantPage() {
     priorBootIsWinner?"Обладатель Золотой бутсы":"",
     pastWhistleWinner===sessionUsername?"Обладатель Золотого свистка":""
   ].filter(Boolean).join(" · ");
-  const stageMatchCount = currentTable ? new Set(currentTable.rows.map(row=>row.match_id)).size : 0;
-  const finishedStageMatches = currentTable ? new Set(currentTable.rows.filter(row=>row.home_score!==null&&row.away_score!==null).map(row=>row.match_id)).size : 0;
+  const activeAdminStage = isAdmin ? adminData?.stages.find(stage=>stage.is_current) : null;
+  const stageMatchCount = activeAdminStage
+    ? activeAdminStage.match_count
+    : currentTable ? new Set(currentTable.rows.map(row=>row.match_id)).size : 0;
+  const finishedStageMatches = activeAdminStage
+    ? activeAdminStage.finished_count
+    : currentTable ? new Set(currentTable.rows.filter(row=>row.home_score!==null&&row.away_score!==null).map(row=>row.match_id)).size : 0;
   const upcomingMatches = schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now());
   const savedForecasts = schedule.filter(m => m.home_pred !== null && m.away_pred !== null).length;
   const myPlace = leaderboard.findIndex(p => p.username === sessionUsername);
