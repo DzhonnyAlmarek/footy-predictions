@@ -81,7 +81,8 @@ export async function POST(req: NextRequest) {
       // Always create an empty draft; the active stage is never changed here.
       const rows = await sql`
         INSERT INTO footy_cutover.stages (id, name, status, matches_required, is_current)
-        SELECT nextval('footy_cutover.stages_id_seq'), ${name}, 'draft', 56, false
+        SELECT GREATEST(nextval('footy_cutover.stages_id_seq'),
+          (SELECT COALESCE(MAX(id),0) + 1 FROM footy_cutover.stages)), ${name}, 'draft', 56, false
         WHERE NOT EXISTS (
           SELECT 1 FROM footy_cutover.stages s WHERE lower(s.name)=lower(${name})
         )
