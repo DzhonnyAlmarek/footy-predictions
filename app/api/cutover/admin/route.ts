@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
           AND m.stage_id = COALESCE(${requestedStage}::bigint,
             (SELECT s.id FROM footy_cutover.stages s WHERE s.is_current=true))
         ORDER BY m.kickoff_at, m.id`,
-      sql`SELECT p.match_id::text, u.username, p.home_pred, p.away_pred
+      sql`SELECT p.match_id::text, u.username
         FROM footy_cutover.predictions p
         JOIN footy_cutover.profiles u ON u.id=p.user_id AND u.role <> 'admin'
         JOIN footy_cutover.matches m ON m.id=p.match_id
