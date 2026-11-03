@@ -623,40 +623,14 @@ export default function CutoverParticipantPage() {
       </section>
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
         <div className="cutover-section-heading"><div><span>УПРАВЛЕНИЕ ТУРНИРОМ</span><h2>Панель администратора</h2></div><p>Матчи, туры и результаты — в одном месте</p></div>
-        <div className="cutover-admin-summary">
-          <span>Участники: {participants.length}</span>
-          <span>Матчей в выбранном этапе: {adminData.stages.find(x=>x.id===(adminStageChoice==="current"?adminData.stages.find(s=>s.is_current)?.id:adminStageChoice))?.match_count ?? "—"}</span>
-          <span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span>
-        </div>
         {(() => {
           const stage = adminData.stages.find(s=>s.is_current);
           return stage ? <div style={{display:"flex",gap:10,flexWrap:"wrap",margin:"10px 0 16px"}}>
             <strong>{stage.name}</strong>
-            <span>Матчей: {stage.match_count} / {stage.matches_required}</span>
-            <span>Завершено: {stage.finished_count}</span>
+            <span>{stage.finished_count} из {stage.matches_required} матчей завершено</span>
             <span>Осталось: {Math.max(0,stage.match_count-stage.finished_count)}</span>
+            <span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span>
           </div> : null;
-        })()}
-        {(() => {
-          const current = adminData.stages.find(s => s.is_current);
-          if (!current) return <p>Текущий этап не назначен.</p>;
-          const finished = current.finished_count;
-          const ready = current.match_count === 56 && finished === 56;
-          return <details style={{margin:"12px 0"}}><summary style={{cursor:"pointer",fontWeight:700,padding:"8px 0"}}>
-            Закрытие этапа · {current.name} · {finished} / 56 завершено
-          </summary>
-            <p>Закрытие доступно после завершения 56 матчей и проверки всех начислений сервером.</p>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"end"}}>
-              <label>Следующий этап <select value={nextStageChoice} onChange={e=>setNextStageChoice(e.target.value)}>
-                <option value="">Выбери следующий этап</option>
-                {adminData.stages.filter(s=>s.status==="draft" && s.id!==current.id).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-              </select></label>
-              <button type="button" disabled={!ready || !nextStageChoice || !adminWritesEnabled || busy} onClick={()=>void closeCurrentStage()}>
-                Закрыть этап и назначить следующий
-              </button>
-            </div>
-            {!ready && <p>Закрытие заблокировано: {current.match_count} матчей, завершено {finished} из 56.</p>}
-          </details>;
         })()}
         <h2>Календарь матчей</h2>
         <p style={{margin:"0 0 10px",opacity:.75}}>Показываются матчи выбранного этапа. Все даты и время — московские.</p>
@@ -717,7 +691,7 @@ export default function CutoverParticipantPage() {
                               <button type="submit" disabled={busy}>Сохранить</button>
                               <button type="button" onClick={()=>setRescheduleForm({match_id:"",kickoff_at:""})}>Отмена</button>
                             </form>
-                          : <button type="button" disabled={busy} onClick={()=>setRescheduleForm({match_id:m.id,kickoff_at:moscowInput(m.kickoff_at)})}>Изменить время</button>)}
+                          : <button type="button" style={{background:"transparent",border:0,padding:0,fontSize:12,textDecoration:"underline",opacity:.7,cursor:"pointer"}} disabled={busy} onClick={()=>setRescheduleForm({match_id:m.id,kickoff_at:moscowInput(m.kickoff_at)})}>✎ Изменить время</button>)}
                     </div>
                   </td>
                   <td>{m.status === "finished"
@@ -749,6 +723,28 @@ export default function CutoverParticipantPage() {
         })()}
 
         <details style={{ marginTop: 16 }}><summary style={{ cursor: "pointer", fontWeight: 700, padding: "10px 0" }}>Дополнительные действия администратора</summary>
+        {(() => {
+          const current = adminData.stages.find(s => s.is_current);
+          if (!current) return <p>Текущий этап не назначен.</p>;
+          const finished = current.finished_count;
+          const ready = current.match_count === 56 && finished === 56;
+          return <details style={{margin:"12px 0"}}><summary style={{cursor:"pointer",fontWeight:700,padding:"8px 0"}}>
+            Закрытие этапа · {current.name} · {finished} / 56 завершено
+          </summary>
+            <p>Закрытие доступно после завершения 56 матчей и проверки всех начислений сервером.</p>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"end"}}>
+              <label>Следующий этап <select value={nextStageChoice} onChange={e=>setNextStageChoice(e.target.value)}>
+                <option value="">Выбери следующий этап</option>
+                {adminData.stages.filter(s=>s.status==="draft" && s.id!==current.id).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+              </select></label>
+              <button type="button" disabled={!ready || !nextStageChoice || !adminWritesEnabled || busy} onClick={()=>void closeCurrentStage()}>
+                Закрыть этап и назначить следующий
+              </button>
+            </div>
+            {!ready && <p>Закрытие заблокировано: {current.match_count} матчей, завершено {finished} из 56.</p>}
+          </details>;
+        })()}
+
         <details style={{margin:"10px 0"}}><summary style={{cursor:"pointer",fontWeight:650,padding:"8px 0"}}>Участники · сброс пароля</summary>
         <h2>Сброс пароля участника</h2>
         <form onSubmit={resetParticipantPassword} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
