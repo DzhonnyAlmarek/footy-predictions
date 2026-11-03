@@ -644,12 +644,25 @@ export default function CutoverParticipantPage() {
             const tour = adminData.tours.find(t => t.id === tourId);
             return <details key={tourId} open={ordered[0]?.[0] === tourId} style={{ marginBottom: 12 }}>
               <summary style={{ cursor: "pointer", fontWeight: 700, padding: "8px 0" }}>{tour?.name ?? "Без тура"} · {matches.length} матчей</summary>
-              <div className="tableWrap"><table className="table" style={{ minWidth: 600 }}>
-                <thead><tr><th>Дата</th><th>Время</th><th>Матч</th><th>Результат</th><th>Календарь</th></tr></thead>
+              <div className="tableWrap"><table className="table" style={{ minWidth: 480 }}>
+                <thead><tr><th>Матч и начало (МСК)</th><th>Результат</th></tr></thead>
                 <tbody>{[...matches].sort((a,b) => new Date(a.kickoff_at).getTime()-new Date(b.kickoff_at).getTime() || Number(a.id)-Number(b.id)).map(m => <tr key={m.id}>
-                  <td>{new Date(m.kickoff_at).toLocaleDateString("ru-RU")}</td>
-                  <td>{new Date(m.kickoff_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td>
-                  <td>{m.home_team} — {m.away_team}</td>
+                  <td>
+                    <strong>{m.home_team} — {m.away_team}</strong>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:4}}>
+                      <small>{new Date(m.kickoff_at).toLocaleString("ru-RU", {timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})} МСК</small>
+                      {m.status==="scheduled" && adminWritesEnabled && new Date(m.deadline_at).getTime()>Date.now() &&
+                        (rescheduleForm.match_id===m.id
+                          ? <form onSubmit={rescheduleMatch} style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                              <input aria-label={`Новое время: ${m.home_team} — ${m.away_team}`} type="datetime-local" required value={rescheduleForm.kickoff_at}
+                                onChange={e=>setRescheduleForm(prev=>({...prev,kickoff_at:e.target.value}))}/>
+                              <small>МСК</small>
+                              <button type="submit" disabled={busy}>Сохранить</button>
+                              <button type="button" onClick={()=>setRescheduleForm({match_id:"",kickoff_at:""})}>Отмена</button>
+                            </form>
+                          : <button type="button" disabled={busy} onClick={()=>setRescheduleForm({match_id:m.id,kickoff_at:moscowInput(m.kickoff_at)})}>Изменить время</button>)}
+                    </div>
+                  </td>
                   <td>{m.status === "finished"
                     ? (m.home_score == null || m.away_score == null ? "—" : <span>{m.home_score}:{m.away_score}<small style={{ marginLeft: 10, whiteSpace: "nowrap", opacity: .8 }}>Пен. {m.home_penalty_goals == null && m.away_penalty_goals == null ? "—" : `${m.home_penalty_goals ?? 0}:${m.away_penalty_goals ?? 0}`}</small></span>)
                     : m.result_eligible && adminWritesEnabled && resultWritesEnabled
@@ -671,18 +684,7 @@ export default function CutoverParticipantPage() {
                             onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: prev[m.id]?.home_score ?? "", away_score: prev[m.id]?.away_score ?? "", home_penalty_goals: prev[m.id]?.home_penalty_goals ?? "0", away_penalty_goals: e.target.value } }))} />
                           <button type="button" disabled={busy} onClick={() => void finishMatch(m.id)}>Сохранить</button>
                         </div>
-                      : <span style={{ opacity: .65, whiteSpace: "nowrap" }}>— <small style={{ marginLeft: 8 }}>Пен. —</small></span>}</td>
-                  <td>{m.status==="scheduled" && adminWritesEnabled && new Date(m.deadline_at).getTime()>Date.now()
-                    ? rescheduleForm.match_id===m.id
-                      ? <form onSubmit={rescheduleMatch} style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                          <input aria-label={`Дата и время начала: ${m.home_team} — ${m.away_team}`} type="datetime-local" required value={rescheduleForm.kickoff_at}
-                            onChange={e=>setRescheduleForm(prev=>({...prev,kickoff_at:e.target.value}))}/>
-                          <span style={{fontSize:11}}>МСК</span>
-                          <button type="submit" disabled={busy}>Сохранить</button>
-                          <button type="button" onClick={()=>setRescheduleForm({match_id:"",kickoff_at:""})}>Отмена</button>
-                        </form>
-                      : <button type="button" disabled={busy} onClick={()=>setRescheduleForm({match_id:m.id,kickoff_at:moscowInput(m.kickoff_at)})}>Изменить</button>
-                    : "—"}</td>
+                      : <span style={{ opacity: .65, whiteSpace: "nowrap" }}>Ожидается</span>}</td>
                 </tr>)}</tbody>
               </table></div>
             </details>;
