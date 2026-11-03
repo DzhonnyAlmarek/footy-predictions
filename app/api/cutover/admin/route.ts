@@ -16,6 +16,9 @@ export async function GET(req: NextRequest) {
   try {
     if (!(await admin(req))) return reply({ ok: false }, 403);
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
+    const requestedStage = req.nextUrl.searchParams.get("stage_id");
+    if (requestedStage !== null && !/^[1-9][0-9]{0,17}$/.test(requestedStage))
+      return reply({ ok: false, error: "invalid_stage_id" }, 400);
     const [teams, tournaments, stages, tours, matches] = await Promise.all([
       sql`SELECT id::text, name FROM footy_cutover.teams ORDER BY name`,
       sql`SELECT id::text, name FROM footy_cutover.tournaments ORDER BY name`,
@@ -41,12 +44,9 @@ export async function GET(req: NextRequest) {
         JOIN footy_cutover.teams h ON h.id=m.home_team_id
         JOIN footy_cutover.teams a ON a.id=m.away_team_id
         WHERE NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
-        ORDER BY
-          CASE WHEN m.status='scheduled' THEN 0 ELSE 1 END,
-          CASE WHEN m.status='scheduled' THEN abs(extract(epoch from (m.kickoff_at-now()))) END ASC NULLS LAST,
-          CASE WHEN m.status<>'scheduled' THEN m.kickoff_at END DESC NULLS LAST,
-          m.id DESC
-        LIMIT 150`
+          AND m.stage_id = COALESCE(${requestedStage}::bigint,
+            (SELECT s.id FROM footy_cutover.stages s WHERE s.is_current=true))
+        ORDER BY m.kickoff_at, m.id`
     ]);
     return reply({ ok: true, teams, tournaments, stages, tours, matches, writes_enabled: process.env.ENABLE_CUTOVER_ADMIN_WRITES === "true", result_writes_enabled: process.env.ENABLE_CUTOVER_RESULT_WRITES === "true" });
   } catch { return reply({ ok: false, error: "unavailable" }, 503); }
