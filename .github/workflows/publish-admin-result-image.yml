@@ -1,4 +1,4 @@
-name: Publish calendar filter fix image (registry only)
+name: Publish complete admin calendar fix (registry only)
 
 on:
   push:
@@ -21,14 +21,14 @@ jobs:
     environment: yandex-test
     timeout-minutes: 40
     env:
-      VERIFIED_SHA: efab22f4144fa09794ce98d88b3c52eb6f362303
+      VERIFIED_SHA: 16808eccdbc9d57909e49e50f62284db08a9d1fc
       IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
       SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
     steps:
       - name: Check out exactly the Docker-tested source
         uses: actions/checkout@v4
         with:
-          ref: efab22f4144fa09794ce98d88b3c52eb6f362303
+          ref: 16808eccdbc9d57909e49e50f62284db08a9d1fc
           persist-credentials: false
       - name: Build pinned candidate (no live credentials)
         run: |
