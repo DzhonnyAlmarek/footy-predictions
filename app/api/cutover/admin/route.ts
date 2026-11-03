@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
           AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
         ORDER BY p.match_id, u.username`
     ]);
-    return reply({ ok: true, teams, tournaments, stages, tours, matches, delegated_predictions: delegatedPredictions, writes_enabled: process.env.ENABLE_CUTOVER_ADMIN_WRITES === "true", result_writes_enabled: process.env.ENABLE_CUTOVER_RESULT_WRITES === "true" });
+    return reply({ ok: true, teams, tournaments, stages, tours, matches, delegated_predictions: delegatedPredictions, prediction_writes_enabled: process.env.ENABLE_CUTOVER_PREDICTION_WRITES === "true", writes_enabled: process.env.ENABLE_CUTOVER_ADMIN_WRITES === "true", result_writes_enabled: process.env.ENABLE_CUTOVER_RESULT_WRITES === "true" });
   } catch { return reply({ ok: false, error: "unavailable" }, 503); }
 }
 
