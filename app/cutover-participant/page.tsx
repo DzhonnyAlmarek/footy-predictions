@@ -30,7 +30,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[]; delegated_predictions: {match_id:string;username:string}[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[]; delegated_predictions: {match_id:string;username:string}[]; prediction_writes_enabled:boolean } | null>(null);
   const [adminStageChoice, setAdminStageChoice] = useState("current");
   const [adminTourChoice, setAdminTourChoice] = useState("current");
   const [adminAction, setAdminAction] = useState("");
@@ -788,7 +788,8 @@ export default function CutoverParticipantPage() {
             <label>Как получен прогноз <input required minLength={3} maxLength={160}
               placeholder="Например: сообщение в чате клуба"
               value={delegatedForm.source_note} onChange={e=>setDelegatedForm(prev=>({...prev,source_note:e.target.value}))}/></label>
-            <button disabled={busy || !adminWritesEnabled || !delegatedForm.username || !delegatedForm.match_id}
+            {!adminData.prediction_writes_enabled && <p>Приём прогнозов сейчас отключён. Ввод за участников недоступен.</p>}
+            <button disabled={busy || !adminWritesEnabled || !adminData.prediction_writes_enabled || !delegatedForm.username || !delegatedForm.match_id}
               type="submit">Сохранить прогноз за участника</button>
             <small>Действие фиксируется в журнале. Не вводи сюда пароли или другие личные данные.</small>
           </form>
