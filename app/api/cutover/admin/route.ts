@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const requestedStage = req.nextUrl.searchParams.get("stage_id");
     if (requestedStage !== null && !/^[1-9][0-9]{0,17}$/.test(requestedStage))
       return reply({ ok: false, error: "invalid_stage_id" }, 400);
-    const [teams, tournaments, stages, tours, matches] = await Promise.all([
+    const [teams, tournaments, stages, tours, matches, delegatedPredictions] = await Promise.all([
       sql`SELECT id::text, name FROM footy_cutover.teams ORDER BY name`,
       sql`SELECT id::text, name FROM footy_cutover.tournaments ORDER BY name`,
       sql`SELECT s.id::text, s.name, s.status, s.is_current, s.matches_required,
@@ -46,9 +46,17 @@ export async function GET(req: NextRequest) {
         WHERE NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
           AND m.stage_id = COALESCE(${requestedStage}::bigint,
             (SELECT s.id FROM footy_cutover.stages s WHERE s.is_current=true))
-        ORDER BY m.kickoff_at, m.id`
+        ORDER BY m.kickoff_at, m.id`,
+      sql`SELECT p.match_id::text, u.username, p.home_pred, p.away_pred
+        FROM footy_cutover.predictions p
+        JOIN footy_cutover.profiles u ON u.id=p.user_id AND u.role <> 'admin'
+        JOIN footy_cutover.matches m ON m.id=p.match_id
+        WHERE m.stage_id = COALESCE(${requestedStage}::bigint,
+          (SELECT s.id FROM footy_cutover.stages s WHERE s.is_current=true))
+          AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
+        ORDER BY p.match_id, u.username`
     ]);
-    return reply({ ok: true, teams, tournaments, stages, tours, matches, writes_enabled: process.env.ENABLE_CUTOVER_ADMIN_WRITES === "true", result_writes_enabled: process.env.ENABLE_CUTOVER_RESULT_WRITES === "true" });
+    return reply({ ok: true, teams, tournaments, stages, tours, matches, delegated_predictions: delegatedPredictions, writes_enabled: process.env.ENABLE_CUTOVER_ADMIN_WRITES === "true", result_writes_enabled: process.env.ENABLE_CUTOVER_RESULT_WRITES === "true" });
   } catch { return reply({ ok: false, error: "unavailable" }, 503); }
 }
 
@@ -65,6 +73,80 @@ export async function POST(req: NextRequest) {
     if (new TextEncoder().encode(rawBody).byteLength > 2048) return reply({ ok: false, error: "payload_too_large" }, 413);
     const body = JSON.parse(rawBody);
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
+    if (body?.action === "create_stage") {
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      if (!name || name.length > 160 || /[<>]/.test(name))
+        return reply({ ok: false, error: "invalid_stage_name" }, 400);
+      // Always create an empty draft; the active stage is never changed here.
+      const rows = await sql`
+        INSERT INTO footy_cutover.stages (id, name, status, matches_required, is_current)
+        SELECT nextval('footy_cutover.stages_id_seq'), ${name}, 'draft', 56, false
+        WHERE NOT EXISTS (
+          SELECT 1 FROM footy_cutover.stages s WHERE lower(s.name)=lower(${name})
+        )
+        RETURNING id::text, name
+      `;
+      return rows.length ? reply({ ok: true, stage: rows[0] })
+        : reply({ ok: false, error: "stage_name_exists" }, 409);
+    }
+    if (body?.action === "save_for_participant") {
+      if (process.env.ENABLE_CUTOVER_PREDICTION_WRITES !== "true")
+        return reply({ ok: false, error: "prediction_writes_disabled" }, 404);
+      const matchId = String(body.match_id ?? "");
+      const username = typeof body.username === "string" ? body.username.trim() : "";
+      const note = typeof body.source_note === "string" ? body.source_note.trim() : "";
+      const home = body.home_pred, away = body.away_pred;
+      if (!/^[1-9][0-9]{0,17}$/.test(matchId) || !username || username.length > 100 ||
+          !note || note.length < 3 || note.length > 160 ||
+          !Number.isInteger(home) || !Number.isInteger(away) ||
+          home < 0 || home > 99 || away < 0 || away > 99)
+        return reply({ ok: false, error: "invalid_delegated_prediction" }, 400);
+      // This statement is atomic: writing a prediction requires an audit entry.
+      // If the audit prerequisite is absent or a deadline has passed, fail closed.
+      const recorded = await sql`
+        WITH eligible AS (
+          SELECT m.id AS match_id, p.id AS participant_id,
+                 old.id AS previous_id,
+                 old.home_pred AS previous_home_pred, old.away_pred AS previous_away_pred
+          FROM footy_cutover.matches m
+          JOIN footy_cutover.stages s ON s.id=m.stage_id AND s.is_current=true
+          JOIN footy_cutover.profiles p ON p.username=${username} AND p.role <> 'admin'
+          LEFT JOIN footy_cutover.predictions old ON old.match_id=m.id AND old.user_id=p.id
+          WHERE m.id=${matchId}::bigint AND m.status='scheduled'
+            AND m.deadline_at > now() AND m.kickoff_at > now()
+            AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
+            AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
+        ),
+        written AS (
+          INSERT INTO footy_cutover.predictions (id, match_id, user_id, home_pred, away_pred)
+          SELECT nextval('footy_cutover.predictions_id_seq'), e.match_id, e.participant_id,
+                 ${home}::integer, ${away}::integer FROM eligible e
+          ON CONFLICT (match_id, user_id) DO UPDATE SET
+            home_pred=EXCLUDED.home_pred, away_pred=EXCLUDED.away_pred, updated_at=now()
+          WHERE EXISTS (
+            SELECT 1 FROM footy_cutover.matches m
+            JOIN footy_cutover.stages s ON s.id=m.stage_id AND s.is_current=true
+            WHERE m.id=EXCLUDED.match_id AND m.status='scheduled'
+              AND m.deadline_at>now() AND m.kickoff_at>now()
+              AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
+          )
+          RETURNING id, match_id, user_id, home_pred, away_pred
+        ),
+        audit AS (
+          INSERT INTO cutover_auth.admin_prediction_audit
+            (prediction_id, match_id, participant_id, previous_home_pred,
+             previous_away_pred, home_pred, away_pred, source_note)
+          SELECT w.id, w.match_id, w.user_id, e.previous_home_pred,
+                 e.previous_away_pred, w.home_pred, w.away_pred, ${note}
+          FROM written w JOIN eligible e
+            ON e.match_id=w.match_id AND e.participant_id=w.user_id
+          RETURNING id
+        )
+        SELECT id::text FROM audit
+      `;
+      return recorded.length === 1 ? reply({ok:true,recorded:true})
+        : reply({ok:false,error:"match_closed_or_participant_missing"},409);
+    }
     if (body?.action === "close_stage") {
       const currentId = String(body.stage_id ?? "");
       const nextId = String(body.next_stage_id ?? "");
