@@ -30,10 +30,12 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[] } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[]; delegated_predictions: {match_id:string;username:string}[]; prediction_writes_enabled:boolean } | null>(null);
   const [adminStageChoice, setAdminStageChoice] = useState("current");
   const [adminTourChoice, setAdminTourChoice] = useState("current");
   const [adminAction, setAdminAction] = useState("");
+  const [newStageName, setNewStageName] = useState("");
+  const [delegatedForm, setDelegatedForm] = useState({username:"",match_id:"",home_pred:"",away_pred:"",source_note:""});
   const [adminCalendarLoading, setAdminCalendarLoading] = useState(false);
   const [nextStageChoice, setNextStageChoice] = useState("");
   const [tourForm, setTourForm] = useState({ stage_id: "", tour_no: "", name: "" });
@@ -326,6 +328,47 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Не удалось закрыть этап. Данные не изменены, если операция отклонена сервером."); }
     finally {setBusy(false);}
   }
+  async function createStage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = newStageName.trim();
+    if (!name || busy) return;
+    if (!window.confirm("Создать пустой черновой этап «" + name + "»? Текущий этап не изменится.")) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", {method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"create_stage",name})});
+      if (!response.ok) {setMessage(response.status===409 ? "Этап с таким названием уже существует." : "Не удалось создать этап.");return;}
+      setNewStageName("");
+      await load();
+      setMessage("Создан этап «" + name + "». Добавь туры и матчи.");
+    } catch {setMessage("Ошибка соединения при создании этапа.");}
+    finally {setBusy(false);}
+  }
+  async function saveDelegatedPrediction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const f = delegatedForm;
+    if (!f.username || !f.match_id || !/^[0-9]{1,2}$/.test(f.home_pred) ||
+        !/^[0-9]{1,2}$/.test(f.away_pred) || f.source_note.trim().length < 3) {
+      setMessage("Выбери участника, матч, счёт и укажи источник прогноза.");return;
+    }
+    const match = adminData?.matches.find(m=>m.id===f.match_id);
+    const existing = adminData?.delegated_predictions?.find(p=>p.match_id===f.match_id && p.username===f.username);
+    const summary = f.username + ": " + (match?.home_team ?? "?") + " — " + (match?.away_team ?? "?") + " " + f.home_pred + ":" + f.away_pred;
+    if (!window.confirm((existing ? "Заменить прогноз?" : "Записать прогноз?") + "\n" + summary + "\nИсточник: " + f.source_note)) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/cutover/admin", {method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"save_for_participant",username:f.username,match_id:f.match_id,
+          home_pred:Number(f.home_pred),away_pred:Number(f.away_pred),source_note:f.source_note.trim()})});
+      if (!response.ok) {
+        setMessage(response.status===409 ? "Прогноз не записан: срок подачи истёк, матч закрыт или участник не найден."
+          : "Не удалось сохранить прогноз. Проверь доступность журнала административных действий.");return;
+      }
+      setDelegatedForm(prev=>({...prev,match_id:"",home_pred:"",away_pred:"",source_note:""}));
+      await load();setMessage("Прогноз сохранён и внесён в журнал: " + summary);
+    } catch {setMessage("Ошибка соединения при сохранении прогноза.");}
+    finally {setBusy(false);}
+  }
   async function createTour(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -580,45 +623,19 @@ export default function CutoverParticipantPage() {
       </section>
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
         <div className="cutover-section-heading"><div><span>УПРАВЛЕНИЕ ТУРНИРОМ</span><h2>Панель администратора</h2></div><p>Матчи, туры и результаты — в одном месте</p></div>
-        <div className="cutover-admin-summary">
-          <span>Участники: {participants.length}</span>
-          <span>Матчей в выбранном этапе: {adminData.stages.find(x=>x.id===(adminStageChoice==="current"?adminData.stages.find(s=>s.is_current)?.id:adminStageChoice))?.match_count ?? "—"}</span>
-          <span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span>
-        </div>
         {(() => {
           const stage = adminData.stages.find(s=>s.is_current);
           return stage ? <div style={{display:"flex",gap:10,flexWrap:"wrap",margin:"10px 0 16px"}}>
             <strong>{stage.name}</strong>
-            <span>Матчей: {stage.match_count} / {stage.matches_required}</span>
-            <span>Завершено: {stage.finished_count}</span>
+            <span>{stage.finished_count} из {stage.matches_required} матчей завершено</span>
             <span>Осталось: {Math.max(0,stage.match_count-stage.finished_count)}</span>
+            <span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span>
           </div> : null;
-        })()}
-        {(() => {
-          const current = adminData.stages.find(s => s.is_current);
-          if (!current) return <p>Текущий этап не назначен.</p>;
-          const finished = current.finished_count;
-          const ready = current.match_count === 56 && finished === 56;
-          return <details style={{margin:"12px 0"}}><summary style={{cursor:"pointer",fontWeight:700,padding:"8px 0"}}>
-            Закрытие этапа · {current.name} · {finished} / 56 завершено
-          </summary>
-            <p>Закрытие доступно после завершения 56 матчей и проверки всех начислений сервером.</p>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"end"}}>
-              <label>Следующий этап <select value={nextStageChoice} onChange={e=>setNextStageChoice(e.target.value)}>
-                <option value="">Выбери следующий этап</option>
-                {adminData.stages.filter(s=>s.status==="draft" && s.id!==current.id).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-              </select></label>
-              <button type="button" disabled={!ready || !nextStageChoice || !adminWritesEnabled || busy} onClick={()=>void closeCurrentStage()}>
-                Закрыть этап и назначить следующий
-              </button>
-            </div>
-            {!ready && <p>Закрытие заблокировано: {current.match_count} матчей, завершено {finished} из 56.</p>}
-          </details>;
         })()}
         <h2>Календарь матчей</h2>
         <p style={{margin:"0 0 10px",opacity:.75}}>Показываются матчи выбранного этапа. Все даты и время — московские.</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end",marginBottom:12}}>
-          <label>Этап <select value={adminStageChoice} onChange={e=>{setAdminStageChoice(e.target.value);setAdminTourChoice("current");}}>
+          <label>Этап <select value={adminStageChoice} onChange={e=>{setAdminStageChoice(e.target.value);setAdminTourChoice("current");setDelegatedForm(prev=>({...prev,match_id:"",home_pred:"",away_pred:""}));}}>
             <option value="current">Текущий — {adminData.stages.find(s=>s.is_current)?.name ?? "не определён"}</option>
             {adminData.stages.filter(stage=>!stage.is_current).map(stage=><option key={stage.id} value={stage.id}>{stage.name}</option>)}
           </select></label>
@@ -674,7 +691,7 @@ export default function CutoverParticipantPage() {
                               <button type="submit" disabled={busy}>Сохранить</button>
                               <button type="button" onClick={()=>setRescheduleForm({match_id:"",kickoff_at:""})}>Отмена</button>
                             </form>
-                          : <button type="button" disabled={busy} onClick={()=>setRescheduleForm({match_id:m.id,kickoff_at:moscowInput(m.kickoff_at)})}>Изменить время</button>)}
+                          : <button type="button" style={{background:"transparent",border:0,padding:0,fontSize:12,textDecoration:"underline",opacity:.7,cursor:"pointer"}} disabled={busy} onClick={()=>setRescheduleForm({match_id:m.id,kickoff_at:moscowInput(m.kickoff_at)})}>✎ Изменить время</button>)}
                     </div>
                   </td>
                   <td>{m.status === "finished"
@@ -706,6 +723,28 @@ export default function CutoverParticipantPage() {
         })()}
 
         <details style={{ marginTop: 16 }}><summary style={{ cursor: "pointer", fontWeight: 700, padding: "10px 0" }}>Дополнительные действия администратора</summary>
+        {(() => {
+          const current = adminData.stages.find(s => s.is_current);
+          if (!current) return <p>Текущий этап не назначен.</p>;
+          const finished = current.finished_count;
+          const ready = current.match_count === 56 && finished === 56;
+          return <details style={{margin:"12px 0"}}><summary style={{cursor:"pointer",fontWeight:700,padding:"8px 0"}}>
+            Закрытие этапа · {current.name} · {finished} / 56 завершено
+          </summary>
+            <p>Закрытие доступно после завершения 56 матчей и проверки всех начислений сервером.</p>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"end"}}>
+              <label>Следующий этап <select value={nextStageChoice} onChange={e=>setNextStageChoice(e.target.value)}>
+                <option value="">Выбери следующий этап</option>
+                {adminData.stages.filter(s=>s.status==="draft" && s.id!==current.id).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+              </select></label>
+              <button type="button" disabled={!ready || !nextStageChoice || !adminWritesEnabled || busy} onClick={()=>void closeCurrentStage()}>
+                Закрыть этап и назначить следующий
+              </button>
+            </div>
+            {!ready && <p>Закрытие заблокировано: {current.match_count} матчей, завершено {finished} из 56.</p>}
+          </details>;
+        })()}
+
         <details style={{margin:"10px 0"}}><summary style={{cursor:"pointer",fontWeight:650,padding:"8px 0"}}>Участники · сброс пароля</summary>
         <h2>Сброс пароля участника</h2>
         <form onSubmit={resetParticipantPassword} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
@@ -719,13 +758,59 @@ export default function CutoverParticipantPage() {
           <p>Пароль участника <strong>{resetCompletedFor}</strong> сброшен на <code>12345678</code>. При следующем входе потребуется его заменить.</p>
         </div>}
         </details>
+        <details style={{margin:"10px 0"}}>
+          <summary style={{cursor:"pointer",fontWeight:650,padding:"8px 0"}}>Прогнозы · внести за участника</summary>
+          <p>Прогноз, переданный по телефону или сообщением, можно записать до окончания приёма. После начала матча или начисления очков запись запрещена.</p>
+          <form onSubmit={saveDelegatedPrediction} style={{display:"grid",gap:10,maxWidth:570,marginBottom:16}}>
+            <label>Участник <select required value={delegatedForm.username}
+              onChange={e=>setDelegatedForm(prev=>({...prev,username:e.target.value,match_id:"",home_pred:"",away_pred:""}))}>
+              <option value="">Выбери участника</option>
+              {participants.filter(x=>x.toUpperCase()!=="ADMIN").map(x=><option key={x} value={x}>{x}</option>)}
+            </select></label>
+            <label>Матч текущего этапа <select required value={delegatedForm.match_id}
+              onChange={e=>setDelegatedForm(prev=>({...prev,match_id:e.target.value,home_pred:"",away_pred:""}))}>
+              <option value="">Выбери матч</option>
+              {adminData.matches.filter(m=>(adminStageChoice==="current" || adminStageChoice===adminData.stages.find(x=>x.is_current)?.id) &&
+                m.status==="scheduled" && new Date(m.deadline_at).getTime()>Date.now() &&
+                new Date(m.kickoff_at).getTime()>Date.now()).map(m=>
+                <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} · {new Date(m.kickoff_at).toLocaleString("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} МСК</option>)}
+            </select></label>
+            {delegatedForm.username && delegatedForm.match_id && adminData.delegated_predictions?.some(
+              p=>p.match_id===delegatedForm.match_id && p.username===delegatedForm.username) &&
+              <p>Участник уже делал прогноз на этот матч. Сохранение заменит его, пока приём открыт.</p>}
+            <div style={{display:"flex",gap:8,alignItems:"end",flexWrap:"wrap"}}>
+              <label>Голы хозяев <input aria-label="Прогноз хозяев" required type="number" min="0" max="99" style={{width:80}}
+                value={delegatedForm.home_pred} onChange={e=>setDelegatedForm(prev=>({...prev,home_pred:e.target.value}))}/></label>
+              <span>:</span>
+              <label>Голы гостей <input aria-label="Прогноз гостей" required type="number" min="0" max="99" style={{width:80}}
+                value={delegatedForm.away_pred} onChange={e=>setDelegatedForm(prev=>({...prev,away_pred:e.target.value}))}/></label>
+            </div>
+            <label>Как получен прогноз <input required minLength={3} maxLength={160}
+              placeholder="Например: сообщение в чате клуба"
+              value={delegatedForm.source_note} onChange={e=>setDelegatedForm(prev=>({...prev,source_note:e.target.value}))}/></label>
+            {!adminData.prediction_writes_enabled && <p>Приём прогнозов сейчас отключён. Ввод за участников недоступен.</p>}
+            <button disabled={busy || !adminWritesEnabled || !adminData.prediction_writes_enabled || !delegatedForm.username || !delegatedForm.match_id}
+              type="submit">Сохранить прогноз за участника</button>
+            <small>Действие фиксируется в журнале. Не вводи сюда пароли или другие личные данные.</small>
+          </form>
+        </details>
         <details style={{margin:"10px 0"}}><summary style={{cursor:"pointer",fontWeight:650,padding:"8px 0"}}>Туры и этапы · создать и переименовать</summary>
-        <label>Действие <select value={["tour","rename-stage","rename-tour"].includes(adminAction)?adminAction:""} onChange={e=>setAdminAction(e.target.value)}>
+        <label>Действие <select value={["create-stage","tour","rename-stage","rename-tour"].includes(adminAction)?adminAction:""} onChange={e=>setAdminAction(e.target.value)}>
           <option value="">Выбери действие</option>
+          <option value="create-stage">Создать этап</option>
           <option value="tour">Создать тур</option>
           <option value="rename-stage">Переименовать этап</option>
           <option value="rename-tour">Переименовать тур</option>
         </select></label>
+        {adminAction === "create-stage" && <>
+          <h2>Новый этап</h2>
+          <p>Создаётся пустой черновой этап на 56 матчей. Текущий этап и результаты не меняются.</p>
+          <form onSubmit={createStage} style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"end",marginBottom:16}}>
+            <label>Название <input required maxLength={160} value={newStageName}
+              onChange={e=>setNewStageName(e.target.value)} placeholder="Этап 4 ЧР 26-27"/></label>
+            <button type="submit" disabled={busy || !adminWritesEnabled || !newStageName.trim()}>Создать этап</button>
+          </form>
+        </>}
         {adminAction === "tour" && <><h2>Новый тур в существующем этапе</h2>
         <form onSubmit={createTour} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end", marginBottom: 24 }}>
           <label>Этап <select required value={tourForm.stage_id}
