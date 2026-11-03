@@ -762,6 +762,45 @@ export default function CutoverParticipantPage() {
           <p>Пароль участника <strong>{resetCompletedFor}</strong> сброшен на <code>12345678</code>. При следующем входе потребуется его заменить.</p>
         </div>}
         </details>
+        <details style={{margin:"10px 0"}}>
+          <summary style={{cursor:"pointer",fontWeight:650,padding:"8px 0"}}>Прогнозы · внести за участника</summary>
+          <p>Прогноз, переданный по телефону или сообщением, можно записать до окончания приёма. После начала матча или начисления очков запись запрещена.</p>
+          <form onSubmit={saveDelegatedPrediction} style={{display:"grid",gap:10,maxWidth:570,marginBottom:16}}>
+            <label>Участник <select required value={delegatedForm.username}
+              onChange={e=>setDelegatedForm(prev=>({...prev,username:e.target.value,match_id:"",home_pred:"",away_pred:""}))}>
+              <option value="">Выбери участника</option>
+              {participants.filter(x=>x.toUpperCase()!=="ADMIN").map(x=><option key={x} value={x}>{x}</option>)}
+            </select></label>
+            <label>Матч текущего этапа <select required value={delegatedForm.match_id}
+              onChange={e=>{
+                const old=adminData.delegated_predictions?.find(p=>p.match_id===e.target.value && p.username===delegatedForm.username);
+                setDelegatedForm(prev=>({...prev,match_id:e.target.value,
+                  home_pred:old?String(old.home_pred):"",away_pred:old?String(old.away_pred):""}));
+              }}>
+              <option value="">Выбери матч</option>
+              {adminData.matches.filter(m=>m.status==="scheduled" &&
+                new Date(m.deadline_at).getTime()>Date.now() &&
+                new Date(m.kickoff_at).getTime()>Date.now()).map(m=>
+                <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} · {new Date(m.kickoff_at).toLocaleString("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} МСК</option>)}
+            </select></label>
+            {delegatedForm.username && delegatedForm.match_id && adminData.delegated_predictions?.some(
+              p=>p.match_id===delegatedForm.match_id && p.username===delegatedForm.username) &&
+              <p>Участник уже делал прогноз на этот матч. Сохранение заменит его, пока приём открыт.</p>}
+            <div style={{display:"flex",gap:8,alignItems:"end",flexWrap:"wrap"}}>
+              <label>Голы хозяев <input aria-label="Прогноз хозяев" required type="number" min="0" max="99" style={{width:80}}
+                value={delegatedForm.home_pred} onChange={e=>setDelegatedForm(prev=>({...prev,home_pred:e.target.value}))}/></label>
+              <span>:</span>
+              <label>Голы гостей <input aria-label="Прогноз гостей" required type="number" min="0" max="99" style={{width:80}}
+                value={delegatedForm.away_pred} onChange={e=>setDelegatedForm(prev=>({...prev,away_pred:e.target.value}))}/></label>
+            </div>
+            <label>Как получен прогноз <input required minLength={3} maxLength={160}
+              placeholder="Например: сообщение в чате клуба"
+              value={delegatedForm.source_note} onChange={e=>setDelegatedForm(prev=>({...prev,source_note:e.target.value}))}/></label>
+            <button disabled={busy || !adminWritesEnabled || !delegatedForm.username || !delegatedForm.match_id}
+              type="submit">Сохранить прогноз за участника</button>
+            <small>Действие фиксируется в журнале. Не вводи сюда пароли или другие личные данные.</small>
+          </form>
+        </details>
         <details style={{margin:"10px 0"}}><summary style={{cursor:"pointer",fontWeight:650,padding:"8px 0"}}>Туры и этапы · создать и переименовать</summary>
         <label>Действие <select value={["create-stage","tour","rename-stage","rename-tour"].includes(adminAction)?adminAction:""} onChange={e=>setAdminAction(e.target.value)}>
           <option value="">Выбери действие</option>
