@@ -1,10 +1,10 @@
 # Isolated Yandex Cloud candidate revision (saved configuration)
 # This file contains no database credentials or passwords.
-# Draft reviewed: 2026-10-29; NOT APPROVED FOR DEPLOYMENT
+# Image publication verified: GitHub Actions run 40936857754 (2026-10-29). NOT APPROVED FOR DEPLOYMENT
 container_id: bbaquq5i6l35i5kbiufb
 container_name: footy-cutover-candidate
 folder_id: b1gtdrn5t149v0ckl6ql
-image: cr.yandex/crpocq57tud830bhe7ck/footy-cutover-candidate:eb584d5735678f0808d1ce9e3280f2e7a33ab144
+image: cr.yandex/crpocq57tud830bhe7ck/footy-cutover-candidate:f5488988f5bc65096618293a8b056e1dba5f736c
 runtime_service_account_id: ajekinma5dcn8agcht7a
 resources:
   cores: 1
