@@ -115,7 +115,15 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
     </section>
     <section>
       <h3>Дуэль участников</h3>
-      <p>Выбери двух участников. Для каждого сыгранного матча, где оценены оба прогноза, сравниваем их очки: кто набрал больше, тот выиграл матчевую дуэль; одинаковые очки — ничья. Ниже показаны победы, ничьи, сумма очков в общих матчах и разница между ними. Это сравнение, а не отдельный зачёт.</p>
+      <p>Здесь мы сравниваем, кто из двух участников лучше предсказывал <strong>одни и те же футбольные матчи</strong>. Выбери двух участников. Мы берём каждый завершённый матч текущего этапа, за который <strong>обоим</strong> уже начислены очки, и сравниваем их результаты.</p>
+      <p><strong>Пример:</strong> за матч «Спартак — Акрон» АМН получил 4 очка, а БАА — 2. В этой дуэли победил АМН, потому что его прогноз принёс больше очков. Если бы оба получили по 2 очка, это была бы ничья. Так сравниваются все общие сыгранные матчи.</p>
+      <ul>
+        <li><strong>Победы в матчевых дуэлях</strong> — количество матчей, в которых прогноз этого участника принёс больше очков, чем прогноз соперника. Это не победы футбольных команд.</li>
+        <li><strong>Ничьи в дуэлях</strong> — количество матчей, в которых оба участника получили одинаковое число очков, даже если их прогнозы отличались.</li>
+        <li><strong>Очки в общих матчах</strong> — сколько очков каждый набрал суммарно именно за матчи, по которым есть начисления у обоих.</li>
+        <li><strong>Разница очков</strong> — на сколько очков один участник опередил другого в этих общих матчах.</li>
+      </ul>
+      <p>Например, результат «Победы: 12 и 9; ничьи: 3» означает, что в 12 матчах больше очков получил первый участник, в 9 — второй, а ещё в 3 они набрали поровну. <strong>Дуэль — только статистика для сравнения:</strong> дополнительные очки и награды за неё не начисляются.</p>
       <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:12}}>
         <label>Первый участник <select value={a} onChange={event=>setFirst(event.target.value)}>
           {users.filter(u=>u.id!==b).map(u=><option key={u.id} value={u.id}>{u.username}</option>)}
@@ -127,9 +135,9 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
       <div className="tableWrap"><table className="table">
         <thead><tr><th>Показатель</th><th>{leftName}</th><th>{rightName}</th></tr></thead>
         <tbody>
-          <tr><td>Победы в матчевых дуэлях</td><td><strong>{winsA}</strong></td><td><strong>{winsB}</strong></td></tr>
-          <tr><td>Ничьи в дуэлях</td><td colSpan={2}>{ties}</td></tr>
-          <tr><td>Очки в общих матчах</td><td>{number(totalA)}</td><td>{number(totalB)}</td></tr>
+          <tr><td>Матчей с большим числом очков</td><td><strong>{winsA}</strong></td><td><strong>{winsB}</strong></td></tr>
+          <tr><td>Матчей с одинаковыми очками</td><td colSpan={2}>{ties}</td></tr>
+          <tr><td>Всего очков в общих матчах</td><td>{number(totalA)}</td><td>{number(totalB)}</td></tr>
           <tr><td>Разница очков</td><td colSpan={2}>{totalA===totalB ? "Равенство" : number(Math.abs(totalA-totalB))+" в пользу "+(totalA>totalB?leftName:rightName)}</td></tr>
         </tbody>
       </table></div>
