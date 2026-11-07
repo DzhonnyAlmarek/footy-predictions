@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 
 import AppHeader from "@/app/_components/AppHeader";
 import BottomBar from "@/app/_components/BottomBar";
+import NewArenaCountdown from "@/app/(user)/dashboard/new-arena-countdown";
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -66,7 +67,7 @@ const nav = [
         nav={nav}
       />
 
- <div className="hasBottomBar pb-28 md:pb-6">{children}</div>
+ <div className="hasBottomBar pb-28 md:pb-6"><NewArenaCountdown />{children}</div>
 
       <BottomBar variant="user" />
     </>
