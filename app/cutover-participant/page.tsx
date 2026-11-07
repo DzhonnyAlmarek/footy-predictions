@@ -714,7 +714,7 @@ export default function CutoverParticipantPage() {
                   <td>{m.status === "finished"
                     ? (m.home_score == null || m.away_score == null ? "—" : <span>{m.home_score}:{m.away_score}<small style={{ marginLeft: 10, whiteSpace: "nowrap", opacity: .8 }}>Пен. {m.home_penalty_goals == null && m.away_penalty_goals == null ? "—" : `${m.home_penalty_goals ?? 0}:${m.away_penalty_goals ?? 0}`}</small></span>)
                     : m.result_eligible && adminWritesEnabled && resultWritesEnabled
-                      ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      ? <div className="cutover-admin-score-entry" style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                           <input aria-label={`Голы хозяев: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
                             value={resultDrafts[m.id]?.home_score ?? ""}
                             onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: e.target.value, away_score: prev[m.id]?.away_score ?? "", home_penalty_goals: prev[m.id]?.home_penalty_goals ?? "0", away_penalty_goals: prev[m.id]?.away_penalty_goals ?? "0" } }))} />
