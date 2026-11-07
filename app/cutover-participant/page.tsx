@@ -581,7 +581,7 @@ export default function CutoverParticipantPage() {
           <strong>Клуб им. А.Н. Мурашева</strong>
         </div>
       </div>
-      <span className="cutover-club-since">Основан 6 июня 2008 года</span>
+      
     </div>
     <header className="cutover-hero">
       <div className="cutover-hero-content"><h1>Точность решает</h1>
@@ -642,6 +642,8 @@ export default function CutoverParticipantPage() {
         <AdminTourControl
           currentStageId={adminData.stages.find(stage=>stage.is_current)?.id ?? ""}
           currentStageName={adminData.stages.find(stage=>stage.is_current)?.name ?? "Текущий этап"}
+          selectedTourId={adminTourChoice}
+          onSelectTour={setAdminTourChoice}
           selectedStageId={adminStageChoice==="current" ? (adminData.stages.find(stage=>stage.is_current)?.id ?? "") : adminStageChoice}
           matches={adminData.matches}
           tours={adminData.tours}
