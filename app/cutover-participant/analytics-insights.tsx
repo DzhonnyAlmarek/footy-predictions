@@ -48,7 +48,7 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
     let againstFour = 0;
     for (const group of perMatch.values()) {
       const own = group.find(row => row.user_id === user.id);
-      if (!own || group.length < 5) continue;
+      if (!own || group.length !== 5) continue;
       const opinions = group.map(row => outcome(row.home_pred,row.away_pred));
       const ownOutcome = outcome(own.home_pred,own.away_pred);
       const matching = opinions.filter(choice => choice === ownOutcome).length;
