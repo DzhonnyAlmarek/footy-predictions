@@ -1060,7 +1060,7 @@ export default function CutoverParticipantPage() {
       </div>
       </section>}
       {activeTab === "analytics" && <section className="cutover-content">
-        <div className="cutover-section-heading"><div><span>СРАВНЕНИЕ УЧАСТНИКОВ · {currentTable?.stage?.name ?? "Текущий этап"}</span><h2>Аналитика прогнозов</h2></div><p>Все участники, очки и эффективность по текущему этапу</p></div>
+        <div className="cutover-section-heading"><div><span>СРАВНЕНИЕ УЧАСТНИКОВ · {currentTable?.stage?.name ?? "Текущий этап"}</span><h2>Аналитика прогнозов</h2></div><p>Здесь можно сравнить участников и понять, кто точнее прогнозирует матчи. Учитываются результаты текущего этапа, по которым уже начислены очки.</p></div>
         {!currentTable?.stage ? <p>Загружаем статистику этапа…</p> : (() => {
           const format = (value:number) => Number(value.toFixed(2)).toLocaleString("ru-RU");
           const calc = (rows:typeof currentTable.rows) => {
@@ -1082,6 +1082,8 @@ export default function CutoverParticipantPage() {
             return ranking.findIndex(u=>u.id===userId)+1;
           };
           return <>
+            <h3>Общие результаты участников</h3>
+            <p>«Прогнозов» — сколько матчей уже сыграно и оценено. «Точных счетов» — сколько раз угадан счёт полностью; «исходов» — правильно выбрана победа хозяев, гостей или ничья. «Среднее за матч» — набранные очки, поделённые на число оценённых прогнозов. «Место» — позиция среди участников по очкам текущего этапа.</p>
             <div className="tableWrap"><table className="table cutover-analytics-table">
               <thead><tr><th>Участник</th><th>Прогнозов</th><th>Точных счетов</th><th>Угадано исходов</th><th>Очки</th><th>Среднее за матч</th><th>Место</th></tr></thead>
               <tbody>{all.map((u,i)=><tr key={u.id}>
@@ -1090,8 +1092,8 @@ export default function CutoverParticipantPage() {
                 <td>{u.outcomes}{u.done?` (${Math.round(100*u.outcomes/u.done)}%)`:""}</td>
                 <td>{format(u.points)}</td><td>{u.done?format(u.avg):"—"}</td><td>{i+1}</td>
               </tr>)}</tbody></table></div>
-            <h3>Динамика по турам</h3>
-            <p>Только туры с завершёнными матчами и начисленными очками. Наведи на точку графика, чтобы увидеть значение.</p>
+            <h3>Гонка за лидерство — динамика по турам</h3>
+            <p>На первом графике очки каждого участника накапливаются от тура к туру: чем выше линия, тем больше очков. На втором показано место в таблице после каждого тура: 1-е место — наверху. Учитываются только завершённые матчи с начисленными очками. Наведи на точку, чтобы увидеть значение.</p>
             {(() => {
               const finishedTours=tours.filter(t=>currentTable.rows.some(p=>p.tour_id===t.id&&p.points!==null));
               const cumulative=users.map(u=>({username:u.username,id:u.id,values:finishedTours.map(t=>
@@ -1120,7 +1122,7 @@ export default function CutoverParticipantPage() {
                 <h4>Накопленные очки</h4>{graph(cumulative,"points")}
                 <h4>Место в рейтинге</h4>{graph(ranking,"rank")}
                 <div className="cutover-chart-legend">{users.map((u,i)=><span key={u.id}><i style={{background:palette[i%palette.length]}}/>{u.username}</span>)}</div>
-                <p>Место рассчитано по накопленным очкам, при равенстве — по имени. Верхняя линия на графике мест соответствует первому месту.</p>
+                <p>Место на графике определяется набранными очками. При равенстве очков участники временно упорядочены по имени — это не дополнительное правило определения победителя.</p>
               </> : <p>Завершённых туров с начислениями пока нет.</p>;
             })()}
             <AnalyticsInsights users={currentTable.users} rows={currentTable.rows} viewer={sessionUsername}/>
