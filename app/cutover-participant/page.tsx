@@ -581,7 +581,7 @@ export default function CutoverParticipantPage() {
           <strong>Клуб им. А.Н. Мурашева</strong>
         </div>
       </div>
-      
+      <span className="cutover-club-founded">Основан 6 июня 2008 года</span>
     </div>
     <header className="cutover-hero">
       <div className="cutover-hero-content"><h1>Точность решает</h1>
