@@ -10,6 +10,11 @@ type Row = {
   home_score: number | null;
   away_score: number | null;
   points: string | null;
+  kickoff_at?: string | null;
+  home_team?: string | null;
+  away_team?: string | null;
+  points_outcome_bonus?: string | null;
+  points_diff_bonus?: string | null;
 };
 type User = { id: string; username: string };
 type Props = { users: User[]; rows: Row[]; viewer: string };
@@ -86,6 +91,62 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
   const leftName=users.find(u=>u.id===a)?.username ?? "—";
   const rightName=users.find(u=>u.id===b)?.username ?? "—";
 
+  // Read the actual ledger bonus components, not a reconstructed approximation.
+  // Outcome and goal-difference rarity are independent; a match can award both.
+  const rarity=users.map(user=>{
+    const scored=finished.filter(row=>row.user_id===user.id);
+    const outcomeBonus=scored.reduce((n,r)=>n+Number(r.points_outcome_bonus??0),0);
+    const diffBonus=scored.reduce((n,r)=>n+Number(r.points_diff_bonus??0),0);
+    return {...user, outcomeBonus, diffBonus, total:outcomeBonus+diffBonus,
+      outcomeMatches:scored.filter(r=>Number(r.points_outcome_bonus??0)>0).length,
+      diffMatches:scored.filter(r=>Number(r.points_diff_bonus??0)>0).length};
+  });
+  const rareExamples=finished.filter(r=>
+    Number(r.points_outcome_bonus??0)>0 || Number(r.points_diff_bonus??0)>0)
+    .sort((x,y)=>(y.kickoff_at??"").localeCompare(x.kickoff_at??"")||Number(y.match_id)-Number(x.match_id))
+    .slice(0,12);
+
+  // Count consecutive scored matches in chronological order. Zero points break
+  // the successful run; a positive score breaks the unsuccessful run.
+  const streaks=users.map(user=>{
+    const scored=finished.filter(r=>r.user_id===user.id)
+      .sort((x,y)=>(x.kickoff_at??"").localeCompare(y.kickoff_at??"")||Number(x.match_id)-Number(y.match_id));
+    let positive=0,zero=0,bestPositive=0,bestZero=0;
+    for(const r of scored){
+      if(Number(r.points)>0){positive++;zero=0;} else {zero++;positive=0;}
+      bestPositive=Math.max(bestPositive,positive);
+      bestZero=Math.max(bestZero,zero);
+    }
+    const tourScores=new Map<string,number>();
+    for(const row of scored){
+      // stage_match_no is not needed: the current-table API exposes tour_id.
+      const tourId=(row as Row & {tour_id?:string|null}).tour_id;
+      if(tourId) tourScores.set(tourId,(tourScores.get(tourId)??0)+Number(row.points));
+    }
+    const totals=[...tourScores.values()];
+    return {...user,played:scored.length,bestPositive,bestZero,
+      currentPositive:positive,currentZero:zero,
+      bestTour:totals.length?Math.max(...totals):null,
+      worstTour:totals.length?Math.min(...totals):null};
+  });
+
+  // Team accuracy: include both home and away fixtures, once per team/match.
+  // At least three completed, scored predictions are needed to rank a team.
+  const teams=users.map(user=>{
+    const byTeam=new Map<string,{matches:number;points:number}>();
+    for(const r of finished.filter(p=>p.user_id===user.id)){
+      for(const name of new Set([r.home_team,r.away_team].filter((n):n is string=>!!n))){
+        const prev=byTeam.get(name)??{matches:0,points:0};
+        byTeam.set(name,{matches:prev.matches+1,points:prev.points+Number(r.points)});
+      }
+    }
+    const eligible=[...byTeam].filter(([,v])=>v.matches>=3)
+      .map(([name,v])=>({name,...v,average:v.points/v.matches}));
+    const best=[...eligible].sort((x,y)=>y.average-x.average||y.matches-x.matches||x.name.localeCompare(y.name,"ru"))[0]??null;
+    const worst=[...eligible].sort((x,y)=>x.average-y.average||y.matches-x.matches||x.name.localeCompare(y.name,"ru"))[0]??null;
+    return {...user,best,worst};
+  });
+
   return <div style={{display:"grid",gap:24,marginTop:28}}>
     <section>
       <h3>Результаты и точность прогнозов</h3>
@@ -140,6 +201,54 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
           <tr><td>Всего очков в общих матчах</td><td>{number(totalA)}</td><td>{number(totalB)}</td></tr>
           <tr><td>Разница очков</td><td colSpan={2}>{totalA===totalB ? "Равенство" : number(Math.abs(totalA-totalB))+" в пользу "+(totalA>totalB?leftName:rightName)}</td></tr>
         </tbody>
+      </table></div>
+    </section>
+    <section>
+      <h3>Редкие правильные прогнозы — дополнительные очки</h3>
+      <p>Если исход или разницу голов правильно угадали немногие, клубные правила увеличивают очки за эту часть прогноза. При одном угадавшем коэффициент 1,75, при двух — 1,50, при трёх — 1,25, при четырёх или пяти — 1,00. Здесь показана <strong>только прибавка сверх обычных очков</strong>, а не все очки за такие матчи. Исход и разница учитываются отдельно; начисления уже входят в рейтинг.</p>
+      <div className="tableWrap"><table className="table">
+        <thead><tr><th>Участник</th><th>Бонус за исход</th><th>Бонус за разницу</th><th>Всего доп. очков</th><th>Матчей с бонусом за исход</th><th>За разницу</th></tr></thead>
+        <tbody>{rarity.map(u=><tr key={u.id}><td><strong>{u.username}</strong></td>
+          <td>{number(u.outcomeBonus)}</td><td>{number(u.diffBonus)}</td><td><strong>{number(u.total)}</strong></td>
+          <td>{u.outcomeMatches}</td><td>{u.diffMatches}</td></tr>)}</tbody>
+      </table></div>
+      <details><summary>Показать последние начисления повышенных бонусов</summary>
+        {rareExamples.length===0?<p>В текущем этапе пока нет начислений повышенных бонусов.</p>:
+          <div className="tableWrap"><table className="table">
+            <thead><tr><th>Матч</th><th>Участник</th><th>Прогноз</th><th>Результат</th><th>Бонус за исход</th><th>Бонус за разницу</th></tr></thead>
+            <tbody>{rareExamples.map((r,i)=><tr key={r.match_id+"-"+r.user_id+"-"+i}>
+              <td>{r.home_team} — {r.away_team}</td>
+              <td>{users.find(u=>u.id===r.user_id)?.username??"—"}</td>
+              <td>{r.home_pred}:{r.away_pred}</td><td>{r.home_score}:{r.away_score}</td>
+              <td>{number(Number(r.points_outcome_bonus??0))}</td>
+              <td>{number(Number(r.points_diff_bonus??0))}</td>
+            </tr>)}</tbody>
+          </table></div>}
+      </details>
+    </section>
+    <section>
+      <h3>Серии и стабильность</h3>
+      <p>Успешная серия — подряд сыгранные матчи, за которые получено больше нуля очков. Серия без очков — подряд матчи с нулём. «Текущая серия» продолжается до последнего матча с начислением, даже если следующие игры ещё не закончились. Лучший и худший тур определяются по сумме очков в турах, где есть начисления; незавершённый тур может ещё изменить рекорд.</p>
+      <div className="tableWrap"><table className="table">
+        <thead><tr><th>Участник</th><th>Матчей</th><th>Лучшая серия с очками</th><th>Самая длинная без очков</th><th>Текущая серия</th><th>Лучший тур</th><th>Худший тур</th></tr></thead>
+        <tbody>{streaks.map(u=><tr key={u.id}><td><strong>{u.username}</strong></td>
+          <td>{u.played}</td><td>{u.bestPositive}</td><td>{u.bestZero}</td>
+          <td>{u.played===0?"—":u.currentPositive>0?u.currentPositive+" с очками":u.currentZero+" без очков"}</td>
+          <td>{u.bestTour===null?"—":number(u.bestTour)}</td><td>{u.worstTour===null?"—":number(u.worstTour)}</td>
+        </tr>)}</tbody>
+      </table></div>
+    </section>
+    <section>
+      <h3>Любимые и неудобные команды</h3>
+      <p>Для каждой команды считаем среднее количество очков за прогнозы матчей с её участием — дома и в гостях. «Любимая» команда приносит участнику больше всего очков в среднем, «неудобная» — меньше всего. Для сравнения нужно минимум три сыгранных матча этой команды с начислениями. Это статистика прогнозов, а не симпатий к командам.</p>
+      <div className="tableWrap"><table className="table">
+        <thead><tr><th>Участник</th><th>Лучше всего прогнозирует</th><th>Очков за матч</th><th>Сложнее всего прогнозирует</th><th>Очков за матч</th></tr></thead>
+        <tbody>{teams.map(u=><tr key={u.id}><td><strong>{u.username}</strong></td>
+          <td>{u.best?u.best.name+" ("+u.best.matches+" матч.)":"Пока мало матчей"}</td>
+          <td>{u.best?number(u.best.average):"—"}</td>
+          <td>{u.worst?u.worst.name+" ("+u.worst.matches+" матч.)":"Пока мало матчей"}</td>
+          <td>{u.worst?number(u.worst.average):"—"}</td>
+        </tr>)}</tbody>
       </table></div>
     </section>
   </div>;
