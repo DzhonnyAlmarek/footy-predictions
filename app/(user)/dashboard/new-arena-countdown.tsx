@@ -39,16 +39,16 @@ export default function NewArenaCountdown() {
       aria-label="Обратный отсчёт до переезда на новую арену"
       style={{
         maxWidth: 1120,
-        margin: "16px auto 20px",
-        padding: "20px 16px",
-        borderRadius: 18,
+        margin: "10px auto 12px",
+        padding: "13px 16px",
+        borderRadius: 16,
         color: "#fff",
         textAlign: "center",
         background: "linear-gradient(120deg,#063d32,#145b4a 68%,#287c55)",
         boxShadow: "0 9px 22px rgba(0,45,31,.16)",
       }}
     >
-      <div style={{ fontWeight: 800, fontSize: "clamp(19px,3.3vw,29px)", lineHeight: 1.2 }}>
+      <div style={{ fontWeight: 800, fontSize: "clamp(18px,3vw,26px)", lineHeight: 1.2 }}>
         {now !== null && time.complete
           ? "Мы переехали на новую арену!"
           : "До переезда на новую арену осталось"}
@@ -61,18 +61,18 @@ export default function NewArenaCountdown() {
         <>
           <div
             aria-live="off"
-            style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 8, maxWidth: 500, margin: "16px auto 8px" }}
+            style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 8, maxWidth: 500, margin: "10px auto 5px" }}
           >
             {units.map((unit) => (
-              <div key={unit.label} style={{ background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.2)", padding: "10px 3px", borderRadius: 10 }}>
-                <div style={{ fontSize: "clamp(25px,5vw,41px)", fontWeight: 900, fontVariantNumeric: "tabular-nums", lineHeight: 1.2 }}>
+              <div key={unit.label} style={{ background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.2)", padding: "5px 3px", borderRadius: 10 }}>
+                <div style={{ fontSize: "clamp(25px,4.7vw,39px)", fontWeight: 900, fontVariantNumeric: "tabular-nums", lineHeight: 1.2 }}>
                   {now === null ? "—" : String(unit.value).padStart(2, "0")}
                 </div>
                 <div style={{ fontSize: "clamp(10px,2vw,13px)", opacity: .9 }}>{unit.label}</div>
               </div>
             ))}
           </div>
-          <div style={{ fontSize: 13, color: "#d6f0df" }}>9 ноября 2026 года, 00:00 МСК</div>
+          <div style={{ fontSize: 12, color: "#d6f0df" }}>9 ноября 2026 года, 00:00 МСК</div>
         </>
       )}
     </section>
