@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
 
 type Match = {
   id: string; tour_id: string | null; status: string; home_score: number | null;
@@ -13,14 +13,15 @@ type Participant = { id: string; username: string };
 type Props = {
   currentStageId: string;
   currentStageName: string;
+  selectedTourId: string;
+  onSelectTour: (tourId: string) => void;
   selectedStageId: string;
   matches: Match[];
   tours: Tour[];
   table: { stage:{id:string;name:string}|null; users:Participant[]; rows:Row[] } | null;
 };
 
-export default function AdminTourControl({ currentStageId, currentStageName, selectedStageId, matches, tours, table }: Props) {
-  const [tourChoice, setTourChoice] = useState("");
+export default function AdminTourControl({ currentStageId, currentStageName, selectedStageId, selectedTourId, onSelectTour, matches, tours, table }: Props) {
   if (selectedStageId !== currentStageId) {
     return <section className="cutover-tour-control">
       <h3>Контроль тура</h3>
@@ -37,7 +38,10 @@ export default function AdminTourControl({ currentStageId, currentStageName, sel
     const latest=(t:Tour)=>Math.max(...matches.filter(m=>m.tour_id===t.id).map(m=>new Date(m.kickoff_at).getTime()));
     return latest(b)-latest(a);
   })[0]?.id ?? "";
-  const actualTour=stageTours.some(t=>t.id===tourChoice)?tourChoice:fallbackTour;
+  const actualTour=stageTours.some(t=>t.id===selectedTourId)?selectedTourId:fallbackTour;
+  useEffect(() => {
+    if (selectedStageId===currentStageId && selectedTourId==="current" && fallbackTour) onSelectTour(fallbackTour);
+  }, [selectedStageId,currentStageId,selectedTourId,fallbackTour,onSelectTour]);
   const tour=stageTours.find(t=>t.id===actualTour);
   const selected=matches.filter(m=>m.tour_id===actualTour)
     .sort((a,b)=>new Date(a.kickoff_at).getTime()-new Date(b.kickoff_at).getTime()||Number(a.id)-Number(b.id));
@@ -57,8 +61,9 @@ export default function AdminTourControl({ currentStageId, currentStageName, sel
     return {match,predictionCount:predictionUsers.size,scoredCount:scoredUsers.size,missing,complete,incomplete,due};
   });
   const totalPredictions=diagnostics.reduce((sum,item)=>sum+item.predictionCount,0);
-  const totalScored=diagnostics.reduce((sum,item)=>sum+item.scoredCount,0);
+  const totalScored=diagnostics.filter(item=>item.match.status==="finished").reduce((sum,item)=>sum+item.scoredCount,0);
   const expected=selected.length*participants;
+  const scoredExpected=finished.length*participants;
   const incomplete=diagnostics.filter(x=>x.incomplete);
   const due=diagnostics.filter(x=>x.due);
   const missingPredictions=diagnostics.filter(x=>x.missing.length>0);
@@ -67,7 +72,7 @@ export default function AdminTourControl({ currentStageId, currentStageName, sel
       <div><span className="cutover-tour-eyebrow">ОПЕРАТИВНЫЙ КОНТРОЛЬ</span><h3>Контроль тура</h3>
         <p>{currentStageName}. Результаты и начисления проверяются по сохранённым данным, без повторного расчёта.</p></div>
       <label>Тур
-        <select value={actualTour} onChange={event=>setTourChoice(event.target.value)}>
+        <select value={actualTour} onChange={event=>onSelectTour(event.target.value)}>
           {stageTours.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </label>
@@ -76,7 +81,7 @@ export default function AdminTourControl({ currentStageId, currentStageName, sel
       <div className="cutover-tour-metrics">
         <div><small>Матчи завершены</small><strong>{finished.length} / {selected.length}</strong></div>
         <div><small>Прогнозы участников</small><strong>{tableReady?totalPredictions+" / "+expected:"—"}</strong></div>
-        <div><small>Начисления записаны</small><strong>{tableReady?totalScored+" / "+expected:"—"}</strong></div>
+        <div><small>Начисления по завершённым матчам</small><strong>{tableReady?totalScored+" / "+scoredExpected:"—"}</strong></div>
       </div>
       {!tableReady?<p>Данные о прогнозах и начислениях пока загружаются. Нулевые значения не отображаются до загрузки.</p>:
       <p className="cutover-tour-note">
@@ -84,22 +89,19 @@ export default function AdminTourControl({ currentStageId, currentStageName, sel
         {incomplete.length?incomplete.length+" завершённых матч(ей) с неполными начислениями. ":"Начисления завершённых матчей полные. "}
         {due.length?due.length+" матч(ей) ожидают ввода результата.":"Нет просроченных матчей без результата."}
       </p>}
-      <div className="tableWrap"><table className="table cutover-tour-control-table">
-        <thead><tr><th>Матч</th><th>Результат</th><th>Прогнозы</th><th>Начисления</th><th>Что требуется</th></tr></thead>
-        <tbody>{diagnostics.map(item=><tr key={item.match.id}>
-          <td><strong>{item.match.home_team} — {item.match.away_team}</strong>
-            <small style={{display:"block"}}>{new Date(item.match.kickoff_at).toLocaleString("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} МСК</small></td>
-          <td>{item.match.status==="finished" && item.match.home_score!==null && item.match.away_score!==null
-            ?item.match.home_score+":"+item.match.away_score:"—"}</td>
-          <td>{tableReady?item.predictionCount+" / "+participants:"—"}</td>
-          <td>{tableReady?item.scoredCount+" / "+participants:"—"}</td>
-          <td>{!tableReady?"Загрузка данных":item.incomplete?"Проверить начисления":
-            item.due?"Внести результат":
-            item.missing.length?"Нет прогноза: "+item.missing.join(", "):
-            item.complete?"Готово":"Ожидается матч"}</td>
-        </tr>)}</tbody>
-      </table></div>
-      <p className="cutover-tour-note">Незаполненные результаты будущих матчей — норма. Нулевые очки за завершённый матч считаются начислением, если запись есть. Кнопки изменения данных здесь отсутствуют.</p>
+      {(incomplete.length>0 || due.length>0 || missingPredictions.length>0) && tableReady &&
+        <div className="cutover-tour-issues">
+          <strong>Требуют внимания</strong>
+          <ul>{diagnostics.filter(item=>item.incomplete||item.due||item.missing.length>0).map(item=>
+            <li key={item.match.id}><span>{item.match.home_team} — {item.match.away_team}</span>
+              {item.incomplete?<span className="cutover-tour-status is-warning">Проверить начисления ({item.scoredCount} / {participants})</span>:
+                item.due?<span className="cutover-tour-status is-warning">Внести результат</span>:
+                <span className="cutover-tour-status is-warning">Нет прогноза: {item.missing.join(", ")}</span>}
+            </li>)}</ul>
+        </div>}
+      {tableReady && incomplete.length===0 && due.length===0 && missingPredictions.length===0 &&
+        <p className="cutover-tour-status is-success">Проблем не обнаружено. Результаты будущих матчей можно внести в календаре ниже.</p>}
+      <p className="cutover-tour-note">Очки не пересчитываются. Даже 0 очков считается начислением, если запись сохранена. Для ввода счёта используй календарь ниже.</p>
     </>}
   </section>;
 }
