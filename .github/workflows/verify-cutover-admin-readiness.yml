@@ -6,6 +6,7 @@ on:
       - feature/cutover-admin-readiness-20261020
       - feature/admin-result-guard-20261102
       - feature/admin-create-stage-delegated-predictions-20261103
+      - feature/participant-analytics-insights-20261107
   workflow_dispatch:
 
 permissions:
