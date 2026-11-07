@@ -43,6 +43,7 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
     const outcomes = predictions.filter(row => outcome(row.home_pred, row.away_pred) === outcome(row.home_score, row.away_score)).length;
     const goalDiff = predictions.filter(row => row.home_pred - row.away_pred === row.home_score - row.away_score).length;
     const error = predictions.reduce((sum,row) => sum + Math.abs(row.home_pred-row.home_score) + Math.abs(row.away_pred-row.away_score),0);
+    const points = predictions.reduce((sum,row) => sum + Number(row.points),0);
     let rareCorrect = 0;
     let rarePoints = 0;
     let againstFour = 0;
@@ -61,10 +62,14 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
         }
       }
     }
-    return {...user, predictions:predictions.length, exact, outcomes, goalDiff,
+    return {...user, predictions:predictions.length, exact, outcomes, goalDiff, points,
+      avgPoints:predictions.length ? points/predictions.length : 0,
       error:predictions.length ? error/predictions.length : null,
       rareCorrect,rarePoints,againstFour};
   });
+
+  const places = [...byUser].sort((x,y)=>y.points-x.points||x.username.localeCompare(y.username,"ru"));
+  const placeFor=(id:string)=>places.findIndex(user=>user.id===id)+1;
 
   const a = users.some(u=>u.id===first) ? first : users[0]?.id ?? "";
   const b = users.some(u=>u.id===second && u.id!==a) ? second :
@@ -83,16 +88,16 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
 
   return <div style={{display:"grid",gap:24,marginTop:28}}>
     <section>
-      <h3>Точность прогнозирования</h3>
-      <p>Считаем только сыгранные матчи, за которые уже начислены очки. «Точный» — угаданы оба числа счёта; «исход» — угадана победа хозяев, победа гостей или ничья; «разница мячей» — угадана разница голов (например, прогноз 2:1 и результат 3:2). «Средняя ошибка» — в среднем на сколько голов суммарно ошибся прогноз по двум командам: чем меньше, тем точнее.</p>
+      <h3>Результаты и точность прогнозов</h3>
+      <p>Одна сводная таблица текущего этапа. «Очки» — сумма начислений, «за матч» — среднее число очков за оценённый прогноз. «Точный» — угаданы оба числа счёта; «исход» — победа хозяев, гостей или ничья; «разница» — угадана разница голов (например, 2:1 и 3:2). «Ошибка» — среднее суммарное отклонение по голам двух команд: чем меньше, тем точнее. Место определяется по очкам.</p>
       <div className="tableWrap"><table className="table">
-        <thead><tr><th>Участник</th><th>Матчей</th><th>Точных</th><th>Исходов</th><th>Разница мячей</th><th>Средняя ошибка</th></tr></thead>
+        <thead><tr><th>Участник</th><th>Матчей</th><th>Очки</th><th>За матч</th><th>Точных</th><th>Исходов</th><th>Разница</th><th>Ошибка</th><th>Место</th></tr></thead>
         <tbody>{byUser.map(u=><tr key={u.id}>
           <td><strong>{u.username}{u.username===viewer?" · ты":""}</strong></td>
-          <td>{u.predictions}</td>
+          <td>{u.predictions}</td><td>{number(u.points)}</td><td>{u.predictions?number(u.avgPoints):"—"}</td>
           <td>{u.exact}{u.predictions?" ("+Math.round(100*u.exact/u.predictions)+"%)":""}</td>
           <td>{u.outcomes}{u.predictions?" ("+Math.round(100*u.outcomes/u.predictions)+"%)":""}</td>
-          <td>{u.goalDiff}</td><td>{u.error===null?"—":number(u.error)}</td>
+          <td>{u.goalDiff}</td><td>{u.error===null?"—":number(u.error)}</td><td>{placeFor(u.id)}</td>
         </tr>)}</tbody>
       </table></div>
     </section>
