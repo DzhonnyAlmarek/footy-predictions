@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import "./cutover.css";
 import PointsPopover from "@/app/_components/points-popover";
+import AnalyticsInsights from "./analytics-insights";
 
 type Prediction = {
   match_id: string; kickoff_at: string | null; home_team: string | null;
@@ -1122,6 +1123,7 @@ export default function CutoverParticipantPage() {
                 <p>Место рассчитано по накопленным очкам, при равенстве — по имени. Верхняя линия на графике мест соответствует первому месту.</p>
               </> : <p>Завершённых туров с начислениями пока нет.</p>;
             })()}
+            <AnalyticsInsights users={currentTable.users} rows={currentTable.rows} viewer={sessionUsername}/>
           </>;
         })()}
       </section>}
