@@ -1,4 +1,4 @@
-name: Publish streamlined participant analytics image (registry only)
+name: Publish clearer participant duel descriptions (registry only)
 
 on:
   push:
@@ -21,14 +21,14 @@ jobs:
     environment: yandex-test
     timeout-minutes: 40
     env:
-      VERIFIED_SHA: df656d70c587e9777491ccf9462efcf9f9980eb1
+      VERIFIED_SHA: 5b78d7930ce4efae9735f3d926156f38fcf8d323
       IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
       SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
     steps:
       - name: Check out exactly the Docker-tested source
         uses: actions/checkout@v4
         with:
-          ref: df656d70c587e9777491ccf9462efcf9f9980eb1
+          ref: 5b78d7930ce4efae9735f3d926156f38fcf8d323
           persist-credentials: false
       - name: Build pinned candidate (no live credentials)
         run: |
