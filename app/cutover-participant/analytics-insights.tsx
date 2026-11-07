@@ -48,11 +48,12 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
     let againstFour = 0;
     for (const group of perMatch.values()) {
       const own = group.find(row => row.user_id === user.id);
-      if (!own || group.length !== 5) continue;
+      if (!own || group.length !== 5 || new Set(group.map(r=>r.user_id)).size!==5) continue;
       const opinions = group.map(row => outcome(row.home_pred,row.away_pred));
       const ownOutcome = outcome(own.home_pred,own.away_pred);
       const matching = opinions.filter(choice => choice === ownOutcome).length;
-      if (matching === 1) {
+      // Exactly one dissenting outcome against four identical choices.
+      if (matching === 1 && new Set(opinions.filter(choice=>choice!==ownOutcome)).size === 1) {
         againstFour++;
         if (ownOutcome === outcome(own.home_score,own.away_score)) {
           rareCorrect++;
@@ -124,7 +125,7 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
           <tr><td>Победы в матчевых дуэлях</td><td><strong>{winsA}</strong></td><td><strong>{winsB}</strong></td></tr>
           <tr><td>Ничьи в дуэлях</td><td colSpan={2}>{ties}</td></tr>
           <tr><td>Очки в общих матчах</td><td>{number(totalA)}</td><td>{number(totalB)}</td></tr>
-          <tr><td>Разница очков</td><td colSpan={2}>{number(Math.abs(totalA-totalB))} в пользу {totalA===totalB?"ни одного — равенство":totalA>totalB?leftName:rightName}</td></tr>
+          <tr><td>Разница очков</td><td colSpan={2}>{totalA===totalB ? "Равенство" : number(Math.abs(totalA-totalB))+" в пользу "+(totalA>totalB?leftName:rightName)}</td></tr>
         </tbody>
       </table></div>
     </section>
