@@ -1,4 +1,4 @@
-name: Publish compact club records API (registry only)
+name: Publish fixed club records route (registry only)
 
 on:
   push:
@@ -21,14 +21,14 @@ jobs:
     environment: yandex-test
     timeout-minutes: 40
     env:
-      VERIFIED_SHA: 7ddd63ba8153c98a36c93a46ffb2a6c575804fc9
+      VERIFIED_SHA: 58eecb3bfc410fb3e87c08d09fce1b537bed3d13
       IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
       SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
     steps:
       - name: Check out exactly the Docker-tested source
         uses: actions/checkout@v4
         with:
-          ref: 7ddd63ba8153c98a36c93a46ffb2a6c575804fc9
+          ref: 58eecb3bfc410fb3e87c08d09fce1b537bed3d13
           persist-credentials: false
       - name: Build pinned candidate (no live credentials)
         run: |
