@@ -22,12 +22,6 @@ type Props = {
 };
 
 export default function AdminTourControl({ currentStageId, currentStageName, selectedStageId, selectedTourId, onSelectTour, matches, tours, table }: Props) {
-  if (selectedStageId !== currentStageId) {
-    return <section className="cutover-tour-control">
-      <h3>Контроль тура</h3>
-      <p>Контроль результатов и начислений доступен для текущего этапа. Выбери текущий этап в календаре.</p>
-    </section>;
-  }
   const stageTours=tours.filter(t=>t.stage_id===currentStageId && matches.some(m=>m.tour_id===t.id));
   const pendingTours=[...stageTours].filter(t=>matches.some(m=>m.tour_id===t.id && m.status!=="finished"))
     .sort((a,b)=>{
@@ -42,6 +36,12 @@ export default function AdminTourControl({ currentStageId, currentStageName, sel
   useEffect(() => {
     if (selectedStageId===currentStageId && selectedTourId==="current" && fallbackTour) onSelectTour(fallbackTour);
   }, [selectedStageId,currentStageId,selectedTourId,fallbackTour,onSelectTour]);
+  if (selectedStageId !== currentStageId) {
+    return <section className="cutover-tour-control">
+      <h3>Контроль тура</h3>
+      <p>Контроль результатов и начислений доступен для текущего этапа. Выбери текущий этап в календаре.</p>
+    </section>;
+  }
   const tour=stageTours.find(t=>t.id===actualTour);
   const selected=matches.filter(m=>m.tour_id===actualTour)
     .sort((a,b)=>new Date(a.kickoff_at).getTime()-new Date(b.kickoff_at).getTime()||Number(a.id)-Number(b.id));
