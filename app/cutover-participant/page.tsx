@@ -1060,20 +1060,10 @@ export default function CutoverParticipantPage() {
       </div>
       </section>}
       {activeTab === "analytics" && <section className="cutover-content">
-        <div className="cutover-section-heading"><div><span>СРАВНЕНИЕ УЧАСТНИКОВ · {currentTable?.stage?.name ?? "Текущий этап"}</span><h2>Аналитика прогнозов</h2></div><p>Здесь можно сравнить участников и понять, кто точнее прогнозирует матчи. Учитываются результаты текущего этапа, по которым уже начислены очки.</p></div>
+        <div className="cutover-section-heading"><div><h2>Аналитика прогнозов</h2></div></div>
         {!currentTable?.stage ? <p>Загружаем статистику этапа…</p> : (() => {
-          const format = (value:number) => Number(value.toFixed(2)).toLocaleString("ru-RU");
-          const calc = (rows:typeof currentTable.rows) => {
-            const done=rows.filter(p=>p.user_id && p.home_pred!==null && p.away_pred!==null && p.home_score!==null && p.away_score!==null);
-            const exact=done.filter(p=>p.home_pred===p.home_score && p.away_pred===p.away_score).length;
-            const outcomes=done.filter(p=>Math.sign(p.home_pred!-p.away_pred!)===Math.sign(p.home_score!-p.away_score!)).length;
-            const points=done.reduce((sum,p)=>sum+Number(p.points??0),0);
-            return {done:done.length,exact,outcomes,points,avg:done.length?points/done.length:0};
-          };
           const users=[...currentTable.users].sort((a,b)=>a.username.localeCompare(b.username,"ru"));
           const tours=[...currentTable.tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no));
-          const all=users.map(u=>({ ...u,...calc(currentTable.rows.filter(p=>p.user_id===u.id)) }))
-            .sort((a,b)=>b.points-a.points||a.username.localeCompare(b.username,"ru"));
           const rankFor=(userId:string,cutoff:number)=>{
             const ranking=users.map(u=>({id:u.id,username:u.username,points:currentTable.rows
               .filter(p=>p.user_id===u.id&&tours.some(t=>t.id===p.tour_id&&Number(t.tour_no)<=cutoff))
@@ -1082,18 +1072,8 @@ export default function CutoverParticipantPage() {
             return ranking.findIndex(u=>u.id===userId)+1;
           };
           return <>
-            <h3>Общие результаты участников</h3>
-            <p>«Прогнозов» — сколько матчей уже сыграно и оценено. «Точных счетов» — сколько раз угадан счёт полностью; «исходов» — правильно выбрана победа хозяев, гостей или ничья. «Среднее за матч» — набранные очки, поделённые на число оценённых прогнозов. «Место» — позиция среди участников по очкам текущего этапа.</p>
-            <div className="tableWrap"><table className="table cutover-analytics-table">
-              <thead><tr><th>Участник</th><th>Прогнозов</th><th>Точных счетов</th><th>Угадано исходов</th><th>Очки</th><th>Среднее за матч</th><th>Место</th></tr></thead>
-              <tbody>{all.map((u,i)=><tr key={u.id}>
-                <td><strong>{u.username}{u.username===sessionUsername?" · ты":""}</strong></td><td>{u.done}</td>
-                <td>{u.exact}{u.done?` (${Math.round(100*u.exact/u.done)}%)`:""}</td>
-                <td>{u.outcomes}{u.done?` (${Math.round(100*u.outcomes/u.done)}%)`:""}</td>
-                <td>{format(u.points)}</td><td>{u.done?format(u.avg):"—"}</td><td>{i+1}</td>
-              </tr>)}</tbody></table></div>
             <h3>Гонка за лидерство — динамика по турам</h3>
-            <p>На первом графике очки каждого участника накапливаются от тура к туру: чем выше линия, тем больше очков. На втором показано место в таблице после каждого тура: 1-е место — наверху. Учитываются только завершённые матчи с начисленными очками. Наведи на точку, чтобы увидеть значение.</p>
+            <p>Первый график показывает отставание от лидера после каждого тура: линия на нуле означает первое место, ниже — сколько очков не хватает до лидера. Можно переключиться на накопленные очки. Второй график показывает изменение мест. Учитываются только матчи с начисленными очками.</p>
             {(() => {
               const finishedTours=tours.filter(t=>currentTable.rows.some(p=>p.tour_id===t.id&&p.points!==null));
               const cumulative=users.map(u=>({username:u.username,id:u.id,values:finishedTours.map(t=>
