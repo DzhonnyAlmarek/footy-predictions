@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ClubRecords from "./club-records";
 
 type Row = {
   match_id: string;
@@ -251,5 +252,6 @@ export default function AnalyticsInsights({ users, rows, viewer }: Props) {
         </tr>)}</tbody>
       </table></div>
     </section>
+    <ClubRecords/>
   </div>;
 }
