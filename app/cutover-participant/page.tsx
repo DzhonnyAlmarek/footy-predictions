@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import "./cutover.css";
 import PointsPopover from "@/app/_components/points-popover";
 import AnalyticsInsights from "./analytics-insights";
+import AdminTourControl from "./admin-tour-control";
 
 type Prediction = {
   match_id: string; kickoff_at: string | null; home_team: string | null;
@@ -638,6 +639,14 @@ export default function CutoverParticipantPage() {
             <span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span>
           </div> : null;
         })()}
+        <AdminTourControl
+          currentStageId={adminData.stages.find(stage=>stage.is_current)?.id ?? ""}
+          currentStageName={adminData.stages.find(stage=>stage.is_current)?.name ?? "Текущий этап"}
+          selectedStageId={adminStageChoice==="current" ? (adminData.stages.find(stage=>stage.is_current)?.id ?? "") : adminStageChoice}
+          matches={adminData.matches}
+          tours={adminData.tours}
+          table={currentTable}
+        />
         <h2>Календарь матчей</h2>
         <p style={{margin:"0 0 10px",opacity:.75}}>Показываются матчи выбранного этапа. Все даты и время — московские.</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end",marginBottom:12}}>
