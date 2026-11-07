@@ -1,4 +1,4 @@
-name: Deploy approved streamlined analytics once (2026-11-07)
+name: Deploy approved clearer participant duels (2026-11-07)
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: Validate explicitly authorized pinned release and target
         env:
-          IMAGE_SHA: df656d70c587e9777491ccf9462efcf9f9980eb1
+          IMAGE_SHA: 5b78d7930ce4efae9735f3d926156f38fcf8d323
         run: |
           set -euo pipefail
           [[ "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Full Git SHA required"; exit 1; }
@@ -46,7 +46,7 @@ jobs:
       - name: Inspect active revision and prepare safe request
         env:
           GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
-          IMAGE_SHA: df656d70c587e9777491ccf9462efcf9f9980eb1
+          IMAGE_SHA: 5b78d7930ce4efae9735f3d926156f38fcf8d323
         run: |
           set -euo pipefail
           umask 077
@@ -73,7 +73,7 @@ jobs:
           if [[ "false" == "true" ]]; then
             jq -e --arg expected "$REGISTRY_PREFIX:ff33c85739f5eac4678ef875da0c2f6f67d9f14d" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Image mismatch: cannot enable predictions"; exit 1; }
           fi
-          jq -e --arg expected "$REGISTRY_PREFIX:803ebc2ca41c680b084378539f18c5ada3b1c784" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Current image differs from preceding verified release; abort"; exit 1; }
+          jq -e --arg expected "$REGISTRY_PREFIX:df656d70c587e9777491ccf9462efcf9f9980eb1" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Current image differs from preceding verified release; abort"; exit 1; }
           # Never print revision JSON: it can contain sensitive environment variables.
           jq -e --arg id "$CONTAINER_ID" '
             .containerId==$id and .status=="ACTIVE"
