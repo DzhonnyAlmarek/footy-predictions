@@ -501,7 +501,6 @@ export default function CutoverParticipantPage() {
     if (![hp, ap].every(Number.isInteger) || hp < 0 || ap < 0 || hp > Number(draft.home_score) || ap > Number(draft.away_score)) {
       setMessage("Голы с пенальти должны быть от 0 до числа голов команды."); return;
     }
-    if (!window.confirm("Завершить матч, сохранить пенальти и начислить очки? Изменить результат через эту форму нельзя.")) return;
     setBusy(true);
     try {
       const response = await fetch("/api/cutover/admin", { method: "POST",
