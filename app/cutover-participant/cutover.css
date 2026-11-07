@@ -396,3 +396,85 @@ img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:n
 .cutover-whistle-details[open]>.tableWrap{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(900px,calc(100vw - 30px));max-width:none;max-height:calc(100dvh - 30px);overflow-x:hidden;overflow-y:auto;z-index:2500;background:#fff;border:1px solid #bdd8cf;border-radius:14px;box-shadow:0 14px 60px #102c254d;padding:16px}
 .cutover-whistle-details[open]>.tableWrap table{width:100%;min-width:0;table-layout:fixed;white-space:normal}
 .cutover-whistle-close{display:block;margin:0 0 10px auto;cursor:pointer;background:#e5f0eb;border:0;border-radius:8px;padding:7px 12px;color:#07533d;font-weight:700}
+
+/* Read-only operational summary for the selected tour in the administrator view. */
+.cutover-tour-control {
+  margin: 16px 0 24px;
+  padding: 18px;
+  border: 1px solid #cbded4;
+  background: #f7fbf8;
+  border-radius: 14px;
+}
+.cutover-tour-control-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.cutover-tour-control-head h3 { margin: 4px 0 6px; }
+.cutover-tour-control-head p { margin: 0; max-width: 670px; }
+.cutover-tour-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .08em; color: #0c6954; }
+.cutover-tour-control-head label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; }
+.cutover-tour-control-head select { max-width: 250px; }
+.cutover-tour-metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+.cutover-tour-metrics > div { padding: 12px; border: 1px solid #d8e6de; background: #fff; border-radius: 10px; }
+.cutover-tour-metrics small { display: block; font-size: 12px; color: #50665b; margin-bottom: 4px; }
+.cutover-tour-metrics strong { font-size: clamp(16px, 2vw, 23px); font-variant-numeric: tabular-nums; }
+.cutover-tour-note { font-size: 13px; color: #52665a; margin: 10px 0; }
+.cutover-tour-control-table { min-width: 660px; }
+.cutover-tour-control-table td { vertical-align: top; }
+@media (max-width: 620px) {
+  .cutover-tour-control { padding: 12px; }
+  .cutover-tour-metrics { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
+  .cutover-tour-metrics > div { padding: 8px; }
+  .cutover-tour-metrics small { font-size: 10px; }
+  .cutover-tour-control-head select { width: 100%; }
+}
+
+/* Compact status-only tour control: match details remain in the calendar. */
+.cutover-tour-issues{background:#fff;border:1px solid #e2e9e4;border-radius:10px;padding:12px 14px;margin-top:10px}
+.cutover-tour-issues>strong{display:block;margin-bottom:8px;color:#153e32}
+.cutover-tour-issues ul{margin:0;padding:0;list-style:none;display:grid;gap:7px}
+.cutover-tour-issues li{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border-bottom:1px solid #eef1ee;padding:5px 0}
+.cutover-tour-issues li:last-child{border-bottom:0}
+.cutover-tour-status{display:inline-block;font-size:12px;font-weight:750;border-radius:7px;padding:4px 7px}
+.cutover-tour-status.is-warning{background:#fff0d8;color:#80500c}
+.cutover-tour-status.is-success{background:#e6f4e9;color:#12613a}
+/* Preserve the agreed club title/left-aligned slogan and remove the founder-date gap. */
+.cutover-club-banner{justify-content:flex-start}
+.cutover-club-copy strong{font-weight:900}
+.cutover-hero-content{text-align:left}
+.cutover-admin-score-entry input[type=number]{width:54px!important;min-width:0;padding:7px 5px!important;text-align:center}
+.cutover-admin-score-entry input[aria-label^="Пенальти"]{width:43px!important}
+.cutover-admin-score-entry button{white-space:nowrap;padding:7px 10px!important}
+@media(max-width:620px){.cutover-admin-score-entry{gap:4px!important}.cutover-admin-score-entry input[type=number]{width:48px!important}.cutover-admin-score-entry input[aria-label^="Пенальти"]{width:39px!important}}
+
+/* Club foundation date is always visible in the shared masthead. */
+.cutover-club-banner .cutover-club-founded {
+  display:block;
+  margin-left:auto;
+  padding-left:18px;
+  color:#4e615b;
+  font-size:clamp(12px,1.35vw,17px);
+  font-weight:600;
+  letter-spacing:0;
+  line-height:1.35;
+  white-space:nowrap;
+  border-left:1px solid #b6c9bf;
+}
+@media(max-width:760px) {
+  .cutover-club-banner { flex-wrap:wrap; }
+  .cutover-club-banner .cutover-club-founded {
+    margin:0 0 0 50px;
+    padding:0;
+    border:0;
+    font-size:12px;
+    flex-basis:calc(100% - 50px);
+    white-space:normal;
+  }
+}
+@media(min-width:761px) and (max-width:970px) {
+  .cutover-club-banner .cutover-club-founded { font-size:12px; padding-left:10px; }
+}
