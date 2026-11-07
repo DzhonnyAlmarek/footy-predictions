@@ -1,4 +1,4 @@
-name: Publish verified read-only tour controls (registry only)
+name: Publish polished admin tour summary (registry only)
 
 on:
   push:
@@ -21,14 +21,14 @@ jobs:
     environment: yandex-test
     timeout-minutes: 40
     env:
-      VERIFIED_SHA: a4b6debf849014e8b9fcc971cb2b6be3542305e7
+      VERIFIED_SHA: 19841260c0caab60e7d2b0e85674a384be9f8f81
       IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
       SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
     steps:
       - name: Check out exactly the Docker-tested source
         uses: actions/checkout@v4
         with:
-          ref: a4b6debf849014e8b9fcc971cb2b6be3542305e7
+          ref: 19841260c0caab60e7d2b0e85674a384be9f8f81
           persist-credentials: false
       - name: Build pinned candidate (no live credentials)
         run: |
