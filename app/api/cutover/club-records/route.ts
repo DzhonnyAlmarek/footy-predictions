@@ -19,7 +19,7 @@ const fmt = (value: number) => Number(value.toFixed(2)).toLocaleString("ru-RU");
 function summarize(entries: Entry[]): ClubRecord[] {
   if (!entries.length) return [];
   const sorted = [...entries].sort((a,b) =>
-    (a.kickoff_at ?? "").localeCompare(b.kickoff_at ?? "") ||
+    String(a.kickoff_at ?? "").localeCompare(String(b.kickoff_at ?? "")) ||
     Number(a.match_id)-Number(b.match_id));
   const records: ClubRecord[] = [];
   const bestMatch = [...sorted].sort((a,b) => Number(b.points)-Number(a.points))[0];
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
     const rows = await sql`
       SELECT s.id::text AS stage_id, s.name AS stage_name, s.status AS stage_status,
         s.is_current, t.id::text AS tour_id, t.name AS tour_name,
-        m.id::text AS match_id, m.kickoff_at, m.home_score, m.away_score,
+        m.id::text AS match_id, m.kickoff_at::text AS kickoff_at, m.home_score, m.away_score,
         h.name AS home_team, a.name AS away_team,
         p.id::text AS user_id, p.username,
         l.points
