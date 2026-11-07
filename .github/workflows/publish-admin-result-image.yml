@@ -1,4 +1,4 @@
-name: Publish approved analytics and result UI from pinned commit (registry only)
+name: Publish club records and simplified streaks (registry only)
 
 on:
   push:
@@ -21,14 +21,14 @@ jobs:
     environment: yandex-test
     timeout-minutes: 40
     env:
-      VERIFIED_SHA: af1d59ce9be9aafe099687ac06f3a560f13aaf76
+      VERIFIED_SHA: 806134d908fb7a53298a10e9679fc8d5ea5c6de4
       IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
       SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
     steps:
       - name: Check out exactly the Docker-tested source
         uses: actions/checkout@v4
         with:
-          ref: af1d59ce9be9aafe099687ac06f3a560f13aaf76
+          ref: 806134d908fb7a53298a10e9679fc8d5ea5c6de4
           persist-credentials: false
       - name: Build pinned candidate (no live credentials)
         run: |
