@@ -450,3 +450,31 @@ img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:n
 .cutover-admin-score-entry input[aria-label^="Пенальти"]{width:43px!important}
 .cutover-admin-score-entry button{white-space:nowrap;padding:7px 10px!important}
 @media(max-width:620px){.cutover-admin-score-entry{gap:4px!important}.cutover-admin-score-entry input[type=number]{width:48px!important}.cutover-admin-score-entry input[aria-label^="Пенальти"]{width:39px!important}}
+
+/* Club foundation date is always visible in the shared masthead. */
+.cutover-club-banner .cutover-club-founded {
+  display:block;
+  margin-left:auto;
+  padding-left:18px;
+  color:#4e615b;
+  font-size:clamp(12px,1.35vw,17px);
+  font-weight:600;
+  letter-spacing:0;
+  line-height:1.35;
+  white-space:nowrap;
+  border-left:1px solid #b6c9bf;
+}
+@media(max-width:760px) {
+  .cutover-club-banner { flex-wrap:wrap; }
+  .cutover-club-banner .cutover-club-founded {
+    margin:0 0 0 50px;
+    padding:0;
+    border:0;
+    font-size:12px;
+    flex-basis:calc(100% - 50px);
+    white-space:normal;
+  }
+}
+@media(min-width:761px) and (max-width:970px) {
+  .cutover-club-banner .cutover-club-founded { font-size:12px; padding-left:10px; }
+}
