@@ -396,3 +396,39 @@ img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:n
 .cutover-whistle-details[open]>.tableWrap{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(900px,calc(100vw - 30px));max-width:none;max-height:calc(100dvh - 30px);overflow-x:hidden;overflow-y:auto;z-index:2500;background:#fff;border:1px solid #bdd8cf;border-radius:14px;box-shadow:0 14px 60px #102c254d;padding:16px}
 .cutover-whistle-details[open]>.tableWrap table{width:100%;min-width:0;table-layout:fixed;white-space:normal}
 .cutover-whistle-close{display:block;margin:0 0 10px auto;cursor:pointer;background:#e5f0eb;border:0;border-radius:8px;padding:7px 12px;color:#07533d;font-weight:700}
+
+/* Read-only operational summary for the selected tour in the administrator view. */
+.cutover-tour-control {
+  margin: 16px 0 24px;
+  padding: 18px;
+  border: 1px solid #cbded4;
+  background: #f7fbf8;
+  border-radius: 14px;
+}
+.cutover-tour-control-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.cutover-tour-control-head h3 { margin: 4px 0 6px; }
+.cutover-tour-control-head p { margin: 0; max-width: 670px; }
+.cutover-tour-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .08em; color: #0c6954; }
+.cutover-tour-control-head label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; }
+.cutover-tour-control-head select { max-width: 250px; }
+.cutover-tour-metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+.cutover-tour-metrics > div { padding: 12px; border: 1px solid #d8e6de; background: #fff; border-radius: 10px; }
+.cutover-tour-metrics small { display: block; font-size: 12px; color: #50665b; margin-bottom: 4px; }
+.cutover-tour-metrics strong { font-size: clamp(16px, 2vw, 23px); font-variant-numeric: tabular-nums; }
+.cutover-tour-note { font-size: 13px; color: #52665a; margin: 10px 0; }
+.cutover-tour-control-table { min-width: 660px; }
+.cutover-tour-control-table td { vertical-align: top; }
+@media (max-width: 620px) {
+  .cutover-tour-control { padding: 12px; }
+  .cutover-tour-metrics { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
+  .cutover-tour-metrics > div { padding: 8px; }
+  .cutover-tour-metrics small { font-size: 10px; }
+  .cutover-tour-control-head select { width: 100%; }
+}
