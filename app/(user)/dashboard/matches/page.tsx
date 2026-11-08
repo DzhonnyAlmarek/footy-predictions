@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { getVerifiedLegacyLogin } from "@/lib/legacy-identity";
 import { createClient } from "@supabase/supabase-js";
 import PredCellEditable from "../pred-cell";
 
@@ -116,9 +116,7 @@ type MatchRow = {
 };
 
 export default async function DashboardMatchesPage() {
-  const cs = await cookies();
-  const rawLogin = cs.get("fp_login")?.value ?? "";
-  const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
+  const fpLogin = await getVerifiedLegacyLogin();
   if (!fpLogin) redirect("/");
 
   const sb = service();

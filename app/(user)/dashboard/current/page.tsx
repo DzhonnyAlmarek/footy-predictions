@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { getVerifiedLegacyLogin } from "@/lib/legacy-identity";
 import { createClient } from "@supabase/supabase-js";
 
 import PointsPopover, { type PointsBreakdown as PtsBD } from "@/app/_components/points-popover";
@@ -120,8 +120,7 @@ function placeIcon(place: number | null): string | null {
 }
 
 export default async function CurrentTablePage() {
-  const cs = await cookies();
-  const fpLogin = decodeMaybe(cs.get("fp_login")?.value ?? "").trim().toUpperCase();
+  const fpLogin = await getVerifiedLegacyLogin();
   if (!fpLogin) redirect("/");
 
   const sb = service();

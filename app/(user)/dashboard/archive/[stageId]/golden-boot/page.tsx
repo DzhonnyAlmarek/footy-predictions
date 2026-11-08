@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { getVerifiedLegacyLogin } from "@/lib/legacy-identity";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -28,9 +28,7 @@ export default async function ArchiveGoldenBootPage({
 }: {
   params: Promise<{ stageId: string }>;
 }) {
-  const cs = await cookies();
-  const raw = cs.get("fp_login")?.value ?? "";
-  const fpLogin = decodeMaybe(raw).trim();
+  const fpLogin = await getVerifiedLegacyLogin();
 
   if (!fpLogin) redirect("/");
 

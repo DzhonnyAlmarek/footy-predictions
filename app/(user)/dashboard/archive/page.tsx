@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { getVerifiedLegacyLogin } from "@/lib/legacy-identity";
 import { createClient } from "@supabase/supabase-js";
 import { stageStatusLabel } from "@/lib/user-labels";
 
@@ -30,9 +30,7 @@ function service() {
 }
 
 export default async function ArchiveStagesPage() {
-  const cs = await cookies();
-  const rawLogin = cs.get("fp_login")?.value ?? "";
-  const login = decodeMaybe(rawLogin).trim().toUpperCase();
+  const login = await getVerifiedLegacyLogin();
 
   if (!login) redirect("/");
 

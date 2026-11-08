@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { getVerifiedLegacyLogin } from "@/lib/legacy-identity";
 import { createClient } from "@supabase/supabase-js";
 
 function mustEnv(name: string): string {
@@ -38,10 +38,7 @@ type Body = {
 
 export async function POST(req: Request) {
   try {
-    const cs = await cookies();
-
-    const rawLogin = cs.get("fp_login")?.value ?? "";
-    const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
+    const fpLogin = (await getVerifiedLegacyLogin()) ?? "";
 
     if (!fpLogin) {
       return NextResponse.json({ ok: false, error: "not_auth" }, { status: 401 });
