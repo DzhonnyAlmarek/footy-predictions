@@ -87,7 +87,7 @@ jobs:
           if [[ "$code" = 200 ]]; then
             jq -r '{id,name,status,currentVersionId:(.currentVersion.id // null),currentVersionStatus:(.currentVersion.status // null),keys:(.currentVersion.payloadEntryKeys // [])}' /tmp/footy-lockbox-meta.json
           fi
-          test "$(jq -r '.currentVersion.id' /tmp/footy-lockbox-meta.json)" = "e6qps2c87aqig5yidm3g" || { echo "Unexpected new version ID"; exit 1; }
+          test "$(jq -r '.currentVersion.id' /tmp/footy-lockbox-meta.json)" = "e6qps2c87aqiq5vjdm3g" || { echo "Unexpected new version ID"; exit 1; }
           jq -e '(.currentVersion.payloadEntryKeys | sort)==(["CUTOVER_AUTH_DATABASE_URL","CUTOVER_RATE_PEPPER"]|sort)' /tmp/footy-lockbox-meta.json >/dev/null || { echo "Expected two keys absent"; exit 1; }
           code="$(curl -sS -o /tmp/footy-binding.json -w '%{http_code}' --max-time 30 \
             -H "Authorization: Bearer $IAM_TOKEN" \
