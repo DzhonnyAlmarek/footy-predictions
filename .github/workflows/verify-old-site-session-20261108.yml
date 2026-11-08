@@ -19,6 +19,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
+      - name: Test signed session validation
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: only-for-ci-signed-cookie-test-placeholder-abcdef
+        run: |
+          node --experimental-strip-types --input-type=module <<'JS'
+          import { createLegacySession, verifyLegacySession } from "./lib/legacy-session.ts";
+          const token = await createLegacySession("КЕН");
+          if (await verifyLegacySession(token) !== "КЕН") throw new Error("valid session rejected");
+          if (await verifyLegacySession(token.slice(0,-1)+(token.endsWith("A")?"B":"A")) !== null) throw new Error("tampered session accepted");
+          if (await verifyLegacySession("КЕН") !== null) throw new Error("unsigned session accepted");
+          console.log("Signed session acceptance and rejection checks passed.");
+          JS
       - name: Build (without live credentials)
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
