@@ -49,18 +49,24 @@ export default function AdminIntrigue({ table, matches, tours }: {table:Table|nu
   const [selected, setSelected] = useState("");
   const [drafts, setDrafts] = useState<Record<string,Score>>({});
   const [maxGoals, setMaxGoals] = useState(5);
+  const users = table?.users ?? [];
+  const rows = table?.rows ?? [];
   // The admin API returns the entire calendar; only the current table's
   // stage is eligible for scenarios. Exclude future stages and test fixtures.
-  const available = useMemo(() => {
+  const unfinished = useMemo(() => {
     const currentStageMatchIds = new Set(table?.rows.map(row => row.match_id) ?? []);
     return matches.filter(m => currentStageMatchIds.has(m.id) &&
       m.status !== "finished" && m.home_score === null && m.away_score === null);
   }, [matches, table?.rows]);
+  // Never assume a missing prediction means zero points: its score is unknown.
+  // A match is simulatable only after every stage participant has a forecast.
+  const available = useMemo(() => unfinished.filter(m => users.length > 0 &&
+    users.every(u => table?.rows.some(r => r.match_id === m.id && r.user_id === u.id &&
+      r.home_pred !== null && r.away_pred !== null))), [unfinished, users, table?.rows]);
+  const incompleteCount = unfinished.length - available.length;
   const matchId = available.some(m => m.id === selected) ? selected : (available[0]?.id ?? "");
   const activeMatch = available.find(m => m.id === matchId);
   const selectedScore = drafts[matchId];
-  const users = table?.users ?? [];
-  const rows = table?.rows ?? [];
 
   const snapshot = useMemo(() => {
     // Admin calendar excludes isolated test matches; the table endpoint may not.
@@ -112,7 +118,7 @@ export default function AdminIntrigue({ table, matches, tours }: {table:Table|nu
     return {id:u.id,name:u.username,prediction:p?`${p.h}:${p.a}`:"—",points:selectedPoints?.get(u.id)??0};
   });
 
-  const singleRemaining = available.length===1 && !!activeMatch && users.length>0 &&
+  const singleRemaining = unfinished.length===1 && available.length===1 && !!activeMatch && users.length>0 &&
     (snapshot.predictions.get(matchId)?.length ?? 0)===users.length;
   const scenarioSummary = useMemo(()=>{
     if (!singleRemaining || !activeMatch) return [] as {winners:string[]; count:number; examples:string[]}[];
@@ -141,9 +147,15 @@ export default function AdminIntrigue({ table, matches, tours }: {table:Table|nu
   return <section className="cutover-intrigue" aria-label="Интрига тура — симулятор">
     <div className="cutover-section-heading"><div><span>РАСЧЁТ БЕЗ СОХРАНЕНИЯ</span><h2>Интрига тура</h2></div>
       <p>Как счёт оставшихся матчей изменит места участников</p></div>
-    <p>Этап: <b>{table.stage.name}</b>. Незавершённых матчей: <b>{available.length}</b>.
+    <p>Этап: <b>{table.stage.name}</b>. Незавершённых матчей: <b>{unfinished.length}</b>.
+      Полные прогнозы есть на <b>{available.length}</b> из них.
       Используются сохранённые начисления и действующие правила редких прогнозов.</p>
-    {!available.length ? <p>Все матчи текущего этапа завершены. Результаты симуляции не требуются.</p> : <>
+    {incompleteCount > 0 && <p className="cutover-intrigue-note" role="status">
+      На {incompleteCount} незавершённых матчей пока не хватает прогнозов всех участников.
+      Они исключены из моделирования. Показанные таблицы — промежуточные, а не окончательный итог тура или этапа.
+    </p>}
+    {!unfinished.length ? <p>Все матчи текущего этапа завершены. Результаты симуляции не требуются.</p> :
+     !available.length ? <p>Пока нет незавершённых матчей с полными прогнозами всех участников. Точный сценарный расчёт недоступен.</p> : <>
       <div className="cutover-intrigue-controls">
         <label>Матч
           <select value={matchId} onChange={e=>setSelected(e.target.value)}>
@@ -175,8 +187,8 @@ export default function AdminIntrigue({ table, matches, tours }: {table:Table|nu
           <tbody>{breakdown.map(r=><tr key={r.id}><td>{r.name}</td><td>{r.prediction}</td><td>{r.prediction==="—"?"—":"+"+show(r.points)}</td></tr>)}</tbody></table></div>
       </div>}
       <div className="cutover-intrigue-tables">
-        {([{title:"Места в туре"+(selectedTour?" · "+selectedTour.name:""),rows:projected.tour},
-           {title:"Места в этапе",rows:projected.stage}] as const).map(group=><div key={group.title}>
+        {([{title:(incompleteCount>0 || available.some(m=>!drafts[m.id])?"Промежуточный тур":"Итог тура")+(selectedTour?" · "+selectedTour.name:""),rows:projected.tour},
+           {title:incompleteCount>0 || available.some(m=>!drafts[m.id])?"Промежуточный этап":"Итог этапа",rows:projected.stage}] as const).map(group=><div key={group.title}>
           <h3>{group.title}</h3>
           <table><thead><tr><th>Место</th><th>Участник</th><th>Очки</th></tr></thead>
             <tbody>{group.rows.map(u=><tr key={u.id}><td>{u.place}</td><td>{u.name}</td><td>{show(u.points)}</td></tr>)}</tbody></table>
