@@ -56,6 +56,16 @@ export default function AppHeader(props: {
           {nav.map((i) => {
             const active = isActive(pathname, i.href);
 
+            // Logout has a GET side-effect. Never render it as a Next.js Link:
+            // automatic RSC prefetch would call /logout and clear the session.
+            if (i.href === "/logout") {
+              return (
+                <a key={i.href} href="/logout" className="appNavLink">
+                  {i.icon ? <span className="appNavIcon" aria-hidden="true">{i.icon}</span> : null}
+                  <span>{i.label}</span>
+                </a>
+              );
+            }
             return (
               <Link
                 key={i.href}
