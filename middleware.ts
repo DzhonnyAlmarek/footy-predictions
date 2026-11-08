@@ -95,7 +95,15 @@ export async function middleware(req: NextRequest) {
         process.env.ENABLE_CUTOVER_PREVIEW === "true") ||
        (process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
         process.env.ENABLE_CUTOVER_PRODUCTION_CANDIDATE === "true" &&
-        process.env.ENABLE_CUTOVER_PREVIEW === "true"))) {
+        process.env.ENABLE_CUTOVER_PREVIEW === "true") ||
+       // Isolated admin sandbox: never use working Neon or enable write operations.
+       (process.env.DEPLOY_TARGET === "yandex-neon-admin-isolated" &&
+        process.env.CUTOVER_AUTH_ALLOWED_HOST === "ep-curly-wildflower-b1bo8av4.c-5.eu-central-1.aws.neon.tech" &&
+        process.env.ENABLE_CUTOVER_AUTH === "true" &&
+        process.env.ENABLE_CUTOVER_PREVIEW === "true" &&
+        process.env.ENABLE_CUTOVER_ADMIN_WRITES !== "true" &&
+        process.env.ENABLE_CUTOVER_RESULT_WRITES !== "true" &&
+        process.env.ENABLE_CUTOVER_PREDICTION_WRITES !== "true"))) {
     return NextResponse.next();
   }
 
@@ -107,8 +115,13 @@ export async function middleware(req: NextRequest) {
   }
 
   if (pathname === "/" &&
-      process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
-      process.env.ENABLE_CUTOVER_PRODUCTION_CANDIDATE === "true" &&
+      ((process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
+        process.env.ENABLE_CUTOVER_PRODUCTION_CANDIDATE === "true") ||
+       (process.env.DEPLOY_TARGET === "yandex-neon-admin-isolated" &&
+        process.env.CUTOVER_AUTH_ALLOWED_HOST === "ep-curly-wildflower-b1bo8av4.c-5.eu-central-1.aws.neon.tech" &&
+        process.env.ENABLE_CUTOVER_ADMIN_WRITES !== "true" &&
+        process.env.ENABLE_CUTOVER_RESULT_WRITES !== "true" &&
+        process.env.ENABLE_CUTOVER_PREDICTION_WRITES !== "true")) &&
       process.env.ENABLE_CUTOVER_PREVIEW === "true" &&
       process.env.ENABLE_CUTOVER_AUTH === "true") {
     const response = NextResponse.redirect(new URL("/cutover-participant", req.url));
