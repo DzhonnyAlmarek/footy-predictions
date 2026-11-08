@@ -650,7 +650,9 @@ export default function CutoverParticipantPage() {
           tours={adminData.tours}
           table={currentTable}
         />
-        <AdminIntrigue table={currentTable} matches={adminData.matches} tours={adminData.tours} />
+        {(adminStageChoice === "current" || adminStageChoice === (adminData.stages.find(s=>s.is_current)?.id ?? "")) ?
+          <AdminIntrigue table={currentTable} matches={adminData.matches} tours={adminData.tours} /> :
+          <p className="cutover-intrigue-note">«Интрига тура» доступна при выборе текущего этапа.</p>}
         <h2>Календарь матчей</h2>
         <p style={{margin:"0 0 10px",opacity:.75}}>Показываются матчи выбранного этапа. Все даты и время — московские.</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end",marginBottom:12}}>
