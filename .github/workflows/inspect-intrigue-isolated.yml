@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          trap 'rm -f /tmp/footy-iam.json /tmp/footy-current.json /tmp/footy-revisions.json /tmp/footy-deploy.json /tmp/footy-operation.json /tmp/footy-container.json /tmp/footy-lockbox-meta.json' EXIT
+          trap 'rm -f /tmp/footy-iam.json /tmp/footy-current.json /tmp/footy-revisions.json /tmp/footy-deploy.json /tmp/footy-operation.json /tmp/footy-container.json /tmp/footy-lockbox-meta.json /tmp/footy-binding.json' EXIT
           code="$(curl -sS -o /tmp/footy-iam.json -w '%{http_code}' --max-time 30 \
             -X POST 'https://auth.yandex.cloud/oauth/token' \
             --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
@@ -87,4 +87,14 @@ jobs:
           if [[ "$code" = 200 ]]; then
             jq -r '{id,name,status,currentVersionId:(.currentVersion.id // null),currentVersionStatus:(.currentVersion.status // null),keys:(.currentVersion.payloadEntryKeys // [])}' /tmp/footy-lockbox-meta.json
           fi
-          echo "No revision deployment attempted."
+          test "$(jq -r '.currentVersion.id' /tmp/footy-lockbox-meta.json)" = "e6qps2c87aqig5yidm3g" || { echo "Unexpected new version ID"; exit 1; }
+          jq -e '(.currentVersion.payloadEntryKeys | sort)==(["CUTOVER_AUTH_DATABASE_URL","CUTOVER_RATE_PEPPER"]|sort)' /tmp/footy-lockbox-meta.json >/dev/null || { echo "Expected two keys absent"; exit 1; }
+          code="$(curl -sS -o /tmp/footy-binding.json -w '%{http_code}' --max-time 30 \
+            -H "Authorization: Bearer $IAM_TOKEN" \
+            "https://lockbox.api.cloud.yandex.net/lockbox/v1/secrets/$ISOLATED_SECRET_ID:listAccessBindings")"
+          echo "Secret-specific IAM binding status: $code"
+          if [[ "$code" = 200 ]]; then
+            jq -r --arg id "$RUNTIME_ACCOUNT_ID" '{bindingCount:(.accessBindings // []|length),runtimeRoles:[.accessBindings[]?|select(.subject.id==$id)|.roleId]}' /tmp/footy-binding.json
+          fi
+          echo "Lockbox version verified; read-only."
+
