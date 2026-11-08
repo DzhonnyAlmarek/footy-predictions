@@ -68,7 +68,7 @@ jobs:
           echo "::add-mask::$IAM_TOKEN"
           BASE="https://$CONTAINER_ID.containers.yandexcloud.net"
           echo "Testing isolated container with temporary IAM token (never public invocation)."
-          for check in "/cutover-participant:200" "/api/cutover/session:401" "/api/cutover/current-table:401" "/api/cutover/admin:401"; do
+          for check in "/cutover-participant:200" "/api/cutover/session:401" "/api/cutover/current-table:401" "/api/cutover/admin:403"; do
             route="$(printf '%s' "$check" | cut -d: -f1)"
             expected="$(printf '%s' "$check" | cut -d: -f2)"
             status="$(curl -sS --max-time 40 -o /tmp/footy-smoke-response \
