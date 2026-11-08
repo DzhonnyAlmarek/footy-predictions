@@ -70,11 +70,12 @@ jobs:
           code="$(curl -sS -o /tmp/footy-revisions.json -w '%{http_code}' \
             -H "Authorization: Bearer $IAM_TOKEN" "$API_URL/revisions?containerId=$CONTAINER_ID&pageSize=100")"
           [[ "$code" = 200 ]] || { echo "Unable to read container revisions: HTTP $code"; exit 1; }
-          echo "Revision response keys: $(jq -r 'keys|join(",")' /tmp/footy-revisions.json)"
-          echo "Revision count: $(jq -r '(.revisions // [])|length' /tmp/footy-revisions.json)"
-          echo "Revision statuses: $(jq -r '[.revisions[]? | .status]|unique|join(",")' /tmp/footy-revisions.json)"
+          echo "Revisions JSON type: $(jq -r 'type' /tmp/footy-revisions.json)"
+          echo "Revision response keys: $(jq -r 'if type=="object" then keys|join(",") else "not_object" end' /tmp/footy-revisions.json)"
+          echo "Revision count: $(jq -r 'if type=="array" then length else (.revisions // [])|length end' /tmp/footy-revisions.json)"
+          echo "Revision statuses: $(jq -r 'if type=="array" then [.[].status]|unique|join(",") else [.revisions[]?|.status]|unique|join(",") end' /tmp/footy-revisions.json)"
           code="$(curl -sS -o /tmp/footy-container.json -w '%{http_code}' \
-            -H "Authorization: Bearer $IAM_TOKEN" "$API_URL/$CONTAINER_ID")"
+            -H "Authorization: Bearer $IAM_TOKEN" "$API_URL/containers/$CONTAINER_ID")"
           echo "Isolated container GET status: $code"
           if [[ "$code" = 200 ]]; then
             jq -r '{id,name,folderId,description,createdAt,revisionCount:(.revisionCount // null)}' /tmp/footy-container.json
