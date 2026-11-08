@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { cookies } from "next/headers";
+import { getVerifiedLegacyLogin } from "@/lib/legacy-identity";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
@@ -30,9 +30,7 @@ function service() {
 }
 
 export default async function UserLayout({ children }: { children: ReactNode }) {
-  const cs = await cookies();
-  const rawLogin = cs.get("fp_login")?.value ?? "";
-  const login = decodeMaybe(rawLogin).trim().toUpperCase();
+  const login = await getVerifiedLegacyLogin();
 
   if (!login) redirect("/");
 
