@@ -1,0 +1,27 @@
+name: Verify old-site browser session
+on:
+  push:
+    branches:
+      - fix/old-site-tab-session-20261108
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Build (without live credentials)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-not-a-real-service-role-key
+        run: npm run build
