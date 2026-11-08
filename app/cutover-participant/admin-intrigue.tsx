@@ -49,8 +49,13 @@ export default function AdminIntrigue({ table, matches, tours }: {table:Table|nu
   const [selected, setSelected] = useState("");
   const [drafts, setDrafts] = useState<Record<string,Score>>({});
   const [maxGoals, setMaxGoals] = useState(5);
-  const available = useMemo(() => matches.filter(m => m.status !== "finished" &&
-    m.home_score === null && m.away_score === null), [matches]);
+  // The admin API returns the entire calendar; only the current table's
+  // stage is eligible for scenarios. Exclude future stages and test fixtures.
+  const available = useMemo(() => {
+    const currentStageMatchIds = new Set(table?.rows.map(row => row.match_id) ?? []);
+    return matches.filter(m => currentStageMatchIds.has(m.id) &&
+      m.status !== "finished" && m.home_score === null && m.away_score === null);
+  }, [matches, table?.rows]);
   const matchId = available.some(m => m.id === selected) ? selected : (available[0]?.id ?? "");
   const activeMatch = available.find(m => m.id === matchId);
   const selectedScore = drafts[matchId];
