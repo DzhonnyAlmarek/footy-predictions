@@ -1,4 +1,5 @@
 name: First isolated intrigue revision (REST, never production)
+# First test-only deployment after successful preflight 42519442026.
 on:
   push:
     branches: [feature/admin-result-guard-20261102]
