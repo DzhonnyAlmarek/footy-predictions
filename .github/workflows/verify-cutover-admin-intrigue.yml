@@ -1,0 +1,29 @@
+name: Verify cutover admin intrigue
+on:
+  push:
+    branches:
+      - feature/cutover-admin-intrigue-20261108
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: test-placeholder
+          DEPLOY_TARGET: yandex-neon-production-candidate
+          ENABLE_CUTOVER_AUTH: 'false'
+          ENABLE_CUTOVER_PRODUCTION_CANDIDATE: 'false'
