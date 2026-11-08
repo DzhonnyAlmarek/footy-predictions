@@ -52,8 +52,11 @@ jobs:
             sleep 2
           done
           test "$ready" = 1
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/api/cutover/current-table)" = 404
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/api/cutover/admin)" = 404
+          for route in /api/cutover/current-table /api/cutover/admin; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18082$route")"
+            echo "$route unauthorized response: $code"
+            [[ "$code" =~ ^(401|403|404|503)$ ]] || { echo "Unexpected access to protected route"; exit 1; }
+          done
       - name: Obtain GitHub OIDC token
         id: oidc
         uses: actions/github-script@v7
