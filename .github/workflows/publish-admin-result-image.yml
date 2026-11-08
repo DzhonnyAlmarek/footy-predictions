@@ -1,4 +1,4 @@
-name: Publish fixed historical records timestamp handling
+name: Publish verified Yandex tab-scoped login (registry only)
 
 on:
   push:
@@ -21,14 +21,14 @@ jobs:
     environment: yandex-test
     timeout-minutes: 40
     env:
-      VERIFIED_SHA: 63e330ddf0f2618530c5815c898ec946d46d1c30
+      VERIFIED_SHA: 1ab21cadff03c5a347e67f2f47fb61d9f919cf54
       IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
       SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
     steps:
       - name: Check out exactly the Docker-tested source
         uses: actions/checkout@v4
         with:
-          ref: 63e330ddf0f2618530c5815c898ec946d46d1c30
+          ref: 1ab21cadff03c5a347e67f2f47fb61d9f919cf54
           persist-credentials: false
       - name: Build pinned candidate (no live credentials)
         run: |
