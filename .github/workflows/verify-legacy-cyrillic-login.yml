@@ -1,0 +1,41 @@
+name: Verify Cyrillic legacy session routing
+on:
+  push:
+    branches:
+      - fix/legacy-cyrillic-login-20261108
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Check Cyrillic and admin signed session payloads
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ci-signing-secret-that-is-not-a-real-service-key-0123456789
+        run: |
+          node --experimental-strip-types --input-type=module <<'JS'
+          import { createLegacySession, verifyLegacySession } from "./lib/legacy-session.ts";
+          for(const name of ["КЕН","АМН","БАА","КДЛ","СВС","ADMIN"]) {
+            const token = await createLegacySession(name);
+            if(await verifyLegacySession(token)!==name) throw Error(name + " rejected");
+            const encoded=encodeURIComponent(name);
+            if(decodeURIComponent(encoded)!==name) throw Error(name + " cookie encoding mismatch");
+          }
+          console.log("All Cyrillic and ADMIN signed sessions accepted.");
+          JS
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-not-a-real-production-secret-012345
