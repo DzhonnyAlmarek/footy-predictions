@@ -1,0 +1,90 @@
+name: Verify and publish intrigue candidate image (registry only)
+
+on:
+  push:
+    branches:
+      - feature/analytics-cleanup-20261107
+    paths:
+      - .github/workflows/publish-intrigue-candidate-image.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: footy-intrigue-registry-publish-only
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/feature/analytics-cleanup-20261107'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
+      SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate exact source and Dockerfile
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          grep -Fxq 'ENV DEPLOY_TARGET=yandex-neon-production-candidate' Dockerfile.cutover-production-candidate
+          grep -Fq 'NEXT_PUBLIC_SUPABASE_URL=https://isolated.invalid' Dockerfile.cutover-production-candidate
+          test -f app/cutover-participant/admin-intrigue.tsx
+          grep -q 'calculateIntriguePoints' app/cutover-participant/admin-intrigue.tsx
+      - name: Build exact candidate container without production secrets
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 -f Dockerfile.cutover-production-candidate -t footy-intrigue:local .
+          test "$(docker image inspect footy-intrigue:local --format '{{.Os}}/{{.Architecture}}')" = 'linux/amd64'
+      - name: Verify protected routes fail closed without secrets
+        run: |
+          set -euo pipefail
+          docker run -d --name footy-intrigue-check -p 127.0.0.1:18082:8080 footy-intrigue:local
+          trap 'docker rm -f footy-intrigue-check >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for i in {1..35}; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/ || true)"
+            if [[ "$code" = 503 ]]; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+          for route in /api/cutover/current-table /api/cutover/admin; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18082$route")"
+            echo "$route unauthorized response: $code"
+            [[ "$code" =~ ^(401|403|404|503)$ ]] || { echo "Unexpected access to protected route"; exit 1; }
+          done
+      - name: Obtain GitHub OIDC token
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jwt = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(jwt);
+            core.setOutput('jwt', jwt);
+      - name: Authenticate to Yandex and upload image ONLY
+        env:
+          OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/footy-intrigue-iam.json; docker logout registry.yandexcloud.net >/dev/null 2>&1 || true' EXIT
+          code="$(curl -sS --max-time 30 -o /tmp/footy-intrigue-iam.json -w '%{http_code}' \
+            -X POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=$SERVICE_ACCOUNT_ID" \
+            --data-urlencode "subject_token=$OIDC_JWT" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          test "$code" = 200
+          IAM_TOKEN="$(jq -er '.access_token' /tmp/footy-intrigue-iam.json)"
+          echo "::add-mask::$IAM_TOKEN"
+          printf '%s' "$IAM_TOKEN" | docker login registry.yandexcloud.net --username iam --password-stdin
+          IMAGE="$IMAGE_REPO:$GITHUB_SHA"
+          docker tag footy-intrigue:local "$IMAGE"
+          docker push "$IMAGE"
+          echo "Verified image uploaded: $IMAGE"
+          echo "No Serverless Container revision deployed; no database or production configuration changed."

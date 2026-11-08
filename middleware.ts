@@ -90,12 +90,20 @@ export async function middleware(req: NextRequest) {
   }
 
   // Opt-in, read-only cutover verification endpoint; route enforces its own token.
-  if ((pathname === "/cutover-participant" || pathname === "/api/cutover/archive" || pathname === "/api/cutover/current-table" || pathname === "/api/cutover/leaderboard" || pathname === "/api/cutover/golden-boot" || pathname === "/api/cutover/golden-whistle" || pathname === "/api/cutover/grand-prix" || pathname === "/api/cutover/admin" || pathname === "/api/cutover/save-prediction" || pathname === "/api/cutover/schedule" || pathname === "/api/cutover/summary" || pathname === "/api/cutover/matches" || pathname === "/api/cutover/prediction-coverage" || pathname === "/api/cutover/validation" || pathname === "/api/cutover/my-predictions" || pathname === "/api/cutover/session" || pathname === "/api/cutover/logout" || pathname === "/api/cutover/login" || pathname === "/api/cutover/participants" || pathname === "/api/cutover/change-password" || pathname === "/api/cutover/admin/reset-password" || pathname === "/api/cutover/redeem-reset-link") &&
+  if ((pathname === "/cutover-participant" || pathname === "/api/cutover/archive" || pathname === "/api/cutover/club-records" || pathname === "/api/cutover/current-table" || pathname === "/api/cutover/leaderboard" || pathname === "/api/cutover/golden-boot" || pathname === "/api/cutover/golden-whistle" || pathname === "/api/cutover/grand-prix" || pathname === "/api/cutover/admin" || pathname === "/api/cutover/save-prediction" || pathname === "/api/cutover/schedule" || pathname === "/api/cutover/summary" || pathname === "/api/cutover/matches" || pathname === "/api/cutover/prediction-coverage" || pathname === "/api/cutover/validation" || pathname === "/api/cutover/my-predictions" || pathname === "/api/cutover/session" || pathname === "/api/cutover/logout" || pathname === "/api/cutover/login" || pathname === "/api/cutover/participants" || pathname === "/api/cutover/change-password" || pathname === "/api/cutover/admin/reset-password" || pathname === "/api/cutover/redeem-reset-link") &&
       ((process.env.DEPLOY_TARGET === "yandex-neon-cutover-preview" &&
         process.env.ENABLE_CUTOVER_PREVIEW === "true") ||
        (process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
         process.env.ENABLE_CUTOVER_PRODUCTION_CANDIDATE === "true" &&
-        process.env.ENABLE_CUTOVER_PREVIEW === "true"))) {
+        process.env.ENABLE_CUTOVER_PREVIEW === "true") ||
+       // Isolated admin sandbox: never use working Neon or enable write operations.
+       (process.env.DEPLOY_TARGET === "yandex-neon-admin-isolated" &&
+        process.env.CUTOVER_AUTH_ALLOWED_HOST === "ep-curly-wildflower-b1bo8av4.c-5.eu-central-1.aws.neon.tech" &&
+        process.env.ENABLE_CUTOVER_AUTH === "true" &&
+        process.env.ENABLE_CUTOVER_PREVIEW === "true" &&
+        process.env.ENABLE_CUTOVER_ADMIN_WRITES !== "true" &&
+        process.env.ENABLE_CUTOVER_RESULT_WRITES !== "true" &&
+        process.env.ENABLE_CUTOVER_PREDICTION_WRITES !== "true"))) {
     return NextResponse.next();
   }
 
@@ -107,8 +115,13 @@ export async function middleware(req: NextRequest) {
   }
 
   if (pathname === "/" &&
-      process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
-      process.env.ENABLE_CUTOVER_PRODUCTION_CANDIDATE === "true" &&
+      ((process.env.DEPLOY_TARGET === "yandex-neon-production-candidate" &&
+        process.env.ENABLE_CUTOVER_PRODUCTION_CANDIDATE === "true") ||
+       (process.env.DEPLOY_TARGET === "yandex-neon-admin-isolated" &&
+        process.env.CUTOVER_AUTH_ALLOWED_HOST === "ep-curly-wildflower-b1bo8av4.c-5.eu-central-1.aws.neon.tech" &&
+        process.env.ENABLE_CUTOVER_ADMIN_WRITES !== "true" &&
+        process.env.ENABLE_CUTOVER_RESULT_WRITES !== "true" &&
+        process.env.ENABLE_CUTOVER_PREDICTION_WRITES !== "true")) &&
       process.env.ENABLE_CUTOVER_PREVIEW === "true" &&
       process.env.ENABLE_CUTOVER_AUTH === "true") {
     const response = NextResponse.redirect(new URL("/cutover-participant", req.url));

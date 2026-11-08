@@ -5,6 +5,8 @@ import type { FormEvent } from "react";
 import "./cutover.css";
 import PointsPopover from "@/app/_components/points-popover";
 import AnalyticsInsights from "./analytics-insights";
+import AdminTourControl from "./admin-tour-control";
+import AdminIntrigue from "./admin-intrigue";
 
 type Prediction = {
   match_id: string; kickoff_at: string | null; home_team: string | null;
@@ -17,6 +19,7 @@ export default function CutoverParticipantPage() {
   const [activeTab, setActiveTab] = useState<"schedule" | "archive" | "analytics" | "golden-boot" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("mine");
   const [showAllMatches, setShowAllMatches] = useState(false);
   const [matchFilter, setMatchFilter] = useState<"upcoming" | "all">("upcoming");
+  const [analyticsGraphMode, setAnalyticsGraphMode] = useState<"gap" | "points">("gap");
   const [savedMatchId, setSavedMatchId] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [participants, setParticipants] = useState<string[]>([]);
@@ -500,7 +503,6 @@ export default function CutoverParticipantPage() {
     if (![hp, ap].every(Number.isInteger) || hp < 0 || ap < 0 || hp > Number(draft.home_score) || ap > Number(draft.away_score)) {
       setMessage("Голы с пенальти должны быть от 0 до числа голов команды."); return;
     }
-    if (!window.confirm("Завершить матч, сохранить пенальти и начислить очки? Изменить результат через эту форму нельзя.")) return;
     setBusy(true);
     try {
       const response = await fetch("/api/cutover/admin", { method: "POST",
@@ -580,7 +582,7 @@ export default function CutoverParticipantPage() {
           <strong>Клуб им. А.Н. Мурашева</strong>
         </div>
       </div>
-      <span className="cutover-club-since">Основан 6 июня 2008 года</span>
+      <span className="cutover-club-founded">Основан 6 июня 2008 года</span>
     </div>
     <header className="cutover-hero">
       <div className="cutover-hero-content"><h1>Точность решает</h1>
@@ -638,6 +640,19 @@ export default function CutoverParticipantPage() {
             <span>{adminWritesEnabled ? "Изменения разрешены" : "Режим просмотра"}</span>
           </div> : null;
         })()}
+        <AdminTourControl
+          currentStageId={adminData.stages.find(stage=>stage.is_current)?.id ?? ""}
+          currentStageName={adminData.stages.find(stage=>stage.is_current)?.name ?? "Текущий этап"}
+          selectedTourId={adminTourChoice}
+          onSelectTour={setAdminTourChoice}
+          selectedStageId={adminStageChoice==="current" ? (adminData.stages.find(stage=>stage.is_current)?.id ?? "") : adminStageChoice}
+          matches={adminData.matches}
+          tours={adminData.tours}
+          table={currentTable}
+        />
+        {(adminStageChoice === "current" || adminStageChoice === (adminData.stages.find(s=>s.is_current)?.id ?? "")) ?
+          <AdminIntrigue table={currentTable} matches={adminData.matches} tours={adminData.tours} /> :
+          <p className="cutover-intrigue-note">«Интрига тура» доступна при выборе текущего этапа.</p>}
         <h2>Календарь матчей</h2>
         <p style={{margin:"0 0 10px",opacity:.75}}>Показываются матчи выбранного этапа. Все даты и время — московские.</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end",marginBottom:12}}>
@@ -703,7 +718,7 @@ export default function CutoverParticipantPage() {
                   <td>{m.status === "finished"
                     ? (m.home_score == null || m.away_score == null ? "—" : <span>{m.home_score}:{m.away_score}<small style={{ marginLeft: 10, whiteSpace: "nowrap", opacity: .8 }}>Пен. {m.home_penalty_goals == null && m.away_penalty_goals == null ? "—" : `${m.home_penalty_goals ?? 0}:${m.away_penalty_goals ?? 0}`}</small></span>)
                     : m.result_eligible && adminWritesEnabled && resultWritesEnabled
-                      ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      ? <div className="cutover-admin-score-entry" style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                           <input aria-label={`Голы хозяев: ${m.home_team} — ${m.away_team}`} type="number" min="0" max="99" required style={{ width: 65 }}
                             value={resultDrafts[m.id]?.home_score ?? ""}
                             onChange={e => setResultDrafts(prev => ({ ...prev, [m.id]: { home_score: e.target.value, away_score: prev[m.id]?.away_score ?? "", home_penalty_goals: prev[m.id]?.home_penalty_goals ?? "0", away_penalty_goals: prev[m.id]?.away_penalty_goals ?? "0" } }))} />
@@ -1060,20 +1075,10 @@ export default function CutoverParticipantPage() {
       </div>
       </section>}
       {activeTab === "analytics" && <section className="cutover-content">
-        <div className="cutover-section-heading"><div><span>СРАВНЕНИЕ УЧАСТНИКОВ · {currentTable?.stage?.name ?? "Текущий этап"}</span><h2>Аналитика прогнозов</h2></div><p>Здесь можно сравнить участников и понять, кто точнее прогнозирует матчи. Учитываются результаты текущего этапа, по которым уже начислены очки.</p></div>
+        <div className="cutover-section-heading"><div><h2>Аналитика прогнозов</h2></div></div>
         {!currentTable?.stage ? <p>Загружаем статистику этапа…</p> : (() => {
-          const format = (value:number) => Number(value.toFixed(2)).toLocaleString("ru-RU");
-          const calc = (rows:typeof currentTable.rows) => {
-            const done=rows.filter(p=>p.user_id && p.home_pred!==null && p.away_pred!==null && p.home_score!==null && p.away_score!==null);
-            const exact=done.filter(p=>p.home_pred===p.home_score && p.away_pred===p.away_score).length;
-            const outcomes=done.filter(p=>Math.sign(p.home_pred!-p.away_pred!)===Math.sign(p.home_score!-p.away_score!)).length;
-            const points=done.reduce((sum,p)=>sum+Number(p.points??0),0);
-            return {done:done.length,exact,outcomes,points,avg:done.length?points/done.length:0};
-          };
           const users=[...currentTable.users].sort((a,b)=>a.username.localeCompare(b.username,"ru"));
           const tours=[...currentTable.tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no));
-          const all=users.map(u=>({ ...u,...calc(currentTable.rows.filter(p=>p.user_id===u.id)) }))
-            .sort((a,b)=>b.points-a.points||a.username.localeCompare(b.username,"ru"));
           const rankFor=(userId:string,cutoff:number)=>{
             const ranking=users.map(u=>({id:u.id,username:u.username,points:currentTable.rows
               .filter(p=>p.user_id===u.id&&tours.some(t=>t.id===p.tour_id&&Number(t.tour_no)<=cutoff))
@@ -1082,18 +1087,8 @@ export default function CutoverParticipantPage() {
             return ranking.findIndex(u=>u.id===userId)+1;
           };
           return <>
-            <h3>Общие результаты участников</h3>
-            <p>«Прогнозов» — сколько матчей уже сыграно и оценено. «Точных счетов» — сколько раз угадан счёт полностью; «исходов» — правильно выбрана победа хозяев, гостей или ничья. «Среднее за матч» — набранные очки, поделённые на число оценённых прогнозов. «Место» — позиция среди участников по очкам текущего этапа.</p>
-            <div className="tableWrap"><table className="table cutover-analytics-table">
-              <thead><tr><th>Участник</th><th>Прогнозов</th><th>Точных счетов</th><th>Угадано исходов</th><th>Очки</th><th>Среднее за матч</th><th>Место</th></tr></thead>
-              <tbody>{all.map((u,i)=><tr key={u.id}>
-                <td><strong>{u.username}{u.username===sessionUsername?" · ты":""}</strong></td><td>{u.done}</td>
-                <td>{u.exact}{u.done?` (${Math.round(100*u.exact/u.done)}%)`:""}</td>
-                <td>{u.outcomes}{u.done?` (${Math.round(100*u.outcomes/u.done)}%)`:""}</td>
-                <td>{format(u.points)}</td><td>{u.done?format(u.avg):"—"}</td><td>{i+1}</td>
-              </tr>)}</tbody></table></div>
             <h3>Гонка за лидерство — динамика по турам</h3>
-            <p>На первом графике очки каждого участника накапливаются от тура к туру: чем выше линия, тем больше очков. На втором показано место в таблице после каждого тура: 1-е место — наверху. Учитываются только завершённые матчи с начисленными очками. Наведи на точку, чтобы увидеть значение.</p>
+            <p>Первый график показывает отставание от лидера после каждого тура: линия на нуле означает первое место, ниже — сколько очков не хватает до лидера. Можно переключиться на накопленные очки. Второй график показывает изменение мест. Учитываются только матчи с начисленными очками.</p>
             {(() => {
               const finishedTours=tours.filter(t=>currentTable.rows.some(p=>p.tour_id===t.id&&p.points!==null));
               const cumulative=users.map(u=>({username:u.username,id:u.id,values:finishedTours.map(t=>
@@ -1101,25 +1096,34 @@ export default function CutoverParticipantPage() {
                   .reduce((sum,p)=>sum+Number(p.points??0),0))}));
               const ranking=users.map(u=>({username:u.username,id:u.id,values:finishedTours.map(t=>rankFor(u.id,Number(t.tour_no)))}));
               const palette=["#166534","#1d4ed8","#c2410c","#7c3aed","#be185d"];
-              const graph=(series:typeof cumulative,mode:"points"|"rank")=>{
-                const max=mode==="rank"?users.length:Math.max(1,...series.flatMap(s=>s.values));
-                const min=mode==="rank"?1:0;
+              const gaps=cumulative.map(u=>({...u,values:u.values.map((points,index)=>
+                Number((points-Math.max(...cumulative.map(other=>other.values[index]??0))).toFixed(2)))}));
+              const graph=(series:typeof cumulative,mode:"points"|"rank"|"gap")=>{
+                const numbers=series.flatMap(row=>row.values);
+                const max=mode==="rank"?users.length:mode==="gap"?0:Math.max(1,...numbers);
+                const min=mode==="rank"?1:mode==="gap"?Math.min(-1,...numbers):Math.min(...numbers,0);
+                const range=Math.max(1,max-min);
                 const x=(i:number)=>70+i*(660/Math.max(1,finishedTours.length-1));
-                const y=(n:number)=>42+(mode==="rank"?(n-1)/Math.max(1,max-1):1-n/max)*205;
-                return <div className="cutover-chart-scroll"><svg className="cutover-analytics-chart" viewBox="0 0 800 306" role="img" aria-label={mode==="rank"?"Изменение места участников по турам":"Накопленные очки участников по турам"}>
+                const y=(n:number)=>42+(mode==="rank"?(n-min)/range:(max-n)/range)*205;
+                return <div className="cutover-chart-scroll"><svg className="cutover-analytics-chart" viewBox="0 0 800 306" role="img" aria-label={mode==="rank"?"Изменение места участников по турам":mode==="gap"?"Отставание участников от лидера по турам":"Накопленные очки участников по турам"}>
                   {[0,1,2,3,4].map(i=><g key={i}><line x1="70" y1={42+i*205/4} x2="730" y2={42+i*205/4} stroke="#dbe5e0" />
-                    <text x="61" y={46+i*205/4} fontSize="12" fill="#586e65" textAnchor="end">{mode==="rank"?Math.round(1+i*(max-1)/4):Number((max*(1-i/4)).toFixed(1))}</text></g>)}
+                    <text x="61" y={46+i*205/4} fontSize="12" fill="#586e65" textAnchor="end">{mode==="rank"?Math.round(1+i*(max-1)/4):Number((max-i*range/4).toFixed(1))}</text></g>)}
                   {finishedTours.map((t,i)=><text key={t.id} x={x(i)} y="268" fontSize="12" textAnchor="middle" fill="#3d5e51">{t.tour_no}</text>)}
-                  {series.map((s,i)=><g key={s.id}><polyline fill="none" stroke={palette[i%palette.length]} strokeWidth="2.6"
-                    points={s.values.map((v,j)=>x(j)+","+y(v)).join(" ")}/>
-                    {s.values.map((v,j)=><circle key={j} cx={x(j)} cy={y(v)} r="4" fill={palette[i%palette.length]}>
-                      <title>{s.username} · Тур {finishedTours[j].tour_no}: {mode==="rank"?"место "+v:v+" очков"}</title>
+                  {series.map((line,i)=><g key={line.id}><polyline fill="none" stroke={palette[i%palette.length]} strokeWidth="2.8"
+                    points={line.values.map((v,j)=>x(j)+","+y(v)).join(" ")}/>
+                    {line.values.map((v,j)=><circle key={j} cx={x(j)} cy={y(v)} r="4.5" fill={palette[i%palette.length]}>
+                      <title>{line.username} · Тур {finishedTours[j].tour_no}: {mode==="rank"?"место "+v:mode==="gap"?(v===0?"лидер":v+" очков от лидера"):v+" очков"}</title>
                     </circle>)}</g>)}
                   <text x="400" y="299" fontSize="12" fill="#586e65" textAnchor="middle">Номер тура</text>
                 </svg></div>;
               };
               return finishedTours.length ? <>
-                <h4>Накопленные очки</h4>{graph(cumulative,"points")}
+                <h4>{analyticsGraphMode==="gap"?"Отставание от лидера":"Накопленные очки"}</h4>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+                  <button type="button" aria-pressed={analyticsGraphMode==="gap"} onClick={()=>setAnalyticsGraphMode("gap")}>Отставание от лидера</button>
+                  <button type="button" aria-pressed={analyticsGraphMode==="points"} onClick={()=>setAnalyticsGraphMode("points")}>Всего очков</button>
+                </div>
+                {graph(analyticsGraphMode==="gap"?gaps:cumulative,analyticsGraphMode)}
                 <h4>Место в рейтинге</h4>{graph(ranking,"rank")}
                 <div className="cutover-chart-legend">{users.map((u,i)=><span key={u.id}><i style={{background:palette[i%palette.length]}}/>{u.username}</span>)}</div>
                 <p>Место на графике определяется набранными очками. При равенстве очков участники временно упорядочены по имени — это не дополнительное правило определения победителя.</p>

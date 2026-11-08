@@ -7,6 +7,7 @@ on:
       - feature/admin-result-guard-20261102
       - feature/admin-create-stage-delegated-predictions-20261103
       - feature/participant-analytics-insights-20261107
+      - feature/analytics-cleanup-20261107
   workflow_dispatch:
 
 permissions:
