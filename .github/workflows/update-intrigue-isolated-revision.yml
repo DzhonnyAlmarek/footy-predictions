@@ -52,6 +52,7 @@ jobs:
         env:
           GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
           IMAGE_SHA: 3f773342b717bff1e19c75c9f30623dd12cdfda6
+          GITHUB_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           umask 077
