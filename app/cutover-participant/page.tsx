@@ -192,11 +192,9 @@ export default function CutoverParticipantPage() {
     try { tabActive = sessionStorage.getItem(CUTOVER_TAB_SESSION) === "1"; } catch {}
     const initialize = async () => {
       if (!tabActive) {
-        try {
-          await fetch("/api/cutover/logout", { method: "POST", cache: "no-store" });
-        } catch {
-          // Do not show protected content even if the network is unavailable.
-        }
+        // The session cookie is shared by all tabs. Do NOT revoke it here:
+        // opening a second tab must not log out an already active first tab.
+        // The new tab stays at the login form until explicitly authenticated.
         setSessionUsername("");
         setAuthenticated(false);
         setIsAdmin(false);
