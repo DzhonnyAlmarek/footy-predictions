@@ -1,0 +1,146 @@
+name: First isolated intrigue revision (REST, never production)
+on:
+  push:
+    branches: [feature/admin-result-guard-20261102]
+    paths: [.github/workflows/deploy-intrigue-first-revision.yml]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Preflight or deploy a single isolated revision"
+        type: choice
+        required: true
+        default: preflight
+        options: [preflight, deploy]
+      confirmation:
+        description: "For deploy: DEPLOY-ISOLATED-FIRST-REST"
+        type: string
+        required: false
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: footy-admin-isolated-revision
+  cancel-in-progress: false
+jobs:
+  isolated:
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && (github.event_name == 'push' || inputs.mode == 'preflight' || (inputs.mode == 'deploy' && inputs.confirmation == 'DEPLOY-ISOLATED-FIRST-REST')) }}
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 15
+    env:
+      YC_CLOUD_ID: b1ge8jgq7kh768aapao1
+      YC_FOLDER_ID: b1gtdrn5t149v0ckl6ql
+      OIDC_ACCOUNT: ajefphrico3hogta85jt
+      RUNTIME_ACCOUNT: ajekinma5dcn8agcht7a
+      CONTAINER_ID: bba2sadajpqn5knluf42
+      ISOLATED_SECRET_ID: e6q9useq2jbpu1lqo1qd
+      EXPECTED_HOST: ep-curly-wildflower-b1bo8av4.c-5.eu-central-1.aws.neon.tech
+      TEST_DATABASE_URL: ${{ secrets.FOOTY_ISOLATED_NEON_DATABASE_URL }}
+      IMAGE: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate:6b2ef4d3300d423e94b14809ef51f1960af50325
+    steps:
+      - name: Validate isolated database URL without printing credentials
+        run: |
+          set -euo pipefail
+          node -e 'const u=new URL(process.env.TEST_DATABASE_URL); if(!["postgres:","postgresql:"].includes(u.protocol)||u.hostname!==process.env.EXPECTED_HOST||u.pathname!=="/neondb"||!u.username||!u.password) throw Error("Isolated database connection mismatch"); console.log("Isolated Neon validated")'
+      - name: Obtain GitHub OIDC identity
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jwt = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(jwt);
+            core.setOutput('jwt', jwt);
+      - name: Exchange Yandex token
+        env:
+          OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/footy-isolated-iam.json' EXIT
+          code="$(curl -sS --max-time 30 -o /tmp/footy-isolated-iam.json -w '%{http_code}' -X POST https://auth.yandex.cloud/oauth/token --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' --data-urlencode "audience=$OIDC_ACCOUNT" --data-urlencode "subject_token=$OIDC_JWT" --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          test "$code" = 200
+          token="$(jq -er .access_token /tmp/footy-isolated-iam.json)"
+          echo "::add-mask::$token"
+          echo "YC_IAM_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Install and configure Yandex CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh -o /tmp/install-yc.sh
+          bash /tmp/install-yc.sh -i "$HOME/yandex-cloud" -n
+          echo "$HOME/yandex-cloud/bin" >> "$GITHUB_PATH"
+          "$HOME/yandex-cloud/bin/yc" config profile create default
+          "$HOME/yandex-cloud/bin/yc" config set cloud-id "$YC_CLOUD_ID"
+          "$HOME/yandex-cloud/bin/yc" config set folder-id "$YC_FOLDER_ID"
+      - name: Check fixed resources and protect live services
+        run: |
+          set -euo pipefail
+          test "$CONTAINER_ID" != bbaquq5i6l35i5kbiufb
+          yc serverless container get --id "$CONTAINER_ID" --format json | jq -e --arg id "$CONTAINER_ID" '.id==$id and .name=="footy-admin-guard-isolated-20261102"' >/dev/null
+          yc lockbox secret get --id "$ISOLATED_SECRET_ID" --format json | jq -e --arg id "$ISOLATED_SECRET_ID" '.id==$id and .name=="footy-admin-guard-isolated-neon-20261102"' >/dev/null
+          version_id="$(yc lockbox secret get --id "$ISOLATED_SECRET_ID" --format json | jq -er '.current_version.id')"
+          test "$version_id" = e6qps2c87aqiq5vjdm3g
+          echo "LOCKBOX_VERSION_ID=$version_id" >> "$GITHUB_ENV"
+          echo "Validated isolated container, secret, image tag and test database identity."
+      - name: Preflight finished without deployment
+        if: ${{ (github.event_name == 'push' && github.event.head_commit.message != 'isolated-intrigue-first-rest-once-20261108') || inputs.mode == 'preflight' }}
+        run: echo 'PRE-FLIGHT OK. No revision deployed, no access opened.'
+      - name: Deploy only isolated revision with test database
+        if: ${{ (github.event_name == 'push' && github.event.head_commit.message == 'isolated-intrigue-first-rest-once-20261108') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy' && inputs.confirmation == 'DEPLOY-ISOLATED-FIRST-REST') }}
+        run: |
+          set -euo pipefail
+          # No public invocation grant, no working/production database, no DNS changes.
+          # Result/admin writes intentionally off until test access and origin are reviewed.
+          umask 077
+          trap 'rm -f /tmp/first-revisions /tmp/first-request /tmp/first-operation' EXIT
+          test "$CONTAINER_ID" = bba2sadajpqn5knluf42
+          test "$LOCKBOX_VERSION_ID" = e6qps2c87aqiq5vjdm3g
+          API="https://serverless-containers.api.cloud.yandex.net/containers/v1"
+          status="$(curl -sS --max-time 30 -o /tmp/first-revisions -w '%{http_code}' \
+            -H "Authorization: Bearer $YC_IAM_TOKEN" "$API/revisions?containerId=$CONTAINER_ID&pageSize=100")"
+          test "$status" = 200
+          jq -e '((.revisions // [])|length)==0' /tmp/first-revisions >/dev/null || { echo "Isolated container no longer empty"; exit 1; }
+          jq -n --arg id "$CONTAINER_ID" --arg account "$RUNTIME_ACCOUNT" \
+            --arg image "$IMAGE" --arg secret "$ISOLATED_SECRET_ID" \
+            --arg version "$LOCKBOX_VERSION_ID" --arg host "$EXPECTED_HOST" \
+            --arg origin "https://$CONTAINER_ID.containers.yandexcloud.net" '{
+             containerId:$id,resources:{memory:"536870912",cores:"1",coreFraction:"100"},
+             executionTimeout:"30s",concurrency:"1",serviceAccountId:$account,
+             imageSpec:{imageUrl:$image,environment:{
+               NODE_ENV:"production",DEPLOY_TARGET:"yandex-neon-admin-isolated",
+               ENABLE_CUTOVER_PREVIEW:"true",ENABLE_CUTOVER_AUTH:"true",ENABLE_CUTOVER_LOGIN:"true",
+               ENABLE_CUTOVER_ADMIN_WRITES:"false",ENABLE_CUTOVER_RESULT_WRITES:"false",
+               ENABLE_CUTOVER_PREDICTION_WRITES:"false",CUTOVER_AUTH_ALLOWED_HOST:$host,
+               CUTOVER_AUTH_ORIGIN:$origin,CUTOVER_SHOW_TEST_MATCHES:"false"
+             }},
+             secrets:[
+               {id:$secret,versionId:$version,key:"CUTOVER_AUTH_DATABASE_URL",environmentVariable:"CUTOVER_AUTH_DATABASE_URL"},
+               {id:$secret,versionId:$version,key:"CUTOVER_RATE_PEPPER",environmentVariable:"CUTOVER_RATE_PEPPER"}
+             ]
+          }' > /tmp/first-request
+          jq -e '.containerId=="bba2sadajpqn5knluf42"
+            and .imageSpec.environment.ENABLE_CUTOVER_ADMIN_WRITES=="false"
+            and .imageSpec.environment.ENABLE_CUTOVER_RESULT_WRITES=="false"
+            and .imageSpec.environment.ENABLE_CUTOVER_PREDICTION_WRITES=="false"
+            and (.secrets|length)==2' /tmp/first-request >/dev/null
+          status="$(curl -sS --max-time 60 -o /tmp/first-operation -w '%{http_code}' \
+            -X POST "$API/revisions:deploy" -H "Authorization: Bearer $YC_IAM_TOKEN" \
+            -H 'Content-Type: application/json' --data-binary @/tmp/first-request)"
+          test "$status" = 200 || { echo "REST deploy rejected HTTP $status"; exit 1; }
+          jq -e '.id and (.error==null)' /tmp/first-operation >/dev/null || exit 1
+          echo "Isolated revision operation accepted."
+          found=0
+          for attempt in $(seq 1 24); do
+            sleep 5
+            status="$(curl -sS --max-time 30 -o /tmp/first-revisions -w '%{http_code}' \
+              -H "Authorization: Bearer $YC_IAM_TOKEN" "$API/revisions?containerId=$CONTAINER_ID&pageSize=100")"
+            test "$status" = 200 || exit 1
+            revision="$(jq -r --arg image "$IMAGE" \
+              '[.revisions[]? | select(.status=="ACTIVE" and .image.imageUrl==$image)] | if length==1 then .[0].id else empty end' /tmp/first-revisions)"
+            if [[ "$revision" =~ ^bba[a-z0-9]+$ ]]; then
+              echo "Confirmed ACTIVE isolated revision: $revision"
+              found=1
+              break
+            fi
+          done
+          test "$found" = 1 || { echo "No ACTIVE revision confirmed"; exit 1; }
+
