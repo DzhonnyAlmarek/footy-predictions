@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { getVerifiedLegacyLogin } from "@/lib/legacy-identity";
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -30,10 +30,8 @@ function service() {
 }
 
 async function readLogin() {
-  const cs = await cookies();
-  const rawLogin = cs.get("fp_login")?.value ?? "";
-  const fpLogin = decodeMaybe(rawLogin).trim().toUpperCase();
-  return { rawLogin, fpLogin };
+  const fpLogin = (await getVerifiedLegacyLogin()) ?? "";
+  return { rawLogin: "", fpLogin };
 }
 
 /* ===== GET: прогнозы текущего пользователя ===== */
