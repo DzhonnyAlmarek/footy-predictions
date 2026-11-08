@@ -39,7 +39,7 @@ jobs:
           test -f app/cutover-participant/admin-intrigue.tsx
           grep -Fq 'calculateIntriguePoints' app/cutover-participant/admin-intrigue.tsx
           docker build --platform linux/amd64 -f Dockerfile.cutover-production-candidate -t footy-intrigue:local .
-          test "$(docker image inspect footy-result:local --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
+          test "$(docker image inspect footy-intrigue:local --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
       - name: Request OIDC identity
         uses: actions/github-script@v7
         id: oidc
@@ -67,7 +67,7 @@ jobs:
           echo "::add-mask::$IAM_TOKEN"
           printf '%s' "$IAM_TOKEN" | docker login registry.yandexcloud.net --username iam --password-stdin
           IMAGE="$IMAGE_REPO:$VERIFIED_SHA"
-          docker tag footy-result:local "$IMAGE"
+          docker tag footy-intrigue:local "$IMAGE"
           docker push "$IMAGE"
           echo "Published pinned candidate image: $IMAGE"
           echo "No Yandex container revision was created or changed."
