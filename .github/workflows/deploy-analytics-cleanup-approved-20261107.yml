@@ -1,4 +1,4 @@
-name: Deploy Yandex browser-session-only login
+name: Deploy Yandex cross-tab session isolation fix
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: Validate explicitly authorized pinned release and target
         env:
-          IMAGE_SHA: 1ab21cadff03c5a347e67f2f47fb61d9f919cf54
+          IMAGE_SHA: 192ef71cf4dc3331dfdf5b2bd4e0aff66e39ac14
         run: |
           set -euo pipefail
           [[ "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Full Git SHA required"; exit 1; }
@@ -46,7 +46,7 @@ jobs:
       - name: Inspect active revision and prepare safe request
         env:
           GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
-          IMAGE_SHA: 1ab21cadff03c5a347e67f2f47fb61d9f919cf54
+          IMAGE_SHA: 192ef71cf4dc3331dfdf5b2bd4e0aff66e39ac14
         run: |
           set -euo pipefail
           umask 077
@@ -73,7 +73,7 @@ jobs:
           if [[ "false" == "true" ]]; then
             jq -e --arg expected "$REGISTRY_PREFIX:ff33c85739f5eac4678ef875da0c2f6f67d9f14d" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Image mismatch: cannot enable predictions"; exit 1; }
           fi
-          jq -e --arg expected "$REGISTRY_PREFIX:63e330ddf0f2618530c5815c898ec946d46d1c30" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Current image differs from preceding verified release; abort"; exit 1; }
+          jq -e --arg expected "$REGISTRY_PREFIX:1ab21cadff03c5a347e67f2f47fb61d9f919cf54" '.image.imageUrl==$expected' /tmp/footy-current.json >/dev/null || { echo "Current image differs from preceding verified release; abort"; exit 1; }
           # Never print revision JSON: it can contain sensitive environment variables.
           jq -e --arg id "$CONTAINER_ID" '
             .containerId==$id and .status=="ACTIVE"
