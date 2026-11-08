@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          trap 'rm -f /tmp/footy-iam.json /tmp/footy-current.json /tmp/footy-revisions.json /tmp/footy-deploy.json /tmp/footy-operation.json /tmp/footy-container.json' EXIT
+          trap 'rm -f /tmp/footy-iam.json /tmp/footy-current.json /tmp/footy-revisions.json /tmp/footy-deploy.json /tmp/footy-operation.json /tmp/footy-container.json /tmp/footy-lockbox-meta.json' EXIT
           code="$(curl -sS -o /tmp/footy-iam.json -w '%{http_code}' --max-time 30 \
             -X POST 'https://auth.yandex.cloud/oauth/token' \
             --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
@@ -79,5 +79,12 @@ jobs:
           echo "Isolated container GET status: $code"
           if [[ "$code" = 200 ]]; then
             jq -r '{id,name,folderId,description,createdAt,revisionCount:(.revisionCount // null)}' /tmp/footy-container.json
+          fi
+          code="$(curl -sS -o /tmp/footy-lockbox-meta.json -w '%{http_code}' --max-time 30 \
+            -H "Authorization: Bearer $IAM_TOKEN" \
+            "https://lockbox.api.cloud.yandex.net/lockbox/v1/secrets/$ISOLATED_SECRET_ID")"
+          echo "Isolated Lockbox metadata status: $code"
+          if [[ "$code" = 200 ]]; then
+            jq -r '{id,name,status,currentVersionId:(.currentVersion.id // null),currentVersionStatus:(.currentVersion.status // null),keys:(.currentVersion.payloadEntryKeys // [])}' /tmp/footy-lockbox-meta.json
           fi
           echo "No revision deployment attempted."
