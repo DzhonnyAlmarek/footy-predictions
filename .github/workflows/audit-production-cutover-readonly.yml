@@ -1,0 +1,98 @@
+name: Audit current Yandex production cutover state (read only)
+
+on:
+  push:
+    branches:
+      - feature/admin-result-guard-20261102
+    paths:
+      - .github/workflows/audit-production-cutover-readonly.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: footy-admin-isolated-revision
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 15
+    env:
+      CONTAINER_ID: bbaquq5i6l35i5kbiufb
+      SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+      REGISTRY_PREFIX: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
+      API_URL: https://serverless-containers.api.cloud.yandex.net/containers/v1
+      EXPECTED_HOST: ep-curly-wildflower-b1bo8av4.c-5.eu-central-1.aws.neon.tech
+      ISOLATED_SECRET_ID: e6q9useq2jbpu1lqo1qd
+      RUNTIME_ACCOUNT_ID: ajekinma5dcn8agcht7a
+    steps:
+      - name: Validate explicitly authorized pinned release and target
+        env:
+          IMAGE_SHA: 415b13fff368812e8a7995aabf91a343f09f180a
+          GITHUB_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Full Git SHA required"; exit 1; }
+          test "$CONTAINER_ID" = bbaquq5i6l35i5kbiufb
+          test "$CONTAINER_ID" != bbaquq5i6l35i5kbiufb
+          echo "Pinned isolated container: $CONTAINER_ID; image commit: $IMAGE_SHA"
+      - name: Obtain Yandex IAM token via existing GitHub OIDC federation
+        uses: actions/github-script@v7
+        id: oidc
+        with:
+          script: |
+            const jwt = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(jwt);
+            core.setOutput('jwt', jwt);
+      - name: Inspect active revision and prepare safe request
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+          IMAGE_SHA: 415b13fff368812e8a7995aabf91a343f09f180a
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/footy-iam.json /tmp/footy-current.json /tmp/footy-revisions.json /tmp/footy-deploy.json /tmp/footy-operation.json /tmp/footy-container.json /tmp/footy-lockbox-meta.json /tmp/footy-binding.json' EXIT
+          code="$(curl -sS -o /tmp/footy-iam.json -w '%{http_code}' --max-time 30 \
+            -X POST 'https://auth.yandex.cloud/oauth/token' \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${GITHUB_OIDC_JWT}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          [[ "$code" = 200 ]] || { echo "OIDC token exchange failed: HTTP $code"; exit 1; }
+          IAM_TOKEN="$(jq -er '.access_token' /tmp/footy-iam.json)"
+          echo "::add-mask::$IAM_TOKEN"
+          # Report only non-secret metadata and boolean feature gates.
+          status="$(curl -sS --max-time 30 -o /tmp/footy-revisions.json -w '%{http_code}' \
+            -H "Authorization: Bearer $IAM_TOKEN" "$API_URL/revisions?containerId=$CONTAINER_ID&pageSize=100")"
+          test "$status" = 200
+          active_id="$(jq -er --arg id "$CONTAINER_ID" '[.revisions[]?|select(.containerId==$id and .status=="ACTIVE")]|if length==1 then .[0].id else empty end' /tmp/footy-revisions.json)"
+          status="$(curl -sS --max-time 30 -o /tmp/footy-current.json -w '%{http_code}' \
+            -H "Authorization: Bearer $IAM_TOKEN" "$API_URL/revisions/$active_id")"
+          test "$status" = 200
+          jq -e --arg id "$CONTAINER_ID" '.containerId==$id and .status=="ACTIVE"' /tmp/footy-current.json >/dev/null
+          echo "Production revision: $active_id"
+          jq -r '{
+            image:(.image.imageUrl|split(":")|last),
+            deploy_target:.image.environment.DEPLOY_TARGET,
+            auth_enabled:.image.environment.ENABLE_CUTOVER_AUTH,
+            login_enabled:.image.environment.ENABLE_CUTOVER_LOGIN,
+            preview_enabled:.image.environment.ENABLE_CUTOVER_PREVIEW,
+            production_candidate:.image.environment.ENABLE_CUTOVER_PRODUCTION_CANDIDATE,
+            prediction_writes:.image.environment.ENABLE_CUTOVER_PREDICTION_WRITES,
+            admin_writes:.image.environment.ENABLE_CUTOVER_ADMIN_WRITES,
+            result_writes:.image.environment.ENABLE_CUTOVER_RESULT_WRITES,
+            auth_origin:.image.environment.CUTOVER_AUTH_ORIGIN,
+            secret_count:(.secrets|length),
+            runtime_service_account_present:(.serviceAccountId!=null)
+          }' /tmp/footy-current.json
+          echo "Unauthenticated domain status (no cookies, no credentials):"
+          for path in / /cutover-participant /api/cutover/session /api/cutover/save-prediction /api/cutover/admin; do
+            code="$(curl -sS -L --max-time 25 -o /dev/null -w '%{http_code}' "https://www.murashevclub.ru$path" || true)"
+            echo "$path HTTP $code"
+          done
+          echo "Read-only audit finished. No revision, DNS, rights, secrets, or DB changed."
