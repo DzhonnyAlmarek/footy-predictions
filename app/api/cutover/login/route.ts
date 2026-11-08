@@ -124,7 +124,7 @@ export async function POST(request: Request) {
     `;
     const response = NextResponse.json({ ok: true, must_change_password: rows[0].must_change_password === true }, { headers: CUTOVER_HEADERS });
     response.cookies.set(CUTOVER_COOKIE, token, {
-      httpOnly: true, secure: true, sameSite: "strict", path: "/", maxAge: 14400
+      httpOnly: true, secure: true, sameSite: "strict", path: "/"
     });
     return response;
   } catch {
