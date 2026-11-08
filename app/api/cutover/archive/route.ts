@@ -9,7 +9,15 @@ export async function GET(req:NextRequest){
   const identity=await authenticatedCutoverIdentity(req.cookies.get(CUTOVER_COOKIE)?.value);
   if(!identity) return NextResponse.json({ok:false},{status:401,headers:CUTOVER_HEADERS});
   const sql=neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
-  const stages=await sql`SELECT id::text,name FROM footy_cutover.stages WHERE status='locked' ORDER BY id DESC`;
+  const stages=await sql`SELECT s.id::text,s.name FROM footy_cutover.stages s
+    WHERE s.status='locked'
+       OR (s.is_current=false AND s.status='draft'
+         AND (SELECT count(*) FROM footy_cutover.matches m WHERE m.stage_id=s.id
+           AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id))=s.matches_required
+         AND NOT EXISTS(SELECT 1 FROM footy_cutover.matches m WHERE m.stage_id=s.id
+           AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
+           AND (m.status<>'finished' OR m.home_score IS NULL OR m.away_score IS NULL)))
+    ORDER BY s.id DESC`;
   const requested=req.nextUrl.searchParams.get("stageId");
   if(requested!==null && !/^[1-9]\d{0,14}$/.test(requested)) return NextResponse.json({ok:false},{status:400,headers:CUTOVER_HEADERS});
   const stage=stages.find(s=>String(s.id)===(requested??String(stages[0]?.id)))??null;
