@@ -6,6 +6,7 @@ import "./cutover.css";
 import PointsPopover from "@/app/_components/points-popover";
 import AnalyticsInsights from "./analytics-insights";
 import AdminTourControl from "./admin-tour-control";
+import AdminIntrigue from "./admin-intrigue";
 
 type Prediction = {
   match_id: string; kickoff_at: string | null; home_team: string | null;
@@ -649,6 +650,7 @@ export default function CutoverParticipantPage() {
           tours={adminData.tours}
           table={currentTable}
         />
+        <AdminIntrigue table={currentTable} matches={adminData.matches} tours={adminData.tours} />
         <h2>Календарь матчей</h2>
         <p style={{margin:"0 0 10px",opacity:.75}}>Показываются матчи выбранного этапа. Все даты и время — московские.</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end",marginBottom:12}}>
