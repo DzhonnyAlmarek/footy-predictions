@@ -16,10 +16,19 @@ export async function middleware(req: NextRequest) {
   if (!protectedRoute || pathname==="/api/admin/backup/cron") return NextResponse.next();
 
   const login=await verifyLegacySession(req.cookies.get(LEGACY_SESSION_COOKIE)?.value);
-  const cookieLogin=req.cookies.get("fp_login")?.value;
-  const storedLogin= cookieLogin ? (()=>{try{return decodeURIComponent(cookieLogin).trim().toUpperCase();}catch{return "";}})() : "";
-  if (login && login===storedLogin && (!pathname.startsWith("/admin") && !pathname.startsWith("/api/admin") || login==="ADMIN")) {
-    return NextResponse.next();
+  if (login && (!pathname.startsWith("/admin") && !pathname.startsWith("/api/admin") || login==="ADMIN")) {
+    // The signed cookie is the only trusted identity. Restore a canonical
+    // UTF-8 fp_login request cookie for legacy server components and APIs.
+    // Avoid comparing independent Cyrillic cookies that may be decoded
+    // differently by Edge middleware and the Node.js request runtime.
+    const headers=new Headers(req.headers);
+    const existing=(headers.get("cookie")??"")
+      .split(";")
+      .map(part=>part.trim())
+      .filter(part=>part && !part.startsWith("fp_login="));
+    existing.push("fp_login="+encodeURIComponent(login));
+    headers.set("cookie",existing.join("; "));
+    return NextResponse.next({request:{headers}});
   }
 
   if (pathname.startsWith("/api/")) {
