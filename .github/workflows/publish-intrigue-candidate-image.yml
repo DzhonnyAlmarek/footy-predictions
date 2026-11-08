@@ -19,7 +19,6 @@ jobs:
   publish:
     if: github.ref == 'refs/heads/feature/analytics-cleanup-20261107'
     runs-on: ubuntu-latest
-    environment: yandex-test
     timeout-minutes: 40
     env:
       IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
