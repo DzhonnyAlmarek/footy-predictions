@@ -198,6 +198,7 @@ export default function LoginWidget() {
         return;
       }
 
+      try { sessionStorage.setItem("fp_legacy_tab_authenticated_v1", "1"); } catch { setMsg("Для входа необходимо разрешить хранение данных вкладки."); return; }
       window.location.href = json?.redirect ?? "/dashboard";
     } catch (e: any) {
       setMsg(e?.name === "AbortError" ? "Таймаут входа. Проверь сеть/сервер." : "Ошибка входа");

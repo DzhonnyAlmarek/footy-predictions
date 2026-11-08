@@ -31,6 +31,8 @@ export async function GET(request: Request) {
 
   // Снимаем наш маркер доступа к внутренним страницам
   response.cookies.set("fp_auth", "", { maxAge: 0, path: "/" });
+  response.cookies.set("fp_login", "", { maxAge: 0, path: "/" });
+  response.cookies.set("fp_session", "", { maxAge: 0, path: "/" });
 
   // На всякий случай ещё раз чистим возможные supabase cookies
   for (const c of cookieStore.getAll()) {

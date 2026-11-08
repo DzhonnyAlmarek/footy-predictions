@@ -1,4 +1,5 @@
 import Link from "next/link";
+import TabSessionGate from "@/app/_components/TabSessionGate";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -40,7 +41,7 @@ export default async function AdminLayout({
   if (login !== "ADMIN") redirect("/dashboard");
 
   return (
-    <div className="page">
+    <TabSessionGate><div className="page">
       <div className="adminTopNav" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         {adminLinks.map((l) => (
           <Link key={l.href} href={l.href} className="pill">
@@ -54,6 +55,6 @@ export default async function AdminLayout({
       </div>
 
       <div style={{ marginTop: 16 }}>{children}</div>
-    </div>
+    </div></TabSessionGate>
   );
 }

@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 
 import AppHeader from "@/app/_components/AppHeader";
 import BottomBar from "@/app/_components/BottomBar";
+import TabSessionGate from "@/app/_components/TabSessionGate";
 import NewArenaCountdown from "@/app/(user)/dashboard/new-arena-countdown";
 
 function mustEnv(name: string): string {
@@ -58,7 +59,7 @@ const nav = [
 ];
 
   return (
-    <>
+    <TabSessionGate>
       <AppHeader
         title="Клуб им. А.Н. Мурашева"
         login={login}
@@ -70,6 +71,6 @@ const nav = [
  <div className="hasBottomBar pb-28 md:pb-6"><NewArenaCountdown />{children}</div>
 
       <BottomBar variant="user" />
-    </>
+    </TabSessionGate>
   );
 }
