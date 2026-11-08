@@ -52,7 +52,7 @@ jobs:
             sleep 2
           done
           test "$ready" = 1
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/api/cutover/current-table)" = 503
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/api/cutover/current-table)" = 404
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/api/cutover/admin)" = 404
       - name: Obtain GitHub OIDC token
         id: oidc
