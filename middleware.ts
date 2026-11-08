@@ -15,7 +15,22 @@ export async function middleware(req: NextRequest) {
   const protectedRoute = areas.some(area => pathname===area || pathname.startsWith(area+"/"));
   if (!protectedRoute || pathname==="/api/admin/backup/cron") return NextResponse.next();
 
-  const login=await verifyLegacySession(req.cookies.get(LEGACY_SESSION_COOKIE)?.value);
+  const rawSession=req.cookies.get(LEGACY_SESSION_COOKIE)?.value;
+  const login=await verifyLegacySession(rawSession);
+  if (!login) {
+    // Diagnostic metadata only. Never log cookie values, passwords, or tokens.
+    console.warn("legacy_auth_redirect", JSON.stringify({
+      path:pathname,
+      reason:!rawSession?"session_cookie_missing":"session_cookie_rejected",
+      sessionCookieLength:rawSession?.length??0,
+      legacyLoginPresent:Boolean(req.cookies.get("fp_login")?.value),
+      authMarkerPresent:Boolean(req.cookies.get("fp_auth")?.value),
+      refererPath:(()=>{
+        try { const u=new URL(req.headers.get("referer")??""); return u.origin===req.nextUrl.origin?u.pathname:"other"; }
+        catch { return "none"; }
+      })()
+    }));
+  }
   if (login && (!pathname.startsWith("/admin") && !pathname.startsWith("/api/admin") || login==="ADMIN")) {
     // The signed cookie is the only trusted identity. Restore a canonical
     // UTF-8 fp_login request cookie for legacy server components and APIs.
@@ -37,7 +52,10 @@ export async function middleware(req: NextRequest) {
   const url=req.nextUrl.clone();
   url.pathname="/";
   url.search="";
-  return NextResponse.redirect(url);
+  const response=NextResponse.redirect(url);
+  response.headers.set("Cache-Control","no-store");
+  response.headers.set("X-Footy-Auth-Reason",login?"admin_required":(!rawSession?"session_cookie_missing":"session_cookie_rejected"));
+  return response;
 }
 
 export const config = {
