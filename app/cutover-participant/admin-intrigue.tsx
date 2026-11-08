@@ -38,7 +38,11 @@ export function calculateIntriguePoints(predictions: { id: string; h: number; a:
 function rank(users: User[], totals: Map<string, number>): Standing[] {
   const ordered = users.map(u => ({ name:u.username, id:u.id, points:round(totals.get(u.id) ?? 0), place:0 }))
     .sort((a,b) => b.points-a.points || a.name.localeCompare(b.name,"ru"));
-  return ordered.map((u,i) => ({...u,place: i>0 && u.points===ordered[i-1].points ? ordered[i-1].place : i+1}));
+  let place = 0;
+  return ordered.map((u,i) => {
+    if (i===0 || u.points!==ordered[i-1].points) place=i+1;
+    return {...u,place};
+  });
 }
 
 export default function AdminIntrigue({ table, matches, tours }: {table:Table|null; matches:Match[]; tours:Tour[]}) {
