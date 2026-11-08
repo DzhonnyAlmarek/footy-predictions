@@ -58,11 +58,14 @@ export default function AdminIntrigue({ table, matches, tours }: {table:Table|nu
   const rows = table?.rows ?? [];
 
   const snapshot = useMemo(() => {
+    // Admin calendar excludes isolated test matches; the table endpoint may not.
+    // Keep the model confined to the matches visible in the real stage calendar.
+    const allowedMatches = new Set(matches.map(m=>m.id));
     const base = new Map(users.map(u => [u.id,0]));
     const byTour = new Map<string,Map<string,number>>();
     const predictions = new Map<string,{id:string;h:number;a:number}[]>();
     for (const row of rows) {
-      if (!row.user_id || !base.has(row.user_id)) continue;
+      if (!allowedMatches.has(row.match_id) || !row.user_id || !base.has(row.user_id)) continue;
       if (row.home_pred !== null && row.away_pred !== null) {
         const values = predictions.get(row.match_id) ?? [];
         values.push({id:row.user_id,h:Number(row.home_pred),a:Number(row.away_pred)});
@@ -79,7 +82,7 @@ export default function AdminIntrigue({ table, matches, tours }: {table:Table|nu
       }
     }
     return {base,byTour,predictions};
-  },[users,rows]);
+  },[users,rows,matches]);
 
   function project(scores: Record<string,Score>, tourId: string|null) {
     const stage=new Map(snapshot.base);
