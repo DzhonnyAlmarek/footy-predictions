@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { getVerifiedLegacyLogin } from "@/lib/legacy-identity";
 import { createClient } from "@/lib/supabase/server";
 import { stageStatusLabel } from "@/lib/user-labels";
 
@@ -25,9 +25,7 @@ function decodeMaybe(v: string): string {
 }
 
 export default async function GoldenBootPage() {
-  const cs = await cookies();
-  const raw = cs.get("fp_login")?.value ?? "";
-  const fpLogin = decodeMaybe(raw).trim();
+  const fpLogin = await getVerifiedLegacyLogin();
 
   // ✅ не кидаем на логин при клике из приложения
   if (!fpLogin) redirect("/dashboard");
