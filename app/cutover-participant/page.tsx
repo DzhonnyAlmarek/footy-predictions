@@ -14,6 +14,8 @@ type Prediction = {
   predictions_open?: boolean;
 };
 
+const CUTOVER_TAB_SESSION = "murashev_cutover_tab_session_v1";
+
 export default function CutoverParticipantPage() {
   const [activeTab, setActiveTab] = useState<"schedule" | "archive" | "analytics" | "golden-boot" | "ranking" | "golden-whistle" | "grand-prix" | "mine" | "admin">("mine");
   const [showAllMatches, setShowAllMatches] = useState(false);
@@ -184,7 +186,28 @@ export default function CutoverParticipantPage() {
     } catch { setMessage("Часть данных временно недоступна. Повтори загрузку страницы."); } })();
   }
   useEffect(() => {
-    void load().catch(() => setMessage("Сервис пока недоступен."));
+    // Cookies alone must never restore the participant cabinet in a freshly
+    // opened tab. sessionStorage normally expires on tab close and survives F5.
+    let tabActive = false;
+    try { tabActive = sessionStorage.getItem(CUTOVER_TAB_SESSION) === "1"; } catch {}
+    const initialize = async () => {
+      if (!tabActive) {
+        try {
+          await fetch("/api/cutover/logout", { method: "POST", cache: "no-store" });
+        } catch {
+          // Do not show protected content even if the network is unavailable.
+        }
+        setSessionUsername("");
+        setAuthenticated(false);
+        setIsAdmin(false);
+        setMustChangePassword(false);
+        setAdminData(null);
+        setMessage("");
+      } else {
+        await load().catch(() => setMessage("Сервис пока недоступен."));
+      }
+    };
+    void initialize();
     void fetch("/api/cutover/participants", { cache: "no-store" })
       .then(response => response.ok ? response.json() : { participants: [] })
       .then(data => setParticipants(Array.isArray(data.participants) ? data.participants : []))
@@ -234,6 +257,12 @@ export default function CutoverParticipantPage() {
       });
       setPassword("");
       if (!response.ok) { setMessage(response.status === 429 ? "Слишком много попыток входа. Подожди 15 минут, не повторяя попытки." : response.status === 401 ? "Неверный логин или пароль." : "Вход временно недоступен. Попробуй позже."); return; }
+      try { sessionStorage.setItem(CUTOVER_TAB_SESSION, "1"); }
+      catch {
+        await fetch("/api/cutover/logout", { method: "POST" }).catch(() => {});
+        setMessage("Для входа разреши хранение данных вкладки в браузере.");
+        return;
+      }
       await load();
     } catch { setMessage("Не удалось подключиться."); }
     finally { setBusy(false); }
@@ -517,6 +546,7 @@ export default function CutoverParticipantPage() {
   }
   async function logout() {
     setBusy(true);
+    try { sessionStorage.removeItem(CUTOVER_TAB_SESSION); } catch {}
     try {
       const response = await fetch("/api/cutover/logout", { method: "POST" });
       if (!response.ok) { setMessage("Не удалось завершить сессию."); return; }
