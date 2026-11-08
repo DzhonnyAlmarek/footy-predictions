@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createLegacySession, LEGACY_SESSION_COOKIE } from "@/lib/legacy-session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type LoginBody = {
@@ -74,18 +75,17 @@ export async function POST(req: Request) {
         ? "/admin"
         : "/dashboard";
 
-    const res = NextResponse.json({ ok: true, redirect: redirectTo });
+    const res = NextResponse.json({ ok: true, redirect: redirectTo }, { headers: { "Cache-Control": "no-store" } });
 
     // Supabase cookies (не обязательны для нашей логики)
     applyCookies(res);
 
-    // ✅ Долгоживущие cookies для нашей авторизации
+    // Session-only cookies: browser should not persist them for 30 days.
     const cookieBase = {
       path: "/",
       httpOnly: true,
       sameSite: "lax" as const,
       secure: true,                 // ✅ на Vercel всегда https
-      maxAge: 60 * 60 * 24 * 30,    // ✅ 30 дней
     };
 
     // Маркер входа (можно оставить, но дальше мы на него НЕ опираемся)
@@ -93,6 +93,7 @@ export async function POST(req: Request) {
 
     // ✅ Главная cookie: кто именно вошёл (её мы используем в middleware и API)
     res.cookies.set("fp_login", login, cookieBase);
+    res.cookies.set(LEGACY_SESSION_COOKIE, await createLegacySession(login), cookieBase);
 
     return res;
   } catch (e: any) {
