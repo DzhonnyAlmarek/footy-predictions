@@ -24,9 +24,21 @@ jobs:
           set -euo pipefail
           grep -Fq "body?.action === \"reschedule_match\"" app/api/cutover/admin/route.ts
           grep -Fq "m.deadline_at > now() AND m.kickoff_at > now()" app/api/cutover/admin/route.ts
-          if grep -Fq 'existing.stage_id=s.id' app/api/cutover/admin/route.ts; then
-            echo 'Invalid reschedule alias remains' >&2; exit 1
-          fi
+          node - <<'NODE'
+          const fs = require('fs');
+          const source = fs.readFileSync('app/api/cutover/admin/route.ts', 'utf8');
+          const start = source.indexOf('if (body?.action === "reschedule_match")');
+          const end = source.indexOf('if (body?.action === "rename_stage")', start);
+          if (start < 0 || end < 0) throw new Error('Cannot locate reschedule handler');
+          const handler = source.slice(start, end);
+          if (handler.includes('existing.stage_id=s.id') || handler.includes('s.matches_required')) {
+            throw new Error('Invalid reschedule stage alias or capacity check remains');
+          }
+          for (const guard of ["m.status='scheduled'", 'm.deadline_at > now()', 'm.kickoff_at > now()', 'footy_cutover.predictions', 'footy_cutover.points_ledger']) {
+            if (!handler.includes(guard)) throw new Error('Missing reschedule guard: ' + guard);
+          }
+          console.log('Reschedule query static guard checks passed');
+          NODE
       - name: Next.js build without production credentials
         run: npm run build
         env:
