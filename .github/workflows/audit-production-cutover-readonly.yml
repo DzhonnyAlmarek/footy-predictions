@@ -1,4 +1,5 @@
 name: Audit current Yandex production cutover state (read only)
+# Repeat read-only inspection for status-card release readiness 2026-11-09; no deployment.
 
 on:
   push:
