@@ -72,22 +72,62 @@ export default function CutoverParticipantPage() {
   const [selectedTour, setSelectedTour] = useState("all");
   const [pastWhistleWinner, setPastWhistleWinner] = useState<string|null>(null);
   useEffect(() => {
-    if (!authenticated || currentTable) return;
-    setTableLoading(true);
-    void fetch("/api/cutover/current-table", {cache:"no-store"})
-      .then(async res => { if (!res.ok) throw new Error("table"); return res.json(); })
-      .then(data => {
-        setCurrentTable(data); setSelectedTour("all");
+    if (!authenticated) {
+      setCurrentTable(null);
+      setPastWhistleWinner(null);
+      return;
+    }
+    let cancelled = false;
+    let inFlight = false;
+    async function refreshCurrentTable() {
+      if (cancelled || inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
+      setTableLoading(true);
+      try {
+        const res = await fetch("/api/cutover/current-table", { cache: "no-store" });
+        if (!res.ok) throw new Error("table");
+        const data = await res.json();
+        if (cancelled) return;
+        setCurrentTable(previous => {
+          if (previous?.stage?.id !== data?.stage?.id) setSelectedTour("all");
+          return data;
+        });
+        // The previous stage and its awards may have changed while this tab was open.
+        setPastWhistleWinner(null);
         if (data.previous_stage?.id) {
-          void fetch("/api/cutover/golden-whistle?stageId="+encodeURIComponent(data.previous_stage.id), {cache:"no-store"})
-            .then(async response => response.ok ? response.json() : null)
-            .then(result => setPastWhistleWinner(result?.penalty_matches > 0 && Number(result?.leaderboard?.[0]?.points) > 0 ? result.leaderboard[0].username : null))
-            .catch(() => setPastWhistleWinner(null));
+          const response = await fetch(
+            "/api/cutover/golden-whistle?stageId=" + encodeURIComponent(data.previous_stage.id),
+            { cache: "no-store" }
+          );
+          const result = response.ok ? await response.json() : null;
+          if (!cancelled) {
+            setPastWhistleWinner(
+              result?.penalty_matches > 0 && Number(result?.leaderboard?.[0]?.points) > 0
+                ? result.leaderboard[0].username
+                : null
+            );
+          }
         }
-      })
-      .catch(() => setCurrentTable(null))
-      .finally(() => setTableLoading(false));
-  }, [authenticated, currentTable]);
+      } catch {
+        // Preserve the last successfully loaded table during temporary network errors.
+      } finally {
+        inFlight = false;
+        if (!cancelled) setTableLoading(false);
+      }
+    }
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshCurrentTable();
+    };
+    const onFocus = () => { void refreshCurrentTable(); };
+    void refreshCurrentTable();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [authenticated]);
   const [message, setMessage] = useState("Проверяем сессию...");
   const [busy, setBusy] = useState(false);
   const [writesEnabled, setWritesEnabled] = useState(false);
