@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
       INSERT INTO footy_cutover.predictions (match_id, user_id, home_pred, away_pred)
       SELECT m.id, ${userId}::uuid, ${home}, ${away}
       FROM footy_cutover.matches m
+      JOIN footy_cutover.stages active_stage ON active_stage.id=m.stage_id AND active_stage.is_current=true AND active_stage.status='published'
       WHERE m.id = ${matchId}::bigint
         AND COALESCE(m.deadline_at, m.kickoff_at) > now()
         AND m.status = 'scheduled'
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
         SET home_pred = EXCLUDED.home_pred, away_pred = EXCLUDED.away_pred, updated_at = now()
       WHERE EXISTS (
         SELECT 1 FROM footy_cutover.matches m
+        JOIN footy_cutover.stages active_stage ON active_stage.id=m.stage_id AND active_stage.is_current=true AND active_stage.status='published'
         WHERE m.id = EXCLUDED.match_id
           AND COALESCE(m.deadline_at, m.kickoff_at) > now()
           AND m.status = 'scheduled'
