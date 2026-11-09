@@ -275,8 +275,6 @@ export async function POST(req: NextRequest) {
           AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
           AND ${deadline}::timestamptz > now()
           AND ${deadline}::timestamptz <= ${kickoff}::timestamptz
-          AND (SELECT COUNT(*) FROM footy_cutover.matches existing WHERE existing.stage_id=s.id)
-            < s.matches_required
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
           AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
         RETURNING m.id::text
