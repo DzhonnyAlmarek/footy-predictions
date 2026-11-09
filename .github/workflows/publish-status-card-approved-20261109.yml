@@ -67,7 +67,7 @@ jobs:
           echo "::add-mask::$IAM_TOKEN"
           printf '%s' "$IAM_TOKEN" | docker login registry.yandexcloud.net --username iam --password-stdin
           IMAGE="$IMAGE_REPO:$VERIFIED_SHA"
-          docker tag footy-intrigue:local "$IMAGE"
+          docker tag footy-status-card:local "$IMAGE"
           docker push "$IMAGE"
           echo "Published pinned status-card image: $IMAGE"
           echo "No Yandex container revision was created or changed."
