@@ -14,6 +14,26 @@ type Prediction = {
   predictions_open?: boolean;
 };
 
+// These 32 match kickoffs are week-start placeholders, not confirmed match times.
+// When an administrator sets an actual kickoff, the warning disappears automatically.
+const provisionalSpringTours: { firstId: number; lastId: number; kickoff: string }[] = [
+  { firstId: 458, lastId: 465, kickoff: "2027-02-26T09:00:00.000Z" },
+  { firstId: 466, lastId: 473, kickoff: "2027-03-05T09:00:00.000Z" },
+  { firstId: 474, lastId: 481, kickoff: "2027-03-12T09:00:00.000Z" },
+  { firstId: 482, lastId: 489, kickoff: "2027-03-19T09:00:00.000Z" }
+];
+
+function isProvisionalSpringKickoff(matchId: string, kickoff: string | null): boolean {
+  if (!kickoff) return false;
+  const numericId = Number(matchId);
+  const timestamp = Date.parse(kickoff);
+  if (!Number.isFinite(numericId) || !Number.isFinite(timestamp)) return false;
+  return provisionalSpringTours.some(tour =>
+    numericId >= tour.firstId && numericId <= tour.lastId
+    && timestamp === Date.parse(tour.kickoff)
+  );
+}
+
 const CUTOVER_TAB_SESSION = "murashev_cutover_tab_session_v1";
 
 export default function CutoverParticipantPage() {
@@ -720,7 +740,7 @@ export default function CutoverParticipantPage() {
           table={currentTable}
         />
         <h2>Календарь матчей</h2>
-        <p style={{margin:"0 0 10px",opacity:.75}}>Показываются матчи выбранного этапа. Все даты и время — московские.</p>
+        <p style={{margin:"0 0 10px",opacity:.75}}>Показываются матчи выбранного этапа. Все даты и время — московские. Для туров 18–21 весны 2027 года время 12:00 МСК предварительное и одновременно используется системой как дедлайн прогнозов. После утверждения расписания необходимо изменить время каждого матча.</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end",marginBottom:12}}>
           <label>Этап <select value={adminStageChoice} onChange={e=>{setAdminStageChoice(e.target.value);setAdminTourChoice("current");setDelegatedForm(prev=>({...prev,match_id:"",home_pred:"",away_pred:""}));}}>
             <option value="current">Текущий — {adminData.stages.find(s=>s.is_current)?.name ?? "не определён"}</option>
@@ -768,7 +788,7 @@ export default function CutoverParticipantPage() {
                   <td>
                     <strong>{m.home_team} — {m.away_team}</strong>
                     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:4}}>
-                      <small>{new Date(m.kickoff_at).toLocaleString("ru-RU", {timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})} МСК</small>
+                      <small>{new Date(m.kickoff_at).toLocaleString("ru-RU", {timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})} МСК{isProvisionalSpringKickoff(m.id, m.kickoff_at) && <strong style={{marginLeft:6}}>· Предварительно (время техническое)</strong>}</small>
                       {m.status==="scheduled" && adminWritesEnabled && new Date(m.deadline_at).getTime()>Date.now() &&
                         (rescheduleForm.match_id===m.id
                           ? <form onSubmit={rescheduleMatch} style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
@@ -1092,6 +1112,7 @@ export default function CutoverParticipantPage() {
       </section>}
       {activeTab === "schedule" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ИГРОВОЙ КАЛЕНДАРЬ</span><h2>Расписание матчей <em>{schedule.length}</em></h2></div><p>Каждый прогноз имеет значение</p></div>
       <p>{writesEnabled ? "Прогнозы можно менять до дедлайна." : "Сохранение новых прогнозов пока отключено."}</p>
+      <p>Для матчей туров 18–21 дата и время предварительные. Время 12:00 МСК — техническое, а не подтверждённое начало матча; пока оно также является сроком закрытия прогнозов. Точное расписание будет внесено после утверждения.</p>
       <div className="cutover-filters">
         <button type="button" aria-pressed={matchFilter === "upcoming"} onClick={() => { setMatchFilter("upcoming"); setShowAllMatches(false); }} className={matchFilter === "upcoming" ? "cutover-filter active" : "cutover-filter"}>Предстоящие</button>
         <button type="button" aria-pressed={matchFilter === "all"} onClick={() => { setMatchFilter("all"); setShowAllMatches(false); }} className={matchFilter === "all" ? "cutover-filter active" : "cutover-filter"}>Все матчи</button>
@@ -1100,7 +1121,7 @@ export default function CutoverParticipantPage() {
       <div className="tableWrap cutover-match-table"><table className="table">
         <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th>{writesEnabled && <th>Изменить прогноз</th>}</tr></thead>
         <tbody>{displayedSchedule.map(m => <tr key={m.match_id}>
-          <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}</td>
+          <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}{isProvisionalSpringKickoff(m.match_id, m.kickoff_at) && <small style={{display:"block",opacity:.75}}>Предварительно · 12:00 МСК (техническое)</small>}</td>
           <td><div className="cutover-match-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div></td>
           <td><span className={m.home_pred !== null && m.away_pred !== null ? "cutover-score has-prediction" : "cutover-score"}>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</span></td>
           <td><span className="cutover-score">{m.home_score ?? "—"} : {m.away_score ?? "—"}</span></td>
@@ -1118,7 +1139,7 @@ export default function CutoverParticipantPage() {
       </table></div>
       <div className="cutover-mobile-match-list" aria-label="Матчи — мобильный вид">
         {displayedSchedule.map(m => <article className="cutover-mobile-match" key={m.match_id}>
-          <div className="cutover-mobile-date">{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Дата не назначена"}</div>
+          <div className="cutover-mobile-date">{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Дата не назначена"}{isProvisionalSpringKickoff(m.match_id, m.kickoff_at) && <small style={{display:"block"}}>Предварительно · время техническое</small>}</div>
           <div className="cutover-mobile-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div>
           <div className="cutover-mobile-scoreline">
             <div><span>Мой прогноз</span><strong>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</strong></div>
