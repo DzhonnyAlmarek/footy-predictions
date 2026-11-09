@@ -39,7 +39,7 @@ jobs:
           grep -Fq 'refreshCurrentTable' app/cutover-participant/page.tsx
           grep -Fq 'visibilitychange' app/cutover-participant/page.tsx
           docker build --platform linux/amd64 -f Dockerfile.cutover-production-candidate -t footy-status-card:local .
-          test "$(docker image inspect footy-intrigue:local --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
+          test "$(docker image inspect footy-status-card:local --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
       - name: Request OIDC identity
         uses: actions/github-script@v7
         id: oidc
