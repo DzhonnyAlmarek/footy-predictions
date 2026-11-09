@@ -687,6 +687,12 @@ const timeline = (stageMatches ?? []).map((m: any, idx: number) => ({
             {stage.status ? <span> · {stageStatusLabel(stage.status)}</span> : null}
           </div>
 
+          <div style={{ marginTop: 12 }}>
+            <Link className="appNavLink" href="/analytics/teams" style={{ display: "inline-block", padding: "10px 14px" }}>
+              ⚽ Удачные и неудачные команды →
+            </Link>
+          </div>
+
           <details className="helpBox" style={{ marginTop: 10 }}>
             <summary className="helpSummary">Пояснения (что означает и как читать)</summary>
             <div className="helpBody">
