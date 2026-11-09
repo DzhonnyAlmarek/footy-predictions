@@ -96,7 +96,7 @@ jobs:
             echo "$path HTTP $code"
           done
           # Fail closed unless the live container is exactly the audited revision.
-          test "$active_id" = bba872qb0knvikjnbt1n
+          test "$active_id" = bbarolctf6aku6q0p8l4
           jq -e --arg expected "$REGISTRY_PREFIX:559341d8f737a1bc4704d61af9ebb2c55f82bfc2" '
             .image.imageUrl==$expected and .status=="ACTIVE"
             and .image.environment.DEPLOY_TARGET=="yandex-neon-production-candidate"
