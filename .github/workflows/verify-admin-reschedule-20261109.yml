@@ -1,0 +1,36 @@
+name: Verify admin reschedule query fix (build only)
+on:
+  push:
+    branches: [fix/admin-reschedule-query-20261109]
+    paths: [.github/workflows/verify-admin-reschedule-20261109.yml]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Verify reschedule SQL guards remain present
+        run: |
+          set -euo pipefail
+          grep -Fq "body?.action === \"reschedule_match\"" app/api/cutover/admin/route.ts
+          grep -Fq "m.deadline_at > now() AND m.kickoff_at > now()" app/api/cutover/admin/route.ts
+          if grep -Fq 'existing.stage_id=s.id' app/api/cutover/admin/route.ts; then
+            echo 'Invalid reschedule alias remains' >&2; exit 1
+          fi
+      - name: Next.js build without production credentials
+        run: npm run build
+        env:
+          DEPLOY_TARGET: yandex-neon-production-candidate
+          ENABLE_CUTOVER_PRODUCTION_CANDIDATE: "false"
+          NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-only-placeholder-not-a-real-key
