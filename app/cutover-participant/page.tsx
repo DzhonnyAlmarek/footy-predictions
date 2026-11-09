@@ -644,7 +644,7 @@ export default function CutoverParticipantPage() {
   const priorBootWinner = currentTable?.previous_boot?.[0];
   const priorBootIsWinner = priorBootWinner && Number(priorBootWinner.exact)>0 && currentTable?.previous_boot?.some(p=>p.user_id===priorBootWinner.user_id && currentTable.users.some(u=>u.id===p.user_id && u.username===sessionUsername));
   const previousTitle = isAdmin ? "" : [
-    previousRankIndex===0?"Победитель":previousRankIndex===1?"Серебряный призёр":previousRankIndex===2?"Бронзовый призёр":"",
+    previousRankIndex===0?"Действующий победитель":previousRankIndex===1?"Серебряный призёр":previousRankIndex===2?"Бронзовый призёр":"",
     priorBootIsWinner?"Обладатель Золотой бутсы":"",
     pastWhistleWinner===sessionUsername?"Обладатель Золотого свистка":""
   ].filter(Boolean).join(" · ");
