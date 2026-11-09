@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
              p.home_pred, p.away_pred,
              (m.status = 'scheduled' AND COALESCE(m.deadline_at, m.kickoff_at) > now()) AS predictions_open
       FROM footy_cutover.matches m
+      JOIN footy_cutover.stages active_stage ON active_stage.id=m.stage_id AND active_stage.is_current=true AND active_stage.status='published'
       LEFT JOIN footy_cutover.teams h ON h.id = m.home_team_id
       LEFT JOIN footy_cutover.teams a ON a.id = m.away_team_id
       LEFT JOIN footy_cutover.predictions p ON p.match_id = m.id AND p.user_id = ${userId}::uuid
