@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - feature/cutover-admin-readiness-20261020
-      - fix/cutover-fresh-previous-titles-20261109
   workflow_dispatch:
 
 permissions:
