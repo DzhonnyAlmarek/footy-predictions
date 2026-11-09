@@ -1,5 +1,5 @@
 name: Publish approved status-card fix image (no deployment)
-# Publish updated archive display and nonblocking participant login; registry only.
+# Registry only, production is not changed by this workflow.
 
 on:
   push:
@@ -7,13 +7,6 @@ on:
       - fix/yandex-status-refresh-20261109
     paths:
       - .github/workflows/publish-status-card-fix-20261109.yml
-  workflow_dispatch:
-    inputs:
-      confirmation:
-        description: 'Enter PUBLISH-CANDIDATE to upload the image only'
-        required: true
-        type: string
-
 
 concurrency:
   group: status-card-registry-publish
@@ -25,7 +18,6 @@ permissions:
 
 jobs:
   publish: 
-    if: ${{ github.ref == 'refs/heads/fix/yandex-status-refresh-20261109' && github.event_name == 'push' && github.event.head_commit.message == 'release: publish approved status-card image 20261109' }}
     runs-on: ubuntu-latest
     environment: yandex-test
     timeout-minutes: 35
