@@ -76,6 +76,8 @@ jobs:
           test "$status" = 200
           jq -e --arg id "$CONTAINER_ID" '.containerId==$id and .status=="ACTIVE"' /tmp/footy-current.json >/dev/null
           echo "Production revision: $active_id"
+          test "$active_id" = bba0a7lc0sj8ckvs5g0m || { echo "Active revision changed since approved release"; exit 1; }
+          jq -e --arg expected "$REGISTRY_PREFIX:d52dc30fc9f7c09013671bcc1730bf3747d0a9c9" '.image.imageUrl == $expected' /tmp/footy-current.json >/dev/null
           jq -r '{
             image:(.image.imageUrl|split(":")|last),
             deploy_target:.image.environment.DEPLOY_TARGET,
@@ -95,4 +97,22 @@ jobs:
             code="$(curl -sS -L --max-time 25 -o /dev/null -w '%{http_code}' "https://www.murashevclub.ru$path" || true)"
             echo "$path HTTP $code"
           done
-          echo "Read-only audit finished. No revision, DNS, rights, secrets, or DB changed."
+          echo "Participant and admin API guard checks (without session cookies):"
+          for path in /api/cutover/schedule /api/cutover/current-table; do
+            code="$(curl -sS --max-time 25 -o /dev/null -w '%{http_code}' "https://www.murashevclub.ru$path")"
+            test "$code" = 401
+            echo "$path GET HTTP $code"
+          done
+          code="$(curl -sS --max-time 25 -o /dev/null -w '%{http_code}' \
+            -X POST -H 'Origin: https://www.murashevclub.ru' -H 'Content-Type: application/json' \
+            -d '{"match_id":"458","home_pred":1,"away_pred":1}' \
+            'https://www.murashevclub.ru/api/cutover/save-prediction')"
+          test "$code" = 401
+          echo "/api/cutover/save-prediction POST HTTP $code (unauthenticated)"
+          code="$(curl -sS --max-time 25 -o /dev/null -w '%{http_code}' \
+            -X POST -H 'Origin: https://www.murashevclub.ru' -H 'Content-Type: application/json' \
+            -d '{"action":"create_stage","name":"UNAUTHENTICATED_CHECK_SHOULD_NOT_EXIST"}' \
+            'https://www.murashevclub.ru/api/cutover/admin')"
+          test "$code" = 403
+          echo "/api/cutover/admin POST HTTP $code (unauthenticated)"
+          echo "Read-only audit finished. No revisions, secrets, database records or rights changed."
