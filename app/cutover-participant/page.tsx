@@ -79,6 +79,7 @@ export default function CutoverParticipantPage() {
     }
     let cancelled = false;
     let inFlight = false;
+    let lastStageId: string | null = null;
     async function refreshCurrentTable() {
       if (cancelled || inFlight || document.visibilityState === "hidden") return;
       inFlight = true;
@@ -88,10 +89,11 @@ export default function CutoverParticipantPage() {
         if (!res.ok) throw new Error("table");
         const data = await res.json();
         if (cancelled) return;
-        setCurrentTable(previous => {
-          if (previous?.stage?.id !== data?.stage?.id) setSelectedTour("all");
-          return data;
-        });
+        if (lastStageId !== (data?.stage?.id ?? null)) {
+          lastStageId = data?.stage?.id ?? null;
+          setSelectedTour("all");
+        }
+        setCurrentTable(data);
         // The previous stage and its awards may have changed while this tab was open.
         setPastWhistleWinner(null);
         if (data.previous_stage?.id) {
