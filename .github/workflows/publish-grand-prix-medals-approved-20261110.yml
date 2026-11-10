@@ -1,0 +1,87 @@
+name: Publish Grand Prix medals and own-row highlight image to Yandex
+
+on:
+  push:
+    branches:
+      - feature/admin-result-guard-20261102
+    paths:
+      - .github/workflows/publish-grand-prix-medals-approved-20261110.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: footy-grand-prix-medals-registry-only
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 40
+    env:
+      VERIFIED_SHA: 4c58bdb952e244d849b7cc57b45a4f5c9c500842
+      IMAGE_REPO: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
+      SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+    steps:
+      - name: Check out exactly the Docker-tested source
+        uses: actions/checkout@v4
+        with:
+          ref: 4c58bdb952e244d849b7cc57b45a4f5c9c500842
+          persist-credentials: false
+      - name: Build pinned candidate (no live credentials)
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$VERIFIED_SHA"
+          grep -Fxq 'ENV DEPLOY_TARGET=yandex-neon-production-candidate' Dockerfile.cutover-production-candidate
+          grep -Fq 'NEXT_PUBLIC_SUPABASE_URL=https://isolated.invalid' Dockerfile.cutover-production-candidate
+          grep -Fq 'refreshCurrentTable' app/cutover-participant/page.tsx
+          grep -Fq 'visibilitychange' app/cutover-participant/page.tsx
+          grep -Fq 'isProvisionalSpringKickoff' app/cutover-participant/page.tsx
+          grep -Fq 'Действующий победитель' app/cutover-participant/page.tsx
+          grep -Fq '[...currentTable.tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no)).map(t=>{' app/cutover-participant/page.tsx
+          grep -Fq 'ORDER BY footy_cutover.stages.id DESC LIMIT 1' app/api/cutover/current-table/route.ts
+          grep -Fq 'className="cutover-status-awards"' app/cutover-participant/page.tsx
+          grep -Fq 'cutover-status-title' app/cutover-participant/cutover.css
+          grep -Fq 'activeTab !== "grand-prix"' app/cutover-participant/page.tsx
+          grep -Fq 'controller.abort()' app/cutover-participant/page.tsx
+          grep -Fq 'cutover-grand-prix-self-label' app/cutover-participant/page.tsx
+          grep -Fq 'cutover-grand-prix-me' app/cutover-participant/cutover.css
+          grep -Fq "WHERE status='locked' ORDER BY footy_cutover.stages.id DESC" app/api/cutover/archive/route.ts
+          if sed -n '/if (body?.action === "reschedule_match")/,/if (body?.action === "rename_stage")/p' app/api/cutover/admin/route.ts | grep -Fq 's.matches_required'; then echo 'Incorrect reschedule alias still present'; exit 1; fi
+          test "$(grep -Fc 'active_stage.is_current=true' app/api/cutover/save-prediction/route.ts)" -eq 2
+          grep -Fq 'active_stage.is_current=true' app/api/cutover/schedule/route.ts
+          docker build --platform linux/amd64 -f Dockerfile.cutover-production-candidate -t footy-grand-prix-medals:local .
+          test "$(docker image inspect footy-grand-prix-medals:local --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
+      - name: Request OIDC identity
+        uses: actions/github-script@v7
+        id: oidc
+        with:
+          script: |
+            const jwt = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(jwt);
+            core.setOutput('jwt', jwt);
+      - name: Authenticate and publish only to candidate registry
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/footy-registry-token.json; docker logout registry.yandexcloud.net >/dev/null 2>&1 || true' EXIT
+          code="$(curl -sS --max-time 30 -o /tmp/footy-registry-token.json -w '%{http_code}' \
+            -X POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${GITHUB_OIDC_JWT}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          test "$code" = 200
+          IAM_TOKEN="$(jq -er '.access_token' /tmp/footy-registry-token.json)"
+          echo "::add-mask::$IAM_TOKEN"
+          printf '%s' "$IAM_TOKEN" | docker login registry.yandexcloud.net --username iam --password-stdin
+          IMAGE="$IMAGE_REPO:$VERIFIED_SHA"
+          docker tag footy-grand-prix-medals:local "$IMAGE"
+          docker push "$IMAGE"
+          echo "Published pinned status-card image: $IMAGE"
+          echo "No Yandex container revision was created or changed."
