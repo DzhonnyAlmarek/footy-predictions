@@ -1,0 +1,74 @@
+name: Audit Yandex active database host (read only)
+on:
+  push:
+    branches:
+      - feature/admin-result-guard-20261102
+    paths:
+      - .github/workflows/audit-active-db-host-20261110.yml
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 10
+    steps:
+      - name: Request OIDC identity
+        uses: actions/github-script@v7
+        id: oidc
+        with:
+          script: |
+            const jwt = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(jwt);
+            core.setOutput('jwt', jwt);
+      - name: Confirm image and database binding (no values logged)
+        shell: bash
+        env:
+          OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/ft-token.json /tmp/ft-revisions.json /tmp/ft-revision.json' EXIT
+          code="$(curl -sS --max-time 30 -o /tmp/ft-token.json -w '%{http_code}' \
+            -X POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode 'audience=ajefphrico3hogta85jt' \
+            --data-urlencode "subject_token=${OIDC_JWT}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          test "$code" = 200
+          token="$(jq -er '.access_token' /tmp/ft-token.json)"
+          echo "::add-mask::$token"
+          api='https://serverless-containers.api.cloud.yandex.net/containers/v1'
+          code="$(curl -sS --max-time 25 -o /tmp/ft-revisions.json -w '%{http_code}' -H "Authorization: Bearer $token" "$api/revisions?containerId=bbaquq5i6l35i5kbiufb&pageSize=100")"
+          test "$code" = 200
+          rev="$(jq -er '[.revisions[]?|select(.containerId=="bbaquq5i6l35i5kbiufb" and .status=="ACTIVE")]|if length==1 then .[0].id else empty end' /tmp/ft-revisions.json)"
+          code="$(curl -sS --max-time 25 -o /tmp/ft-revision.json -w '%{http_code}' -H "Authorization: Bearer $token" "$api/revisions/$rev")"
+          test "$code" = 200
+          echo "ACTIVE_REVISION=$rev"
+          jq -r '{image_tag:(.image.imageUrl|split(":")|last), binding_refs:[.secrets[]?|{id:.id,versionId:.versionId,key:.key,environmentVariable:.environmentVariable}], nonsecret_db_env_keys:(.image.environment|keys|map(select(test("DATABASE|NEON|POSTGRES"))))}' /tmp/ft-revision.json
+          FT_TOKEN="$token" python3 - <<'PY'
+          import json,os,urllib.request,urllib.error,urllib.parse
+          cfg=json.load(open('/tmp/ft-revision.json'))
+          bindings=cfg.get('secrets',[])
+          for bind in bindings:
+              sid=bind.get('id')
+              if not sid:continue
+              address='https://payload.lockbox.api.cloud.yandex.net/lockbox/v1/secrets/'+urllib.parse.quote(sid,safe='')+'/payload'
+              try:
+                  req=urllib.request.Request(address,headers={'Authorization':'Bearer '+os.environ['FT_TOKEN']})
+                  with urllib.request.urlopen(req,timeout=10) as response:
+                      payload=json.load(response)
+                  for entry in payload.get('entries',[]):
+                      raw=entry.get('textValue','')
+                      if entry.get('key') != bind.get('key'):continue
+                      if raw.startswith(('postgresql://','postgres://')):
+                          print('DATABASE_HOST='+str(urllib.parse.urlsplit(raw).hostname))
+                      else:
+                          print('OTHER_SECRET_BINDING',str(bind.get('environmentVariable')))
+              except urllib.error.HTTPError as e:
+                  print('LOCKBOX_READ_HTTP='+str(e.code))
+              except Exception as e:
+                  print('LOCKBOX_READ_UNAVAILABLE='+type(e).__name__)
+          PY
