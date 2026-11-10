@@ -1134,8 +1134,11 @@ export default function CutoverParticipantPage() {
           <h3>{season.name}</h3>
           <div className="tableWrap"><table className="table" style={{ minWidth: 450 }}>
             <thead><tr><th>Участник</th><th>Очки</th><th>Этапов с очками</th></tr></thead>
-            <tbody>{grandPrix.ratings.filter(p => p.season_id === season.id).map(p =>
-              <tr key={p.username}><td>{p.username}</td><td>{p.points}</td><td>{p.scored_rounds}</td></tr>)}</tbody>
+            <tbody>{grandPrix.ratings.filter(p => p.season_id === season.id).map((p, index) =>
+              <tr key={p.username} className={p.username === sessionUsername ? "cutover-grand-prix-me" : undefined}>
+                <td>{index === 0 ? "🥇 " : index === 1 ? "🥈 " : index === 2 ? "🥉 " : ""}{p.username}{p.username === sessionUsername && <span className="cutover-grand-prix-self-label"> · ты</span>}</td>
+                <td>{p.points}</td><td>{p.scored_rounds}</td>
+              </tr>)}</tbody>
           </table></div>
         </div>)}
       </section>}
