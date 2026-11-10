@@ -478,3 +478,15 @@ img.cutover-club-ball-photo::before,img.cutover-club-ball-photo::after{content:n
 @media(min-width:761px) and (max-width:970px) {
   .cutover-club-banner .cutover-club-founded { font-size:12px; padding-left:10px; }
 }
+
+
+/* Compact, readable previous-stage honours. Scoped to the participant status card only. */
+.cutover-overview .cutover-stat-accent{gap:4px;padding:13px 16px;min-height:106px}
+.cutover-overview .cutover-stat-accent .cutover-status-title{font-size:22px;line-height:1.14;letter-spacing:-.035em;margin-top:1px;overflow-wrap:normal}
+.cutover-overview .cutover-stat-accent .cutover-status-awards{display:block;font-size:15px;line-height:1.25;font-weight:700;letter-spacing:0;color:#14735e}
+.cutover-overview .cutover-stat-accent small{margin-top:3px;line-height:1.2}
+@media(max-width:620px){
+  .cutover-overview .cutover-stat-accent{padding:12px;gap:4px}
+  .cutover-overview .cutover-stat-accent .cutover-status-title{font-size:19px;line-height:1.16}
+  .cutover-overview .cutover-stat-accent .cutover-status-awards{font-size:13px;line-height:1.25}
+}
