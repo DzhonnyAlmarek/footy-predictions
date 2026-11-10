@@ -1,0 +1,42 @@
+name: Verify compact status and ascending current-table tours (build only)
+on:
+  push:
+    branches: [fix/compact-status-ranking-tours-20261110]
+    paths: [.github/workflows/verify-compact-status-ranking-20261110.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Check targeted order and status markup
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const page=fs.readFileSync('app/cutover-participant/page.tsx','utf8');
+          const css=fs.readFileSync('app/cutover-participant/cutover.css','utf8');
+          const ranking=page.slice(page.indexOf('cutover-content cutover-rankings'),page.indexOf('cutover-content cutover-my-predictions'));
+          const asc='[...currentTable.tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no)||Number(a.id)-Number(b.id))';
+          if(ranking.split(asc).length-1!==2)throw Error('Current Table selector and sections must both sort ascending');
+          if(ranking.includes('[...currentTable.tours].sort((a,b)=>Number(b.tour_no)'))throw Error('Descending Current Table sort remains');
+          if(!page.includes('[...currentTable.tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no)).map(t=>{'))throw Error('My Predictions order changed');
+          if(!page.includes('className="cutover-status-awards"')||!css.includes('.cutover-overview .cutover-stat-accent .cutover-status-title'))throw Error('Compact status missing');
+          console.log('Both tour views ascending, awards split, style scoped to status');
+          NODE
+      - name: Build without production credentials
+        run: npm run build
+        env:
+          DEPLOY_TARGET: yandex-neon-production-candidate
+          ENABLE_CUTOVER_PRODUCTION_CANDIDATE: "false"
+          NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-placeholder
