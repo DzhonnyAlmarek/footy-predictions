@@ -1287,7 +1287,7 @@ export default function CutoverParticipantPage() {
       {activeTab === "mine" && !isAdmin && <section className="cutover-content cutover-my-predictions">
         <div className="cutover-section-heading"><div><span>ТЕКУЩИЙ ЭТАП — {currentTable?.stage?.name ?? "Загрузка…"}</span><h2>Мои прогнозы</h2></div><p>Матчи и твои прогнозы по турам текущего этапа</p></div>
         {!currentTable?.stage ? <p>Загружаем матчи текущего этапа…</p> :
-          [...currentTable.tours].sort((a,b)=>Number(b.tour_no)-Number(a.tour_no)).map(t=>{
+          [...currentTable.tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no)).map(t=>{
             const unique=new Map<string,(typeof currentTable.rows)[number]>();
             for(const row of currentTable.rows.filter(row=>row.tour_id===t.id)) if(!unique.has(row.match_id)) unique.set(row.match_id,row);
             return <div className="cutover-current-tour" key={t.id}>

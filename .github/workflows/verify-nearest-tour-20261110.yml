@@ -1,0 +1,39 @@
+name: Verify nearest tour first (build only)
+on:
+  push:
+    branches: [fix/my-predictions-nearest-tour-first-20261110]
+    paths: [.github/workflows/verify-nearest-tour-20261110.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Verify My Predictions tour order
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');const c=fs.readFileSync('app/cutover-participant/page.tsx','utf8');
+          const start=c.indexOf('cutover-content cutover-my-predictions');
+          if(start<0)throw Error('No My Predictions block');
+          const mine=c.slice(start);
+          if(!mine.includes('[...currentTable.tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no)).map(t=>{'))throw Error('My Predictions not in ascending order');
+          if(!c.includes('[...currentTable.tours].sort((a,b)=>Number(b.tour_no)-Number(a.tour_no)||Number(b.id)-Number(a.id))'))throw Error('Current Table order changed');
+          console.log('My Predictions 15 -> 21, Current Table unchanged');
+          NODE
+      - name: Build without production secrets
+        run: npm run build
+        env:
+          DEPLOY_TARGET: yandex-neon-production-candidate
+          ENABLE_CUTOVER_PRODUCTION_CANDIDATE: "false"
+          NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-placeholder
