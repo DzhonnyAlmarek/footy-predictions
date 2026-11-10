@@ -1,0 +1,39 @@
+name: Verify numeric previous-stage ordering (build only)
+on:
+  push:
+    branches: [fix/numeric-stage-order-status-archive-20261110]
+    paths: [.github/workflows/verify-stage-order-20261110.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Verify numeric ordering in previous stage and archive queries
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const current=fs.readFileSync('app/api/cutover/current-table/route.ts','utf8');
+          const archive=fs.readFileSync('app/api/cutover/archive/route.ts','utf8');
+          if(!current.includes('ORDER BY footy_cutover.stages.id DESC LIMIT 1'))throw Error('Previous stage query is not numeric');
+          if(!archive.includes("WHERE status='locked' ORDER BY footy_cutover.stages.id DESC"))throw Error('Archive stage list is not numeric');
+          if(!archive.includes("footy_cutover.tours.id DESC"))throw Error('Tour ID tie-break is not numeric');
+          console.log('Numeric previous-stage and archive sorting verified');
+          NODE
+      - name: Build Next.js without production credentials
+        run: npm run build
+        env:
+          DEPLOY_TARGET: yandex-neon-production-candidate
+          ENABLE_CUTOVER_PRODUCTION_CANDIDATE: 'false'
+          NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-placeholder
