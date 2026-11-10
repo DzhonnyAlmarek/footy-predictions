@@ -1,0 +1,44 @@
+name: Audit active Lockbox secret metadata only
+on:
+  push:
+    branches: [feature/admin-result-guard-20261102]
+    paths: [.github/workflows/audit-lockbox-metadata-20261110.yml]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 8
+    steps:
+      - uses: actions/github-script@v7
+        id: oidc
+        with:
+          script: |
+            const jwt=await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(jwt); core.setOutput('jwt',jwt);
+      - name: Read ONLY secret metadata (no payload)
+        env:
+          JWT: ${{ steps.oidc.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/f-token.json /tmp/f-meta.json' EXIT
+          code="$(curl -sS --max-time 25 -o /tmp/f-token.json -w '%{http_code}' \
+            -X POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode 'audience=ajefphrico3hogta85jt' \
+            --data-urlencode "subject_token=${JWT}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          test "$code" = 200
+          token="$(jq -er '.access_token' /tmp/f-token.json)"
+          echo "::add-mask::$token"
+          for secret in e6qht354a446srlm5ge9 e6q9useq2jbpu1lqo1qd; do
+            code="$(curl -sS --max-time 20 -o /tmp/f-meta.json -w '%{http_code}' -H "Authorization: Bearer $token" "https://lockbox.api.cloud.yandex.net/lockbox/v1/secrets/$secret")"
+            echo "SECRET=$secret METADATA_HTTP=$code"
+            if [[ "$code" = 200 ]]; then
+              jq -r '{id,name,description,folderId,createdAt,currentVersion:{id:.currentVersion.id,status:.currentVersion.status}}' /tmp/f-meta.json
+            fi
+          done
