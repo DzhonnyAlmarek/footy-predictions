@@ -1,0 +1,33 @@
+name: Identify Neon connection hosts without credentials (read only)
+on:
+  push:
+    branches: [feature/admin-result-guard-20261102]
+    paths: [.github/workflows/audit-github-neon-hosts-20261110.yml]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 5
+    env:
+      FOOTY_CANDIDATE_NEON_DATABASE_URL: ${{ secrets.FOOTY_CANDIDATE_NEON_DATABASE_URL }}
+      FOOTY_TEST_NEON_DATABASE_URL: ${{ secrets.FOOTY_TEST_NEON_DATABASE_URL }}
+      CUTOVER_AUTH_DATABASE_URL: ${{ secrets.CUTOVER_AUTH_DATABASE_URL }}
+    steps:
+      - name: Check host and database role metadata only
+        shell: bash
+        run: |
+          node <<'NODE'
+          const names=['FOOTY_CANDIDATE_NEON_DATABASE_URL','FOOTY_TEST_NEON_DATABASE_URL','CUTOVER_AUTH_DATABASE_URL'];
+          const knownHosts=['ep-divine-rain-b1d1r892','ep-curly-wildflower-b1bo8av4','ep-holy-smoke-b1y4pzhn','ep-icy-union-b1h1p4zn','ep-orange-brook-b11tfen5','ep-square-lake-b1mex6z8','ep-bold-feather-b1hd3w9m'];
+          for(const name of names){
+            const raw=process.env[name]||'';
+            if(!raw){console.log(name+': not configured');continue}
+            try {
+              const u=new URL(raw);
+              const match=knownHosts.find(host=>u.hostname.startsWith(host+'.') || u.hostname.startsWith(host+'-pooler.'));
+              console.log(name+': host='+ (match||'other host')+', database='+ (u.pathname==='/neondb'?'neondb':'other'));
+            }catch{console.log(name+': invalid format')}
+          }
+          NODE
