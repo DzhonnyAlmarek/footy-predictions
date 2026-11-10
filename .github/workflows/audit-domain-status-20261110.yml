@@ -1,0 +1,24 @@
+name: Audit public domain routing and status cache (read only)
+on:
+  push:
+    branches: [audit/domain-and-status-routing-20261110]
+    paths: [.github/workflows/audit-domain-status-20261110.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Public DNS, response headers, auth guard, no credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DNS A records for the public club website:"
+          getent ahostsv4 www.murashevclub.ru | awk '{print $1}' | sort -u
+          for path in / /cutover-participant /api/cutover/session /api/cutover/current-table; do
+            echo "PATH=$path"
+            curl -sS -L --max-time 25 --output /dev/null --dump-header /tmp/footy-headers.txt "https://www.murashevclub.ru$path"
+            awk 'BEGIN {IGNORECASE=1} /^HTTP\/|^server:|^x-vercel-id:|^via:|^cache-control:|^x-powered-by:|^x-yc-/{print}' /tmp/footy-headers.txt
+          done
+          rm -f /tmp/footy-headers.txt
