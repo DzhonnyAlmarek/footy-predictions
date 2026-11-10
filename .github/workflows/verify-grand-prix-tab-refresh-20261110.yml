@@ -1,0 +1,42 @@
+name: Verify Grand Prix tab refresh (build only)
+on:
+  push:
+    branches: [fix/grand-prix-refresh-on-tab-20261110]
+    paths: [.github/workflows/verify-grand-prix-tab-refresh-20261110.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Check Grand Prix reload and cancellation
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const text=fs.readFileSync('app/cutover-participant/page.tsx','utf8');
+          const start=text.indexOf('// Refresh the season ranking whenever its tab opens');
+          const end=text.indexOf('  const [whistle,',start);
+          if(start<0||end<0)throw Error('Grand Prix refresh effect not found');
+          const part=text.slice(start,end);
+          for(const term of ['activeTab !== "grand-prix"','cache: "no-store"','controller.abort()','setGrandPrixUnavailable(false)','setGrandPrixLoading(false)']){
+            if(!part.includes(term))throw Error('Grand Prix refresh guard missing: '+term);
+          }
+          console.log('Grand Prix tab fetch / cancellation checks passed');
+          NODE
+      - name: Build without Production credentials
+        run: npm run build
+        env:
+          DEPLOY_TARGET: yandex-neon-production-candidate
+          ENABLE_CUTOVER_PRODUCTION_CANDIDATE: "false"
+          NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
