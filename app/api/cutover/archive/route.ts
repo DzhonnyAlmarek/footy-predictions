@@ -9,14 +9,14 @@ export async function GET(req:NextRequest){
   const identity=await authenticatedCutoverIdentity(req.cookies.get(CUTOVER_COOKIE)?.value);
   if(!identity) return NextResponse.json({ok:false},{status:401,headers:CUTOVER_HEADERS});
   const sql=neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
-  const stages=await sql`SELECT id::text,name FROM footy_cutover.stages WHERE status='locked' ORDER BY id DESC`;
+  const stages=await sql`SELECT id::text,name FROM footy_cutover.stages WHERE status='locked' ORDER BY footy_cutover.stages.id DESC`;
   const requested=req.nextUrl.searchParams.get("stageId");
   if(requested!==null && !/^[1-9]\d{0,14}$/.test(requested)) return NextResponse.json({ok:false},{status:400,headers:CUTOVER_HEADERS});
   const stage=stages.find(s=>String(s.id)===(requested??String(stages[0]?.id)))??null;
   if(!stage) return NextResponse.json({ok:true,stages,stage:null,tours:[],users:[],rows:[]},{headers:CUTOVER_HEADERS});
   const id=String(stage.id);
   const [tours,users,rows]=await Promise.all([
-   sql`SELECT id::text,name,COALESCE(substring(tour_no from '[0-9]+')::integer,0) AS tour_no FROM footy_cutover.tours WHERE stage_id=${id}::bigint ORDER BY COALESCE(substring(tour_no from '[0-9]+')::integer,0) DESC, id DESC`,
+   sql`SELECT id::text,name,COALESCE(substring(tour_no from '[0-9]+')::integer,0) AS tour_no FROM footy_cutover.tours WHERE stage_id=${id}::bigint ORDER BY COALESCE(substring(tour_no from '[0-9]+')::integer,0) DESC, footy_cutover.tours.id DESC`,
    sql`SELECT id::text,username FROM footy_cutover.profiles WHERE username IS NOT NULL AND UPPER(username)<>'ADMIN' AND LOWER(COALESCE(role,''))<>'admin' ORDER BY username`,
    sql`SELECT m.id::text match_id,m.tour_id::text,m.stage_match_no,m.home_score,m.away_score,
    h.name home_team,a.name away_team,p.user_id::text,p.home_pred,p.away_pred,l.points

@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     const previous = await sql`
       SELECT id::text, name FROM footy_cutover.stages
       WHERE status='locked' AND id < ${stageId}::bigint
-      ORDER BY id DESC LIMIT 1
+      ORDER BY footy_cutover.stages.id DESC LIMIT 1
     `;
     const prevId = previous[0]?.id ? String(previous[0].id) : null;
     const previousTotals = prevId ? await sql`
