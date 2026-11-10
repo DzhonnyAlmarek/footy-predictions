@@ -1,0 +1,174 @@
+name: Release nearest-tour-first fix to Yandex
+# Approved release: change only the image; preserve live settings, secrets and database.
+
+on:
+  push:
+    branches:
+      - feature/admin-result-guard-20261102
+    paths:
+      - .github/workflows/release-nearest-tour-approved-20261110.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: footy-nearest-tour-production-release
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.ref == 'refs/heads/feature/admin-result-guard-20261102' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 15
+    env:
+      CONTAINER_ID: bbaquq5i6l35i5kbiufb
+      SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+      REGISTRY_PREFIX: registry.yandexcloud.net/crpocq57tud830bhe7ck/footy-cutover-candidate
+      API_URL: https://serverless-containers.api.cloud.yandex.net/containers/v1
+      EXPECTED_HOST: ep-curly-wildflower-b1bo8av4.c-5.eu-central-1.aws.neon.tech
+      ISOLATED_SECRET_ID: e6q9useq2jbpu1lqo1qd
+      RUNTIME_ACCOUNT_ID: ajekinma5dcn8agcht7a
+    steps:
+      - name: Validate explicitly authorized pinned release and target
+        env:
+          IMAGE_SHA: c6eb9541cfb178fb9a2d939225f4acdfdad24e61
+          GITHUB_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Full Git SHA required"; exit 1; }
+          test "$CONTAINER_ID" = bbaquq5i6l35i5kbiufb
+          echo "Pinned production container for read-only inspection: $CONTAINER_ID"
+      - name: Obtain Yandex IAM token via existing GitHub OIDC federation
+        uses: actions/github-script@v7
+        id: oidc
+        with:
+          script: |
+            const jwt = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(jwt);
+            core.setOutput('jwt', jwt);
+      - name: Verify live revision and deploy pinned image preserving configuration
+        env:
+          GITHUB_OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+          IMAGE_SHA: c6eb9541cfb178fb9a2d939225f4acdfdad24e61
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/footy-iam.json /tmp/footy-current.json /tmp/footy-revisions.json /tmp/footy-deploy.json /tmp/footy-operation.json /tmp/footy-container.json /tmp/footy-lockbox-meta.json /tmp/footy-binding.json' EXIT
+          code="$(curl -sS -o /tmp/footy-iam.json -w '%{http_code}' --max-time 30 \
+            -X POST 'https://auth.yandex.cloud/oauth/token' \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${GITHUB_OIDC_JWT}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          [[ "$code" = 200 ]] || { echo "OIDC token exchange failed: HTTP $code"; exit 1; }
+          IAM_TOKEN="$(jq -er '.access_token' /tmp/footy-iam.json)"
+          echo "::add-mask::$IAM_TOKEN"
+          # Report only non-secret metadata and boolean feature gates.
+          status="$(curl -sS --max-time 30 -o /tmp/footy-revisions.json -w '%{http_code}' \
+            -H "Authorization: Bearer $IAM_TOKEN" "$API_URL/revisions?containerId=$CONTAINER_ID&pageSize=100")"
+          test "$status" = 200
+          active_id="$(jq -er --arg id "$CONTAINER_ID" '[.revisions[]?|select(.containerId==$id and .status=="ACTIVE")]|if length==1 then .[0].id else empty end' /tmp/footy-revisions.json)"
+          status="$(curl -sS --max-time 30 -o /tmp/footy-current.json -w '%{http_code}' \
+            -H "Authorization: Bearer $IAM_TOKEN" "$API_URL/revisions/$active_id")"
+          test "$status" = 200
+          jq -e --arg id "$CONTAINER_ID" '.containerId==$id and .status=="ACTIVE"' /tmp/footy-current.json >/dev/null
+          echo "Production revision: $active_id"
+          jq -r '{
+            image:(.image.imageUrl|split(":")|last),
+            deploy_target:.image.environment.DEPLOY_TARGET,
+            auth_enabled:.image.environment.ENABLE_CUTOVER_AUTH,
+            login_enabled:.image.environment.ENABLE_CUTOVER_LOGIN,
+            preview_enabled:.image.environment.ENABLE_CUTOVER_PREVIEW,
+            production_candidate:.image.environment.ENABLE_CUTOVER_PRODUCTION_CANDIDATE,
+            prediction_writes:.image.environment.ENABLE_CUTOVER_PREDICTION_WRITES,
+            admin_writes:.image.environment.ENABLE_CUTOVER_ADMIN_WRITES,
+            result_writes:.image.environment.ENABLE_CUTOVER_RESULT_WRITES,
+            auth_origin:.image.environment.CUTOVER_AUTH_ORIGIN,
+            secret_count:(.secrets|length),
+            runtime_service_account_present:(.serviceAccountId!=null)
+          }' /tmp/footy-current.json
+          echo "Unauthenticated domain status (no cookies, no credentials):"
+          for path in / /cutover-participant /api/cutover/session /api/cutover/save-prediction /api/cutover/admin; do
+            code="$(curl -sS -L --max-time 25 -o /dev/null -w '%{http_code}' "https://www.murashevclub.ru$path" || true)"
+            echo "$path HTTP $code"
+          done
+          # Fail closed unless the live container is exactly the audited revision.
+          test "$active_id" = bba1bc25qdi5p3a3nttd
+          jq -e --arg expected "$REGISTRY_PREFIX:ac6e669e7a1aff49f1b1971b9a55d31b3a305dfb" '
+            .image.imageUrl==$expected and .status=="ACTIVE"
+            and .image.environment.DEPLOY_TARGET=="yandex-neon-production-candidate"
+            and .image.environment.ENABLE_CUTOVER_AUTH=="true"
+            and .image.environment.ENABLE_CUTOVER_LOGIN=="true"
+            and .image.environment.ENABLE_CUTOVER_PREDICTION_WRITES=="true"
+            and .image.environment.ENABLE_CUTOVER_ADMIN_WRITES=="true"
+            and .image.environment.ENABLE_CUTOVER_RESULT_WRITES=="true"
+            and (.secrets|length)==2
+            and .serviceAccountId!=null
+            and .resources.memory!=null and .resources.cores!=null
+            and ((.connectivity//{})=={})
+            and ((.storageMounts//[])==[])
+            and ((.mounts//[])==[])
+            and ((.asyncInvocationConfig//{})=={})
+            and ((.metadataOptions//{})=={})
+          ' /tmp/footy-current.json >/dev/null || { echo "Active revision/config mismatch, no deployment"; exit 1; }
+          # Only the image changes: retain all environment settings, Lockbox bindings and resources.
+          jq --arg url "$REGISTRY_PREFIX:$IMAGE_SHA" --arg id "$CONTAINER_ID" '{
+            containerId:$id,
+            imageSpec: (.image | {
+              imageUrl:$url,
+              environment:(.environment // {})
+            } + (if .command then {command:.command} else {} end)
+              + (if .args then {args:.args} else {} end)
+              + (if .workingDir then {workingDir:.workingDir} else {} end)),
+            resources:.resources,
+            executionTimeout:.executionTimeout,
+            concurrency:.concurrency,
+            serviceAccountId:.serviceAccountId,
+            secrets:(.secrets // []),
+            connectivity:(.connectivity // {}),
+            provisionPolicy:(.provisionPolicy // {}),
+            logOptions:(.logOptions // {}),
+            scalingPolicy:(.scalingPolicy // {})
+          }' /tmp/footy-current.json > /tmp/footy-deploy.json
+          echo "Releasing pinned image $REGISTRY_PREFIX:$IMAGE_SHA"
+          status="$(curl -sS --max-time 45 -o /tmp/footy-operation.json -w '%{http_code}' \
+            -X POST "$API_URL/revisions:deploy" \
+            -H "Authorization: Bearer $IAM_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/footy-deploy.json)"
+          test "$status" = 200 || { echo "Yandex deploy request rejected HTTP $status"; exit 1; }
+          jq -e '.id and (.error==null)' /tmp/footy-operation.json >/dev/null
+          echo "Deployment operation accepted: $(jq -r '.id' /tmp/footy-operation.json)"
+          verified=0
+          for i in $(seq 1 36); do
+            code="$(curl -sS --max-time 20 -o /tmp/footy-revisions.json -w '%{http_code}' \
+              -H "Authorization: Bearer $IAM_TOKEN" "$API_URL/revisions?containerId=$CONTAINER_ID&pageSize=100")" || code=000
+            if [[ "$code" = 200 ]]; then
+              new_id="$(jq -r --arg id "$CONTAINER_ID" '[.revisions[]?|select(.containerId==$id and .status=="ACTIVE")]|if length==1 then .[0].id else empty end' /tmp/footy-revisions.json)"
+              if [[ -n "$new_id" && "$new_id" != "$active_id" ]]; then
+                code="$(curl -sS --max-time 20 -o /tmp/footy-new-revision.json -w '%{http_code}' \
+                  -H "Authorization: Bearer $IAM_TOKEN" "$API_URL/revisions/$new_id")"
+                if [[ "$code" = 200 ]] && jq -e --arg image "$REGISTRY_PREFIX:$IMAGE_SHA" '.status=="ACTIVE" and .image.imageUrl==$image' /tmp/footy-new-revision.json >/dev/null; then
+                  verified=1
+                  echo "NEW_ACTIVE_REVISION=$new_id"
+                  echo "NEW_ACTIVE_IMAGE=$REGISTRY_PREFIX:$IMAGE_SHA"
+                  break
+                fi
+              fi
+            fi
+            sleep 5
+          done
+          test "$verified" = 1 || { echo "New ACTIVE revision not confirmed; no automatic retry"; exit 1; }
+          for path in / /cutover-participant; do
+            code="$(curl -sS -L --max-time 25 -o /dev/null -w '%{http_code}' "https://www.murashevclub.ru$path")"
+            test "$code" = 200
+            echo "$path HTTP 200"
+          done
+          code="$(curl -sS --max-time 25 -o /dev/null -w '%{http_code}' https://www.murashevclub.ru/api/cutover/session)"
+          test "$code" = 401
+          echo "Unauthenticated session remains protected: HTTP 401"
+          rm -f /tmp/footy-new-revision.json
+
