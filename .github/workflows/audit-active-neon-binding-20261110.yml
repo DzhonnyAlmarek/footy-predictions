@@ -1,0 +1,77 @@
+name: Audit active Yandex Neon secret binding (read only)
+on:
+  push:
+    branches: [audit/domain-and-status-routing-20261110]
+    paths: [.github/workflows/audit-active-neon-binding-20261110.yml]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: yandex-test
+    timeout-minutes: 8
+    env:
+      CONTAINER_ID: bbaquq5i6l35i5kbiufb
+      SERVICE_ACCOUNT_ID: ajefphrico3hogta85jt
+    steps:
+      - uses: actions/github-script@v7
+        id: oidc
+        with:
+          script: |
+            const jwt = await core.getIDToken('https://github.com/DzhonnyAlmarek');
+            core.setSecret(jwt);
+            core.setOutput('jwt', jwt);
+      - name: Identify active revision and safe secret reference metadata
+        shell: bash
+        env:
+          OIDC_JWT: ${{ steps.oidc.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/footy-tok.json /tmp/footy-revs.json /tmp/footy-rev.json /tmp/footy-payload.json' EXIT
+          http="$(curl -sS --max-time 30 -o /tmp/footy-tok.json -w '%{http_code}' -X POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${OIDC_JWT}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+          test "$http" = 200
+          token="$(jq -er '.access_token' /tmp/footy-tok.json)"
+          echo "::add-mask::$token"
+          api='https://serverless-containers.api.cloud.yandex.net/containers/v1'
+          code="$(curl -sS --max-time 25 -o /tmp/footy-revs.json -w '%{http_code}' -H "Authorization: Bearer $token" "$api/revisions?containerId=$CONTAINER_ID&pageSize=100")"
+          test "$code" = 200
+          rev="$(jq -er --arg id "$CONTAINER_ID" '[.revisions[]?|select(.containerId==$id and .status=="ACTIVE")]|if length==1 then .[0].id else empty end' /tmp/footy-revs.json)"
+          code="$(curl -sS --max-time 25 -o /tmp/footy-rev.json -w '%{http_code}' -H "Authorization: Bearer $token" "$api/revisions/$rev")"
+          test "$code" = 200
+          echo "ACTIVE_REVISION=$rev"
+          jq -r '{image_tag:(.image.imageUrl|split(":")|last), secret_bindings:[.secrets[]?|{id:.id,versionId:.versionId,key:.key,environmentVariable:.environmentVariable}], auth_origin:.image.environment.CUTOVER_AUTH_ORIGIN, deploy_target:.image.environment.DEPLOY_TARGET}' /tmp/footy-rev.json
+          # Never emit a secret or connection URI. Fetch payload to memory only if IAM authorizes it.
+          export FOOTY_TOKEN="$token"
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error,urllib.parse
+          rev=json.load(open('/tmp/footy-rev.json'))
+          bindings=rev.get('secrets') or []
+          print('binding_count=',len(bindings))
+          for bind in bindings:
+              id=bind.get('id')
+              key=bind.get('key')
+              if not id:
+                  print('binding missing secret ID');continue
+              url='https://payload.lockbox.api.cloud.yandex.net/lockbox/v1/secrets/'+urllib.parse.quote(id,safe='')+'/payload'
+              try:
+                  req=urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['FOOTY_TOKEN']})
+                  with urllib.request.urlopen(req,timeout=12) as f:
+                      data=json.load(f)
+                  entries=data.get('entries',[])
+                  for ent in entries:
+                      raw=ent.get('textValue')
+                      if ent.get('key') != key or not raw:continue
+                      if 'DATABASE' in str(bind.get('environmentVariable','')) or 'URL' in str(key).upper() or raw.startswith(('postgresql://','postgres://')):
+                          host=urllib.parse.urlsplit(raw).hostname or 'unknown'
+                          print('DB_BINDING_HOST=',host)
+                      else:print('NON_DB_BINDING_KEY=',str(key))
+              except urllib.error.HTTPError as e:print('LOCKBOX_PAYLOAD_HTTP=',e.code)
+              except Exception as e:print('LOCKBOX_PAYLOAD_UNAVAILABLE=',type(e).__name__)
+          PY
