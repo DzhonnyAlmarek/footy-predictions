@@ -1,0 +1,43 @@
+name: Verify admin stage guards (build only)
+on:
+  push:
+    branches: [fix/admin-stage-guards-20261110]
+    paths: [.github/workflows/verify-admin-stage-guards-20261110.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Check security guards in correct admin operations
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const src=fs.readFileSync('app/api/cutover/admin/route.ts','utf8');
+          const delegated=src.slice(src.indexOf('if (body?.action === "save_for_participant")'),src.indexOf('if (body?.action === "close_stage")'));
+          const create=src.slice(src.indexOf('if (body?.action === "create_match")'));
+          const stageGuard="JOIN footy_cutover.stages s ON s.id=m.stage_id AND s.is_current=true AND s.status='published'";
+          if(delegated.split(stageGuard).length-1!==2)throw Error('Both delegated prediction branches must check published stage');
+          if(!delegated.includes('cutover_auth.admin_prediction_audit'))throw Error('Delegated audit missing');
+          if(!create.includes("WHERE existing.stage_id=s.id) < s.matches_required"))throw Error('Draft stage cap missing');
+          if(!create.includes("s.status='draft'"))throw Error('Draft stage-only rule missing');
+          if(!src.includes('footy_cutover.finish_new_match'))throw Error('Result scoring routine missing');
+          console.log('Delegated stage and draft fixture guards verified');
+          NODE
+      - name: Next.js build with test-only environment
+        run: npm run build
+        env:
+          DEPLOY_TARGET: yandex-neon-production-candidate
+          ENABLE_CUTOVER_PRODUCTION_CANDIDATE: "false"
+          NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-placeholder

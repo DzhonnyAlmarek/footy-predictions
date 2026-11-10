@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
                  old.id AS previous_id,
                  old.home_pred AS previous_home_pred, old.away_pred AS previous_away_pred
           FROM footy_cutover.matches m
-          JOIN footy_cutover.stages s ON s.id=m.stage_id AND s.is_current=true
+          JOIN footy_cutover.stages s ON s.id=m.stage_id AND s.is_current=true AND s.status='published'
           JOIN footy_cutover.profiles p ON p.username=${username} AND p.role <> 'admin'
           LEFT JOIN footy_cutover.predictions old ON old.match_id=m.id AND old.user_id=p.id
           WHERE m.id=${matchId}::bigint AND m.status='scheduled'
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
             home_pred=EXCLUDED.home_pred, away_pred=EXCLUDED.away_pred, updated_at=now()
           WHERE EXISTS (
             SELECT 1 FROM footy_cutover.matches m
-            JOIN footy_cutover.stages s ON s.id=m.stage_id AND s.is_current=true
+            JOIN footy_cutover.stages s ON s.id=m.stage_id AND s.is_current=true AND s.status='published'
             WHERE m.id=EXCLUDED.match_id AND m.status='scheduled'
               AND m.deadline_at>now() AND m.kickoff_at>now()
               AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
@@ -355,6 +355,8 @@ export async function POST(req: NextRequest) {
         JOIN footy_cutover.teams h ON h.id=${home}::bigint
         JOIN footy_cutover.teams a ON a.id=${away}::bigint
         WHERE t.id=${tournament}::bigint AND s.status='draft'
+          AND (SELECT COUNT(*) FROM footy_cutover.matches existing
+               WHERE existing.stage_id=s.id) < s.matches_required
           AND ${deadline}::timestamptz > now()
           AND ${deadline}::timestamptz <= ${kickoff}::timestamptz
           AND NOT EXISTS (
