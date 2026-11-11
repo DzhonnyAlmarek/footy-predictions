@@ -8,7 +8,7 @@ import AnalyticsInsights from "./analytics-insights";
 import AdminTourControl from "./admin-tour-control";
 
 type Prediction = {
-  match_id: string; kickoff_at: string | null; home_team: string | null;
+  match_id: string; kickoff_at: string | null; home_team: string | null; competition_label?: string | null;
   away_team: string | null; home_pred: number | null; away_pred: number | null;
   home_score: number | null; away_score: number | null;
   predictions_open?: boolean;
@@ -34,6 +34,11 @@ function isProvisionalSpringKickoff(matchId: string, kickoff: string | null): bo
   );
 }
 
+function CompetitionBadge({ label }: { label?: string | null }) {
+  if (!label) return null;
+  return <span title={`Турнир: ${label}`} style={{display:'inline-flex',alignItems:'center',padding:'2px 7px',marginLeft:6,borderRadius:6,border:'1px solid #9fbdad',background:'#eaf4ee',color:'#1c5940',fontSize:11,fontWeight:800,lineHeight:1.5,whiteSpace:'nowrap',verticalAlign:'middle'}}>{label}</span>;
+}
+
 const CUTOVER_TAB_SESSION = "murashev_cutover_tab_session_v1";
 
 export default function CutoverParticipantPage() {
@@ -55,7 +60,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[]; delegated_predictions: {match_id:string;username:string}[]; prediction_writes_enabled:boolean } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; competition_label?: string | null; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[]; delegated_predictions: {match_id:string;username:string}[]; prediction_writes_enabled:boolean } | null>(null);
   const [adminStageChoice, setAdminStageChoice] = useState("current");
   const [adminTourChoice, setAdminTourChoice] = useState("current");
   const [adminAction, setAdminAction] = useState("");
@@ -104,7 +109,7 @@ export default function CutoverParticipantPage() {
   const [whistleUnavailable, setWhistleUnavailable] = useState(false);
   const [whistleLoading, setWhistleLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ username: string; points: string; bonus_points: string; scored_predictions: number }[]>([]);
-  const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null;previous_stage?:{id:string;name:string}|null;previous_totals?:{user_id:string;username:string;points:string}[];previous_boot?:{user_id:string;exact:number}[]; tours:{id:string;name:string;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null;points_h1:string|null;points_h2:string|null;points_outcome:string|null;points_diff:string|null;points_bonus:string|null;points_outcome_base:string|null;points_outcome_bonus:string|null;points_diff_base:string|null;points_diff_bonus:string|null}[] }|null>(null);
+  const [currentTable, setCurrentTable] = useState<{ stage:{id:string;name:string}|null;previous_stage?:{id:string;name:string}|null;previous_totals?:{user_id:string;username:string;points:string}[];previous_boot?:{user_id:string;exact:number}[]; tours:{id:string;name:string;tour_no:number}[]; users:{id:string;username:string}[]; rows:{match_id:string;tour_id:string|null;stage_match_no:number|null;kickoff_at:string|null;home_team:string;away_team:string;competition_label?:string|null;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null;points_h1:string|null;points_h2:string|null;points_outcome:string|null;points_diff:string|null;points_bonus:string|null;points_outcome_base:string|null;points_outcome_bonus:string|null;points_diff_base:string|null;points_diff_bonus:string|null}[] }|null>(null);
   const [archive, setArchive] = useState<{stages:{id:string;name:string}[];stage:{id:string;name:string}|null;tours:{id:string;name:string;tour_no:number}[];users:{id:string;username:string}[];rows:{match_id:string;tour_id:string;stage_match_no:number|null;home_team:string;away_team:string;home_score:number|null;away_score:number|null;user_id:string|null;home_pred:number|null;away_pred:number|null;points:string|null}[]}|null>(null);
   const [archiveStageId,setArchiveStageId]=useState("");
   const [archiveWhistle,setArchiveWhistle]=useState<{penalty_matches:number;leaderboard:{username:string;points:number;breakdown?:{match_id:string;match:string;result:string;without_penalties:string;prediction:string;points:number;with_penalties_base:number;without_penalties_base:number;actual_points:number}[]}[]}|null>(null);
@@ -814,7 +819,7 @@ export default function CutoverParticipantPage() {
                 <thead><tr><th>Матч и начало (МСК)</th><th>Результат</th></tr></thead>
                 <tbody>{[...matches].sort((a,b) => new Date(a.kickoff_at).getTime()-new Date(b.kickoff_at).getTime() || Number(a.id)-Number(b.id)).map(m => <tr key={m.id}>
                   <td>
-                    <strong>{m.home_team} — {m.away_team}</strong>
+                    <strong>{m.home_team} — {m.away_team}</strong><CompetitionBadge label={m.competition_label} />
                     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:4}}>
                       <small>{new Date(m.kickoff_at).toLocaleString("ru-RU", {timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})} МСК{isProvisionalSpringKickoff(m.id, m.kickoff_at) && <strong style={{marginLeft:6}}>· Предварительно (время техническое)</strong>}</small>
                       {m.status==="scheduled" && adminWritesEnabled && new Date(m.deadline_at).getTime()>Date.now() &&
@@ -1079,7 +1084,7 @@ export default function CutoverParticipantPage() {
                   const m = records[0];
                   return <tr key={id}>
                     <td>{m.stage_match_no ?? index + 1}</td>
-                    <td><strong>{m.home_team} — {m.away_team}</strong></td>
+                    <td><strong>{m.home_team} — {m.away_team}</strong><CompetitionBadge label={m.competition_label} /></td>
                     <td>{m.home_score == null || m.away_score == null ? "—" : m.home_score + ":" + m.away_score}</td>
                     {[...currentTable.users].sort((a,b) => { const rank=(name:string)=>["АМН","БАА","КДЛ","КЕН","СВС"].indexOf(name.toUpperCase()); const ra=rank(a.username),rb=rank(b.username); return (ra<0?999:ra)-(rb<0?999:rb) || a.username.localeCompare(b.username,"ru"); }).map(u => {
                       const prediction = records.find(row => row.user_id === u.id);
@@ -1154,7 +1159,7 @@ export default function CutoverParticipantPage() {
         <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th>{writesEnabled && <th>Изменить прогноз</th>}</tr></thead>
         <tbody>{displayedSchedule.map(m => <tr key={m.match_id}>
           <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}{isProvisionalSpringKickoff(m.match_id, m.kickoff_at) && <small style={{display:"block",opacity:.75}}>Предварительно · 12:00 МСК (техническое)</small>}</td>
-          <td><div className="cutover-match-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div></td>
+          <td><div className="cutover-match-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div><CompetitionBadge label={m.competition_label} /></td>
           <td><span className={m.home_pred !== null && m.away_pred !== null ? "cutover-score has-prediction" : "cutover-score"}>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</span></td>
           <td><span className="cutover-score">{m.home_score ?? "—"} : {m.away_score ?? "—"}</span></td>
           {writesEnabled && <td>{m.predictions_open ? <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, minWidth: 210 }}>
@@ -1172,7 +1177,7 @@ export default function CutoverParticipantPage() {
       <div className="cutover-mobile-match-list" aria-label="Матчи — мобильный вид">
         {displayedSchedule.map(m => <article className="cutover-mobile-match" key={m.match_id}>
           <div className="cutover-mobile-date">{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Дата не назначена"}{isProvisionalSpringKickoff(m.match_id, m.kickoff_at) && <small style={{display:"block"}}>Предварительно · время техническое</small>}</div>
-          <div className="cutover-mobile-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div>
+          <div className="cutover-mobile-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div><CompetitionBadge label={m.competition_label} />
           <div className="cutover-mobile-scoreline">
             <div><span>Мой прогноз</span><strong>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</strong></div>
             <div><span>Результат</span><strong>{m.home_score ?? "—"} : {m.away_score ?? "—"}</strong></div>
