@@ -13,11 +13,12 @@ export async function GET(req: NextRequest) {
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
     const matches = await sql`
       SELECT m.id::text AS match_id, m.kickoff_at, m.deadline_at, m.status,
-             m.home_score, m.away_score, h.name AS home_team, a.name AS away_team,
+             m.home_score, m.away_score, t.name AS tournament_name, h.name AS home_team, a.name AS away_team,
              p.home_pred, p.away_pred,
              (m.status = 'scheduled' AND COALESCE(m.deadline_at, m.kickoff_at) > now()) AS predictions_open
       FROM footy_cutover.matches m
       JOIN footy_cutover.stages active_stage ON active_stage.id=m.stage_id AND active_stage.is_current=true AND active_stage.status='published'
+      LEFT JOIN footy_cutover.tournaments t ON t.id = m.tournament_id
       LEFT JOIN footy_cutover.teams h ON h.id = m.home_team_id
       LEFT JOIN footy_cutover.teams a ON a.id = m.away_team_id
       LEFT JOIN footy_cutover.predictions p ON p.match_id = m.id AND p.user_id = ${userId}::uuid
