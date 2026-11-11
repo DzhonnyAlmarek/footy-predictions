@@ -12,6 +12,7 @@ type Prediction = {
   away_team: string | null; home_pred: number | null; away_pred: number | null;
   home_score: number | null; away_score: number | null;
   predictions_open?: boolean;
+  tournament_name?: string | null;
 };
 
 // These 32 match kickoffs are week-start placeholders, not confirmed match times.
@@ -1154,7 +1155,7 @@ export default function CutoverParticipantPage() {
         <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th>{writesEnabled && <th>Изменить прогноз</th>}</tr></thead>
         <tbody>{displayedSchedule.map(m => <tr key={m.match_id}>
           <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}{isProvisionalSpringKickoff(m.match_id, m.kickoff_at) && <small style={{display:"block",opacity:.75}}>Предварительно · 12:00 МСК (техническое)</small>}</td>
-          <td><div className="cutover-match-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div></td>
+          <td><div className="cutover-match-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div>{m.tournament_name && <small style={{ display: "block", marginTop: 4 }}>{m.tournament_name}</small>}</td>
           <td><span className={m.home_pred !== null && m.away_pred !== null ? "cutover-score has-prediction" : "cutover-score"}>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</span></td>
           <td><span className="cutover-score">{m.home_score ?? "—"} : {m.away_score ?? "—"}</span></td>
           {writesEnabled && <td>{m.predictions_open ? <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, minWidth: 210 }}>
@@ -1173,6 +1174,7 @@ export default function CutoverParticipantPage() {
         {displayedSchedule.map(m => <article className="cutover-mobile-match" key={m.match_id}>
           <div className="cutover-mobile-date">{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Дата не назначена"}{isProvisionalSpringKickoff(m.match_id, m.kickoff_at) && <small style={{display:"block"}}>Предварительно · время техническое</small>}</div>
           <div className="cutover-mobile-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div>
+          {m.tournament_name && <small style={{ display: "block", marginTop: 4 }}>{m.tournament_name}</small>}
           <div className="cutover-mobile-scoreline">
             <div><span>Мой прогноз</span><strong>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</strong></div>
             <div><span>Результат</span><strong>{m.home_score ?? "—"} : {m.away_score ?? "—"}</strong></div>
