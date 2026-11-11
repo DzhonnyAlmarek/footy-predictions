@@ -90,6 +90,14 @@ BEGIN
     ) dependencies JOIN approved_stage3 a USING (match_id)
   ) THEN RAISE EXCEPTION 'At least one fixture being replaced has dependent data'; END IF;
 
+  -- Imported IDs can be ahead of the identity sequences.
+  EXECUTE format('ALTER TABLE footy_cutover.tournaments ALTER COLUMN id RESTART WITH %s',
+    (SELECT greatest(coalesce(max(id),0),coalesce(pg_sequence_last_value(
+      pg_get_serial_sequence('footy_cutover.tournaments','id')::regclass),0))+1 FROM footy_cutover.tournaments));
+  EXECUTE format('ALTER TABLE footy_cutover.teams ALTER COLUMN id RESTART WITH %s',
+    (SELECT greatest(coalesce(max(id),0),coalesce(pg_sequence_last_value(
+      pg_get_serial_sequence('footy_cutover.teams','id')::regclass),0))+1 FROM footy_cutover.teams));
+
   INSERT INTO footy_cutover.tournaments (name,slug) VALUES
     ('Кубок России','russian-cup'), ('АПЛ','epl'), ('Серия А','serie-a'),
     ('Бундеслига','bundesliga'), ('Ла Лига','la-liga')
