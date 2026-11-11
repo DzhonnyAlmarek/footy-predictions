@@ -27,8 +27,10 @@ export async function GET(req: NextRequest) {
       sql`SELECT m.id::text AS match_id, m.tour_id::text, m.stage_match_no,
           m.kickoff_at, m.home_score, m.away_score,
           h.name AS home_team, a.name AS away_team,
+          COALESCE(CASE t.slug WHEN 'rpl' THEN 'РПЛ' WHEN 'ucl' THEN 'ЛЧ' WHEN 'russian-cup' THEN 'КР' WHEN 'epl' THEN 'АПЛ' WHEN 'serie-a' THEN 'Серия А' WHEN 'bundesliga' THEN 'Бундеслига' WHEN 'la-liga' THEN 'Ла Лига' ELSE t.name END, CASE WHEN m.stage_id=15 AND m.id BETWEEN 434 AND 457 THEN 'РПЛ' END) AS competition_label,
           p.user_id::text, p.home_pred, p.away_pred, l.points,\n          l.points_h1, l.points_h2, l.points_outcome, l.points_diff, l.points_bonus,\n          l.points_outcome_base, l.points_outcome_bonus, l.points_diff_base, l.points_diff_bonus
           FROM footy_cutover.matches m
+          LEFT JOIN footy_cutover.tournaments t ON t.id=m.tournament_id
           LEFT JOIN footy_cutover.teams h ON h.id=m.home_team_id
           LEFT JOIN footy_cutover.teams a ON a.id=m.away_team_id
           LEFT JOIN footy_cutover.predictions p ON p.match_id=m.id
