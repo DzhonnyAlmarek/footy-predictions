@@ -12,6 +12,7 @@ type Prediction = {
   away_team: string | null; home_pred: number | null; away_pred: number | null;
   home_score: number | null; away_score: number | null;
   predictions_open?: boolean;
+  pending_kickoff_date?: string | null;
 };
 
 // These 32 match kickoffs are week-start placeholders, not confirmed match times.
@@ -32,6 +33,14 @@ function isProvisionalSpringKickoff(matchId: string, kickoff: string | null): bo
     numericId >= tour.firstId && numericId <= tour.lastId
     && timestamp === Date.parse(tour.kickoff)
   );
+}
+
+function pendingKickoffLabel(date?: string | null) {
+  return date ? `${date.split("-").reverse().join(".")} · Время уточняется` : "Дата не назначена";
+}
+
+function matchTime(iso: string | null) {
+  return iso ? Date.parse(iso) : 0;
 }
 
 function CompetitionBadge({ label }: { label?: string | null }) {
@@ -60,7 +69,7 @@ export default function CutoverParticipantPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionUsername, setSessionUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string; deadline_at: string; home_team: string; away_team: string; competition_label?: string | null; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[]; delegated_predictions: {match_id:string;username:string}[]; prediction_writes_enabled:boolean } | null>(null);
+  const [adminData, setAdminData] = useState<{ teams: { id: string; name: string }[]; tournaments: { id: string; name: string }[]; stages: { id: string; name: string; status: string; is_current: boolean; matches_required: number; match_count: number; finished_count: number }[]; tours: { id: string; name: string; stage_id: string }[]; matches: { id: string; tour_id: string | null; status: string; home_score: number | null; away_score: number | null; home_penalty_goals: number | null; away_penalty_goals: number | null; kickoff_at: string | null; deadline_at: string | null; pending_kickoff_date?: string | null; home_team: string; away_team: string; competition_label?: string | null; home_team_id: string; away_team_id: string; admin_created: boolean; result_eligible: boolean }[]; delegated_predictions: {match_id:string;username:string}[]; prediction_writes_enabled:boolean } | null>(null);
   const [adminStageChoice, setAdminStageChoice] = useState("current");
   const [adminTourChoice, setAdminTourChoice] = useState("current");
   const [adminAction, setAdminAction] = useState("");
@@ -688,7 +697,7 @@ export default function CutoverParticipantPage() {
   const finishedStageMatches = activeAdminStage
     ? activeAdminStage.finished_count
     : currentTable ? new Set(currentTable.rows.filter(row=>row.home_score!==null&&row.away_score!==null).map(row=>row.match_id)).size : 0;
-  const upcomingMatches = schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now());
+  const upcomingMatches = schedule.filter(m => m.pending_kickoff_date || matchTime(m.kickoff_at) > Date.now());
   const savedForecasts = schedule.filter(m => m.home_pred !== null && m.away_pred !== null).length;
   const myPlace = leaderboard.findIndex(p => p.username === sessionUsername);
   const myRanking = myPlace >= 0 ? leaderboard[myPlace] : null;
@@ -799,7 +808,7 @@ export default function CutoverParticipantPage() {
             const priority = (matches: typeof adminData.matches) => {
               const pending = matches.filter(m => m.status === "scheduled");
               const candidates = pending.length ? pending : matches;
-              return { pending: pending.length > 0, distance: Math.min(...candidates.map(m => Math.abs(new Date(m.kickoff_at).getTime() - now))) };
+              return { pending: pending.length > 0, distance: Math.min(...candidates.map(m => Math.abs(matchTime(m.kickoff_at) - now))) };
             };
             const pa = priority(a[1]), pb = priority(b[1]);
             const tourNumber = (id: string) => {
@@ -817,12 +826,12 @@ export default function CutoverParticipantPage() {
               <summary style={{ cursor: "pointer", fontWeight: 700, padding: "8px 0" }}>{tour?.name ?? "Без тура"} · {matches.length} матчей</summary>
               <div className="tableWrap"><table className="table" style={{ minWidth: 480 }}>
                 <thead><tr><th>Матч и начало (МСК)</th><th>Результат</th></tr></thead>
-                <tbody>{[...matches].sort((a,b) => new Date(a.kickoff_at).getTime()-new Date(b.kickoff_at).getTime() || Number(a.id)-Number(b.id)).map(m => <tr key={m.id}>
+                <tbody>{[...matches].sort((a,b) => matchTime(a.kickoff_at ?? a.pending_kickoff_date ?? null)-matchTime(b.kickoff_at ?? b.pending_kickoff_date ?? null) || Number(a.id)-Number(b.id)).map(m => <tr key={m.id}>
                   <td>
                     <strong>{m.home_team} — {m.away_team}</strong><CompetitionBadge label={m.competition_label} />
                     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:4}}>
-                      <small>{new Date(m.kickoff_at).toLocaleString("ru-RU", {timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})} МСК{isProvisionalSpringKickoff(m.id, m.kickoff_at) && <strong style={{marginLeft:6}}>· Предварительно (время техническое)</strong>}</small>
-                      {m.status==="scheduled" && adminWritesEnabled && new Date(m.deadline_at).getTime()>Date.now() &&
+                      <small>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU", {timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}) + " МСК" : pendingKickoffLabel(m.pending_kickoff_date)}{isProvisionalSpringKickoff(m.id, m.kickoff_at) && <strong style={{marginLeft:6}}>· Предварительно (время техническое)</strong>}</small>
+                      {m.status==="scheduled" && adminWritesEnabled && (m.pending_kickoff_date || matchTime(m.deadline_at)>Date.now()) &&
                         (rescheduleForm.match_id===m.id
                           ? <form onSubmit={rescheduleMatch} style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                               <input aria-label={`Новое время: ${m.home_team} — ${m.away_team}`} type="datetime-local" required value={rescheduleForm.kickoff_at}
@@ -831,7 +840,7 @@ export default function CutoverParticipantPage() {
                               <button type="submit" disabled={busy}>Сохранить</button>
                               <button type="button" onClick={()=>setRescheduleForm({match_id:"",kickoff_at:""})}>Отмена</button>
                             </form>
-                          : <button type="button" style={{background:"transparent",border:0,padding:0,fontSize:12,textDecoration:"underline",opacity:.7,cursor:"pointer"}} disabled={busy} onClick={()=>setRescheduleForm({match_id:m.id,kickoff_at:moscowInput(m.kickoff_at)})}>✎ Изменить время</button>)}
+                          : <button type="button" style={{background:"transparent",border:0,padding:0,fontSize:12,textDecoration:"underline",opacity:.7,cursor:"pointer"}} disabled={busy} onClick={()=>setRescheduleForm({match_id:m.id,kickoff_at:m.kickoff_at ? moscowInput(m.kickoff_at) : ""})}>✎ Изменить время</button>)}
                     </div>
                   </td>
                   <td>{m.status === "finished"
@@ -911,9 +920,9 @@ export default function CutoverParticipantPage() {
               onChange={e=>setDelegatedForm(prev=>({...prev,match_id:e.target.value,home_pred:"",away_pred:""}))}>
               <option value="">Выбери матч</option>
               {adminData.matches.filter(m=>(adminStageChoice==="current" || adminStageChoice===adminData.stages.find(x=>x.is_current)?.id) &&
-                m.status==="scheduled" && new Date(m.deadline_at).getTime()>Date.now() &&
-                new Date(m.kickoff_at).getTime()>Date.now()).map(m=>
-                <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} · {new Date(m.kickoff_at).toLocaleString("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} МСК</option>)}
+                m.status==="scheduled" && matchTime(m.deadline_at)>Date.now() &&
+                matchTime(m.kickoff_at)>Date.now()).map(m=>
+                <option key={m.id} value={m.id}>{m.home_team} — {m.away_team} · {new Date(m.kickoff_at ?? "").toLocaleString("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} МСК</option>)}
             </select></label>
             {delegatedForm.username && delegatedForm.match_id && adminData.delegated_predictions?.some(
               p=>p.match_id===delegatedForm.match_id && p.username===delegatedForm.username) &&
@@ -1037,7 +1046,7 @@ export default function CutoverParticipantPage() {
                 away_team_id: match?.away_team_id ?? "" });
             }}>
             <option value="">Выбери новый матч</option>
-            {adminData.matches.filter(m => m.status === "scheduled" && new Date(m.deadline_at).getTime() > Date.now()).map(m =>
+            {adminData.matches.filter(m => m.status === "scheduled" && matchTime(m.deadline_at) > Date.now()).map(m =>
               <option key={m.id} value={m.id}>{m.home_team} — {m.away_team}</option>)}
           </select></label>
           <label>Хозяева <select required value={teamsEditForm.home_team_id}
@@ -1149,16 +1158,16 @@ export default function CutoverParticipantPage() {
       </section>}
       {activeTab === "schedule" && <section className="cutover-content"><div className="cutover-section-heading"><div><span>ИГРОВОЙ КАЛЕНДАРЬ</span><h2>Расписание матчей <em>{schedule.length}</em></h2></div><p>Каждый прогноз имеет значение</p></div>
       <p>{writesEnabled ? "Прогнозы можно менять до дедлайна." : "Сохранение новых прогнозов пока отключено."}</p>
-      <p>Для матчей туров 18–21 дата и время предварительные. Время 12:00 МСК — техническое, а не подтверждённое начало матча; пока оно также является сроком закрытия прогнозов. Точное расписание будет внесено после утверждения.</p>
+      {schedule.some(m => isProvisionalSpringKickoff(m.match_id, m.kickoff_at)) && <p>Для матчей туров 18–21 дата и время предварительные. Время 12:00 МСК — техническое, а не подтверждённое начало матча; пока оно также является сроком закрытия прогнозов. Точное расписание будет внесено после утверждения.</p>}
       <div className="cutover-filters">
         <button type="button" aria-pressed={matchFilter === "upcoming"} onClick={() => { setMatchFilter("upcoming"); setShowAllMatches(false); }} className={matchFilter === "upcoming" ? "cutover-filter active" : "cutover-filter"}>Предстоящие</button>
         <button type="button" aria-pressed={matchFilter === "all"} onClick={() => { setMatchFilter("all"); setShowAllMatches(false); }} className={matchFilter === "all" ? "cutover-filter active" : "cutover-filter"}>Все матчи</button>
       </div>
-      {(matchFilter === "all" ? schedule : schedule.filter(m => m.kickoff_at && new Date(m.kickoff_at).getTime() > Date.now())).length > 30 && <button type="button" onClick={() => setShowAllMatches(v => !v)} style={{ margin: "12px 0", padding: "10px 14px", borderRadius: 10 }}>{showAllMatches ? "Показать первые 30" : "Показать больше матчей"}</button>}
+      {scheduleSelection.length > 30 && <button type="button" onClick={() => setShowAllMatches(v => !v)} style={{ margin: "12px 0", padding: "10px 14px", borderRadius: 10 }}>{showAllMatches ? "Показать первые 30" : "Показать больше матчей"}</button>}
       <div className="tableWrap cutover-match-table"><table className="table">
         <thead><tr><th>Дата</th><th>Матч</th><th>Прогноз</th><th>Результат</th>{writesEnabled && <th>Изменить прогноз</th>}</tr></thead>
         <tbody>{displayedSchedule.map(m => <tr key={m.match_id}>
-          <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU") : "—"}{isProvisionalSpringKickoff(m.match_id, m.kickoff_at) && <small style={{display:"block",opacity:.75}}>Предварительно · 12:00 МСК (техническое)</small>}</td>
+          <td>{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : pendingKickoffLabel(m.pending_kickoff_date)}{isProvisionalSpringKickoff(m.match_id, m.kickoff_at) && <small style={{display:"block",opacity:.75}}>Предварительно · 12:00 МСК (техническое)</small>}</td>
           <td><div className="cutover-match-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div><CompetitionBadge label={m.competition_label} /></td>
           <td><span className={m.home_pred !== null && m.away_pred !== null ? "cutover-score has-prediction" : "cutover-score"}>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</span></td>
           <td><span className="cutover-score">{m.home_score ?? "—"} : {m.away_score ?? "—"}</span></td>
@@ -1176,7 +1185,7 @@ export default function CutoverParticipantPage() {
       </table></div>
       <div className="cutover-mobile-match-list" aria-label="Матчи — мобильный вид">
         {displayedSchedule.map(m => <article className="cutover-mobile-match" key={m.match_id}>
-          <div className="cutover-mobile-date">{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Дата не назначена"}{isProvisionalSpringKickoff(m.match_id, m.kickoff_at) && <small style={{display:"block"}}>Предварительно · время техническое</small>}</div>
+          <div className="cutover-mobile-date">{m.kickoff_at ? new Date(m.kickoff_at).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : pendingKickoffLabel(m.pending_kickoff_date)}{isProvisionalSpringKickoff(m.match_id, m.kickoff_at) && <small style={{display:"block"}}>Предварительно · время техническое</small>}</div>
           <div className="cutover-mobile-teams"><strong>{m.home_team || "?"}</strong><span>—</span><strong>{m.away_team || "?"}</strong></div><CompetitionBadge label={m.competition_label} />
           <div className="cutover-mobile-scoreline">
             <div><span>Мой прогноз</span><strong>{m.home_pred ?? "—"} : {m.away_pred ?? "—"}</strong></div>
