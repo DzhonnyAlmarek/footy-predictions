@@ -1347,7 +1347,11 @@ export default function CutoverParticipantPage() {
                   const draft=editableMatch ? (drafts[editableMatch.match_id] ?? {home:String(editableMatch.home_pred ?? ""),away:String(editableMatch.away_pred ?? "")}) : null;
                   return <tr key={match.match_id}>
                     <td>{match.stage_match_no??index+1}</td>
-                    <td><strong>{match.home_team} — {match.away_team}</strong>{editableMatch?.kickoff_at && <div style={{marginTop:4,fontSize:12,color:"#526779"}}>Начало: {new Intl.DateTimeFormat("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(editableMatch.kickoff_at))} МСК</div>}</td>
+                    <td><strong>{match.home_team} — {match.away_team}</strong><CompetitionBadge label={match.competition_label ?? editableMatch?.competition_label} />{editableMatch?.kickoff_at ? <div style={{marginTop:4,fontSize:12,color:"#526779"}}>Начало: {new Intl.DateTimeFormat("ru-RU",{timeZone:"Europe/Moscow",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(editableMatch.kickoff_at))} МСК</div> : editableMatch?.pending_kickoff_date && (
+                      <div style={{marginTop:4,fontSize:12,color:"#526779"}}>
+                        {pendingKickoffLabel(editableMatch.pending_kickoff_date)}
+                      </div>
+                    )}</td>
                     <td>{match.home_score===null||match.away_score===null?"—":match.home_score+":"+match.away_score}</td>
                     <td>{canEdit && editableMatch && draft ? <div className="cutover-my-prediction-editor" style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                       <input aria-label={`Голы хозяев: ${match.home_team}`} type="number" inputMode="numeric" min="0" max="99" value={draft.home} style={{width:57,minHeight:36,padding:5}} onChange={e=>setDrafts(prev=>({...prev,[editableMatch.match_id]:{home:e.target.value,away:prev[editableMatch.match_id]?.away??String(editableMatch.away_pred??"")}}))}/>
