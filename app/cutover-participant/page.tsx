@@ -716,7 +716,7 @@ export default function CutoverParticipantPage() {
       <section className="cutover-overview" aria-label="Обзор текущего этапа">
         <div className="cutover-stat"><span>МАТЧИ ТЕКУЩЕГО ЭТАПА</span><strong>{stageMatchCount || "—"}</strong><small>{finishedStageMatches} завершено</small></div>
         {!isAdmin && <div className="cutover-stat"><span>МОЁ МЕСТО В ТЕКУЩЕМ ЭТАПЕ</span><strong>{currentRankIndex>=0 ? "#"+(currentRankIndex+1) : "—"}</strong><small>{currentRank ? currentRank.points+" очков" : "Нет данных"}</small></div>}
-        {!isAdmin && previousTitle && <div className="cutover-stat cutover-stat-accent"><span>МОЙ СТАТУС</span><strong>{previousTitle}</strong><small>{currentTable?.previous_stage?.name ?? "Предыдущий этап"}</small></div>}
+        {!isAdmin && previousTitle && <div className="cutover-stat cutover-stat-accent"><span>МОЙ СТАТУС</span><strong className="cutover-status-title">{previousTitle.split(" · ")[0]}</strong>{previousTitle.includes(" · ") && <span className="cutover-status-awards">{previousTitle.split(" · ").slice(1).join(" · ")}</span>}<small>{currentTable?.previous_stage?.name ?? "Предыдущий этап"}</small></div>}
       </section>
       {activeTab === "admin" && isAdmin && adminData && <section className="card cutover-admin-panel" style={{ padding: 20, marginTop: 18 }}>
         <div className="cutover-section-heading"><div><span>УПРАВЛЕНИЕ ТУРНИРОМ</span><h2>Панель администратора</h2></div><p>Матчи, туры и результаты — в одном месте</p></div>
@@ -1031,9 +1031,9 @@ export default function CutoverParticipantPage() {
         {currentTable?.stage && <>
           <label className="cutover-table-filter">Тур <select value={selectedTour} onChange={e => setSelectedTour(e.target.value)}>
             <option value="all">Все туры</option>
-            {[...currentTable.tours].sort((a,b)=>Number(b.tour_no)-Number(a.tour_no)||Number(b.id)-Number(a.id)).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {[...currentTable.tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no)||Number(a.id)-Number(b.id)).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select></label>
-          {[...currentTable.tours].sort((a,b)=>Number(b.tour_no)-Number(a.tour_no)||Number(b.id)-Number(a.id)).filter(t => selectedTour === "all" || t.id === selectedTour).map(t => {
+          {[...currentTable.tours].sort((a,b)=>Number(a.tour_no)-Number(b.tour_no)||Number(a.id)-Number(b.id)).filter(t => selectedTour === "all" || t.id === selectedTour).map(t => {
             const grouped = new Map<string, typeof currentTable.rows>();
             for (const record of currentTable.rows.filter(row => row.tour_id === t.id)) {
               grouped.set(record.match_id, [...(grouped.get(record.match_id) ?? []), record]);
