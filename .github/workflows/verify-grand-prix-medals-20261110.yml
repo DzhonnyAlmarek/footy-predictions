@@ -1,0 +1,44 @@
+name: Verify Grand Prix medals and self-highlight (build only)
+on:
+  push:
+    branches: [fix/grand-prix-medals-self-highlight-20261110]
+    paths: [.github/workflows/verify-grand-prix-medals-20261110.yml]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Check awards and signed-in highlight markup
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const page=fs.readFileSync('app/cutover-participant/page.tsx','utf8');
+          const css=fs.readFileSync('app/cutover-participant/cutover.css','utf8');
+          const start=page.indexOf('activeTab === "grand-prix" &&');
+          const end=page.indexOf('activeTab === "schedule" &&',start);
+          if(start<0||end<0)throw Error('Cannot locate Grand Prix markup');
+          const section=page.slice(start,end);
+          for(const str of ['.map((p, index) =>','index === 0 ? "🥇 "','index === 1 ? "🥈 "','index === 2 ? "🥉 "','p.username === sessionUsername','cutover-grand-prix-me','cutover-grand-prix-self-label']){
+            if(!section.includes(str))throw Error('Missing UI detail: '+str);
+          }
+          if(!css.includes('.cutover-grand-prix .table tbody tr.cutover-grand-prix-me'))throw Error('Missing scoped row style');
+          console.log('Grand Prix medals and own-row checks passed');
+          NODE
+      - name: Next.js build without production credentials
+        run: npm run build
+        env:
+          DEPLOY_TARGET: yandex-neon-production-candidate
+          ENABLE_CUTOVER_PRODUCTION_CANDIDATE: "false"
+          NEXT_PUBLIC_SUPABASE_URL: https://isolated.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-only-placeholder
