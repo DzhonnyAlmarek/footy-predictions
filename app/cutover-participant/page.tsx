@@ -72,6 +72,34 @@ export default function CutoverParticipantPage() {
   const [boot, setBoot] = useState<{ username: string; exact: number }[]>([]);
   const [grandPrix, setGrandPrix] = useState<{ seasons: { id: string; name: string }[]; ratings: { season_id: string; username: string; points: string; scored_rounds: number }[] } | null>(null);
   const [grandPrixUnavailable, setGrandPrixUnavailable] = useState(false);
+  const [grandPrixLoading, setGrandPrixLoading] = useState(false);
+  // Refresh the season ranking whenever its tab opens, not only at sign-in.
+  useEffect(() => {
+    if (!authenticated || mustChangePassword || activeTab !== "grand-prix") return;
+    let cancelled = false;
+    const controller = new AbortController();
+    setGrandPrixLoading(true);
+    void fetch("/api/cutover/grand-prix", { cache: "no-store", signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error("grand-prix");
+        return response.json();
+      })
+      .then(data => {
+        if (cancelled) return;
+        setGrandPrix({
+          seasons: Array.isArray(data.seasons) ? data.seasons : [],
+          ratings: Array.isArray(data.ratings) ? data.ratings : []
+        });
+        setGrandPrixUnavailable(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setGrandPrix(null);
+        setGrandPrixUnavailable(true);
+      })
+      .finally(() => { if (!cancelled) setGrandPrixLoading(false); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [authenticated, mustChangePassword, activeTab]);
   const [whistle, setWhistle] = useState<{ stage: { id: string; name: string }; available_stages: { id: string; name: string; status: string }[]; penalty_matches: number; leaderboard: { username: string; points: number; main_place: number; breakdown?:{match_id:string;match:string;result:string;without_penalties:string;prediction:string;points:number;with_penalties_base:number;without_penalties_base:number;actual_points:number}[] }[] } | null>(null);
   const [whistleUnavailable, setWhistleUnavailable] = useState(false);
   const [whistleLoading, setWhistleLoading] = useState(false);
@@ -1100,6 +1128,7 @@ export default function CutoverParticipantPage() {
           </table></div></>}
       </section>}
       {activeTab === "grand-prix" && <section className="cutover-content cutover-grand-prix"><div className="cutover-section-heading"><div><span>СЕЗОННЫЙ ЗАЧЁТ</span><h2>Гран-при <span aria-hidden="true">🏁</span></h2></div><p>Очки за этапы соревнования</p></div>
+        {grandPrixLoading && <p>Обновляем сезонный зачёт…</p>}
         {grandPrixUnavailable && <p>Рейтинг Гран-при временно недоступен.</p>}
         {grandPrix?.seasons.map(season => <div key={season.id}>
           <h3>{season.name}</h3>
