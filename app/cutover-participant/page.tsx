@@ -605,7 +605,10 @@ export default function CutoverParticipantPage() {
   }
   async function rescheduleMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!rescheduleForm.match_id || !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/.test(rescheduleForm.kickoff_at)) return;
+    if (!rescheduleForm.match_id || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(rescheduleForm.kickoff_at)) {
+      setMessage("Укажи дату и время начала матча по Москве.");
+      return;
+    }
     const kickoff = new Date(rescheduleForm.kickoff_at + ":00+03:00");
     if (!Number.isFinite(kickoff.getTime()) || kickoff.getTime() <= Date.now()) {
       setMessage("Начало матча должно быть в будущем (московское время)."); return;
