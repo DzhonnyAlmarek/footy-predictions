@@ -5,7 +5,7 @@ import { useEffect } from "react";
 type Match = {
   id: string; tour_id: string | null; status: string; home_score: number | null;
   away_score: number | null; home_team: string; away_team: string;
-  kickoff_at: string; deadline_at: string;
+  kickoff_at: string | null; deadline_at: string | null; pending_kickoff_date?: string | null;
 };
 type Tour = { id: string; name: string; stage_id: string };
 type Row = { match_id: string; user_id: string | null; points: string | null };
@@ -25,11 +25,11 @@ export default function AdminTourControl({ currentStageId, currentStageName, sel
   const stageTours=tours.filter(t=>t.stage_id===currentStageId && matches.some(m=>m.tour_id===t.id));
   const pendingTours=[...stageTours].filter(t=>matches.some(m=>m.tour_id===t.id && m.status!=="finished"))
     .sort((a,b)=>{
-      const next=(t:Tour)=>Math.min(...matches.filter(m=>m.tour_id===t.id && m.status!=="finished").map(m=>new Date(m.kickoff_at).getTime()));
+      const next=(t:Tour)=>Math.min(...matches.filter(m=>m.tour_id===t.id && m.status!=="finished").map(m=>Date.parse(m.kickoff_at ?? (m.pending_kickoff_date ? m.pending_kickoff_date + "T00:00:00+03:00" : ""))));
       return next(a)-next(b);
     });
   const fallbackTour=pendingTours[0]?.id ?? [...stageTours].sort((a,b)=>{
-    const latest=(t:Tour)=>Math.max(...matches.filter(m=>m.tour_id===t.id).map(m=>new Date(m.kickoff_at).getTime()));
+    const latest=(t:Tour)=>Math.max(...matches.filter(m=>m.tour_id===t.id).map(m=>Date.parse(m.kickoff_at ?? (m.pending_kickoff_date ? m.pending_kickoff_date + "T00:00:00+03:00" : ""))));
     return latest(b)-latest(a);
   })[0]?.id ?? "";
   const actualTour=stageTours.some(t=>t.id===selectedTourId)?selectedTourId:fallbackTour;
@@ -44,7 +44,7 @@ export default function AdminTourControl({ currentStageId, currentStageName, sel
   }
   const tour=stageTours.find(t=>t.id===actualTour);
   const selected=matches.filter(m=>m.tour_id===actualTour)
-    .sort((a,b)=>new Date(a.kickoff_at).getTime()-new Date(b.kickoff_at).getTime()||Number(a.id)-Number(b.id));
+    .sort((a,b)=>Date.parse(a.kickoff_at ?? a.pending_kickoff_date ?? "")-Date.parse(b.kickoff_at ?? b.pending_kickoff_date ?? "")||Number(a.id)-Number(b.id));
   const finished=selected.filter(m=>m.status==="finished");
   const tableReady=table?.stage?.id===currentStageId && Array.isArray(table.users) && Array.isArray(table.rows);
   const users=tableReady?table.users:[];
@@ -57,7 +57,7 @@ export default function AdminTourControl({ currentStageId, currentStageName, sel
     const missing=users.filter(u=>!predictionUsers.has(u.id)).map(u=>u.username);
     const complete=match.status==="finished" && participants>0 && scoredUsers.size===participants;
     const incomplete=match.status==="finished" && !complete;
-    const due=match.status!=="finished" && new Date(match.deadline_at).getTime()<=Date.now();
+    const due=match.status!=="finished" && match.deadline_at !== null && Date.parse(match.deadline_at)<=Date.now();
     return {match,predictionCount:predictionUsers.size,scoredCount:scoredUsers.size,missing,complete,incomplete,due};
   });
   const totalPredictions=diagnostics.reduce((sum,item)=>sum+item.predictionCount,0);

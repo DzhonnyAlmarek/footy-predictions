@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
           AND NOT EXISTS(SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)) AS finished_count
         FROM footy_cutover.stages s ORDER BY s.id DESC`,
       sql`SELECT id::text, stage_id::text, name, tour_no FROM footy_cutover.tours ORDER BY id DESC`,
-      sql`SELECT m.id::text, m.tour_id::text, m.kickoff_at, m.deadline_at, m.status, m.home_score, m.away_score, m.home_penalty_goals, m.away_penalty_goals,
+      sql`SELECT m.id::text, m.tour_id::text, m.kickoff_at, m.deadline_at, to_jsonb(m)->>'pending_kickoff_date' AS pending_kickoff_date, m.status, m.home_score, m.away_score, m.home_penalty_goals, m.away_penalty_goals,
         m.home_team_id::text, m.away_team_id::text,
         h.name AS home_team, a.name AS away_team,
         COALESCE(CASE t.slug WHEN 'rpl' THEN 'РПЛ' WHEN 'ucl' THEN 'ЛЧ' WHEN 'russian-cup' THEN 'КР' WHEN 'epl' THEN 'АПЛ' WHEN 'serie-a' THEN 'Серия А' WHEN 'bundesliga' THEN 'Бундеслига' WHEN 'la-liga' THEN 'Ла Лига' ELSE t.name END, CASE WHEN m.stage_id=15 AND m.id BETWEEN 434 AND 457 THEN 'РПЛ' END) AS competition_label,
@@ -269,7 +269,23 @@ export async function POST(req: NextRequest) {
           !validDate(deadline) || Date.parse(deadline) <= Date.now() ||
           Date.parse(deadline) > Date.parse(kickoff))
         return reply({ ok: false, error: "invalid_schedule" }, 400);
-      const rows = await sql`
+      const [match] = await sql`
+        SELECT to_jsonb(m)->>'pending_kickoff_date' AS pending_date
+        FROM footy_cutover.matches m WHERE m.id=${matchId}::bigint
+      `;
+      const rows = match?.pending_date ? await sql`
+        UPDATE footy_cutover.matches m
+        SET kickoff_at=${kickoff}::timestamptz, deadline_at=${deadline}::timestamptz, pending_kickoff_date=NULL
+        WHERE m.id=${matchId}::bigint AND m.status='scheduled'
+          AND m.kickoff_at IS NULL AND m.deadline_at IS NULL AND m.pending_kickoff_date IS NOT NULL
+          AND m.home_score IS NULL AND m.away_score IS NULL
+          AND NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id=m.id)
+          AND ${deadline}::timestamptz > now()
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.predictions p WHERE p.match_id=m.id)
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.points_ledger l WHERE l.match_id=m.id)
+          AND NOT EXISTS (SELECT 1 FROM footy_cutover.match_scores s WHERE s.match_id=m.id)
+        RETURNING m.id::text
+      ` : await sql`
         UPDATE footy_cutover.matches m
         SET kickoff_at=${kickoff}::timestamptz, deadline_at=${deadline}::timestamptz
         WHERE m.id=${matchId}::bigint AND m.status='scheduled'

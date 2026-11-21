@@ -12,11 +12,11 @@ export async function GET(req: NextRequest) {
     if (!userId) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401, headers: CUTOVER_HEADERS });
     const sql = neon(process.env.CUTOVER_AUTH_DATABASE_URL!);
     const matches = await sql`
-      SELECT m.id::text AS match_id, m.kickoff_at, m.deadline_at, m.status,
+      SELECT m.id::text AS match_id, m.kickoff_at, m.deadline_at, to_jsonb(m)->>'pending_kickoff_date' AS pending_kickoff_date, m.status,
              m.home_score, m.away_score, h.name AS home_team, a.name AS away_team,
              COALESCE(CASE t.slug WHEN 'rpl' THEN 'РПЛ' WHEN 'ucl' THEN 'ЛЧ' WHEN 'russian-cup' THEN 'КР' WHEN 'epl' THEN 'АПЛ' WHEN 'serie-a' THEN 'Серия А' WHEN 'bundesliga' THEN 'Бундеслига' WHEN 'la-liga' THEN 'Ла Лига' ELSE t.name END, CASE WHEN m.stage_id=15 AND m.id BETWEEN 434 AND 457 THEN 'РПЛ' END) AS competition_label,
              p.home_pred, p.away_pred,
-             (m.status = 'scheduled' AND COALESCE(m.deadline_at, m.kickoff_at) > now()) AS predictions_open
+             COALESCE(m.status = 'scheduled' AND m.deadline_at > now() AND m.kickoff_at > now(), false) AS predictions_open
       FROM footy_cutover.matches m
       JOIN footy_cutover.stages active_stage ON active_stage.id=m.stage_id AND active_stage.is_current=true AND active_stage.status='published'
       LEFT JOIN footy_cutover.tournaments t ON t.id = m.tournament_id
@@ -24,8 +24,9 @@ export async function GET(req: NextRequest) {
       LEFT JOIN footy_cutover.teams a ON a.id = m.away_team_id
       LEFT JOIN footy_cutover.predictions p ON p.match_id = m.id AND p.user_id = ${userId}::uuid
       WHERE ( ${process.env.CUTOVER_SHOW_TEST_MATCHES === "true"}::boolean OR NOT EXISTS (SELECT 1 FROM cutover_auth.test_matches tm WHERE tm.match_id = m.id) )
-      ORDER BY CASE WHEN m.status = 'scheduled' AND m.kickoff_at >= now() THEN 0 ELSE 1 END,
-               CASE WHEN m.status = 'scheduled' AND m.kickoff_at >= now() THEN m.kickoff_at END ASC NULLS LAST,
+      ORDER BY CASE WHEN m.status = 'scheduled' AND (m.kickoff_at >= now() OR m.kickoff_at IS NULL) THEN 0 ELSE 1 END,
+               CASE WHEN m.status = 'scheduled' AND (m.kickoff_at >= now() OR m.kickoff_at IS NULL)
+                 THEN COALESCE(m.kickoff_at, (to_jsonb(m)->>'pending_kickoff_date')::date::timestamp AT TIME ZONE 'Europe/Moscow') END ASC NULLS LAST,
                m.kickoff_at DESC NULLS LAST, m.id DESC LIMIT 250
     `;
     return NextResponse.json({ ok: true, matches }, { headers: CUTOVER_HEADERS });
